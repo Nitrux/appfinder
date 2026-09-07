@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Appfinder
+Comment=Manage Flatpaks, NX AppHub AppBoxes, and Distrobox containers
+TryExec=appfinder
+Exec=appfinder
+Terminal=false
+Type=Application
+Categories=Qt;KDE;System;PackageManager;
+StartupNotify=true
+Icon=application-x-iso9660-appimage

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>org.nitrux.appfinder</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-3-Clause</project_license>
+  <name>Appfinder</name>
+  <summary>Software management for Nitrux</summary>
+  <description>
+    <p>Appfinder brings together the three software-management roles in Nitrux: Flatpak applications from Flathub, specialized AppBoxes built by NX AppHub, and Distrobox development containers.</p>
+  </description>
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
+  <provides>
+    <binary>appfinder</binary>
+  </provides>
+</component>

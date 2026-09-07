@@ -1,7 +1,0 @@
-module AppComponents
-
-AppCard 1.0 AppCard.qml
-AppWindow 1.0 AppWindow.qml
-CategoryBar 1.0 CategoryBar.qml
-MainView 1.0 MainView.qml
-TopNavigationBar 1.0 TopNavigationBar.qml
