@@ -11,6 +11,9 @@ qt_add_executable(${PROJECT_NAME}
     ${APPFINDER_SOURCES}
 )
 
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
 qt_add_qml_module(${PROJECT_NAME}
     URI org.nitrux.appfinder
     NO_PLUGIN
@@ -25,6 +28,7 @@ qt_add_qml_module(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         MauiKit4
+        KF6::I18n
         Qt6::Core
         Qt6::Gui
         Qt6::Qml

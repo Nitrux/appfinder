@@ -14,7 +14,8 @@ Maui.ApplicationWindow {
     title: currentSection === 0 ? qsTr("Flathub")
                                 : currentSection === 1 ? qsTr("NX AppHub")
                                                         : qsTr("Distrobox")
-    color: Maui.Theme.backgroundColor
+    color: "transparent"
+    background: null
 
     property int currentSection: 0
     property string searchText
@@ -26,27 +27,43 @@ Maui.ApplicationWindow {
 
     Component.onCompleted: appHub.refresh()
 
+    Maui.WindowBlur {
+        view: root
+        geometry: Qt.rect(0, 0, root.width, root.height)
+        windowRadius: Maui.Style.radiusV
+        enabled: true
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: Maui.Theme.backgroundColor
+        opacity: 0.76
+        radius: Maui.Style.radiusV
+    }
+
     Maui.Page {
         id: page
         anchors.fill: parent
         title: root.title
+        background: null
+        headerMargins: Maui.Style.contentMargins
 
         headBar.leftContent: [
-            Maui.ToolButton {
+            ToolButton {
                 icon.name: "applications-internet"
                 checked: root.currentSection === 0
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("Flathub")
                 onClicked: root.selectSection(0)
             },
-            Maui.ToolButton {
+            ToolButton {
                 icon.name: "application-x-iso9660-appimage"
                 checked: root.currentSection === 1
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("NX AppHub")
                 onClicked: root.selectSection(1)
             },
-            Maui.ToolButton {
+            ToolButton {
                 icon.name: "utilities-terminal"
                 checked: root.currentSection === 2
                 ToolTip.visible: hovered
@@ -72,14 +89,14 @@ Maui.ApplicationWindow {
         }
 
         headBar.rightContent: [
-            Maui.ToolButton {
+            ToolButton {
                 icon.name: "view-refresh"
                 enabled: !appHub.busy
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("Refresh sources")
                 onClicked: appHub.refresh()
             },
-            Maui.ToolButton {
+            ToolButton {
                 visible: root.currentSection === 1
                 icon.name: "repository-update"
                 enabled: !appHub.busy

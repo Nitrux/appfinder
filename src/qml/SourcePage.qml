@@ -5,6 +5,7 @@
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import org.mauikit.controls as Maui
 
 Maui.Page {
@@ -31,8 +32,9 @@ Maui.Page {
             height: Maui.Style.rowHeight * 1.35
 
             Maui.ListItemTemplate {
-                anchors.fill: parent
-                anchors.rightMargin: actionButton.visible ? actionButton.width + Maui.Style.space.big : 0
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.rightMargin: actionButton.visible ? Maui.Style.space.big : 0
                 iconSource: model.icon
                 iconSizeHint: Maui.Style.iconSizes.medium
                 label1.text: model.name
@@ -40,12 +42,12 @@ Maui.Page {
                 label2.elide: Text.ElideRight
             }
 
-            Maui.ToolButton {
+            ToolButton {
                 id: actionButton
                 visible: model.actionText.length > 0
-                anchors.right: parent.right
-                anchors.rightMargin: Maui.Style.contentMargins
-                anchors.verticalCenter: parent.verticalCenter
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: implicitWidth
+                Layout.rightMargin: Maui.Style.contentMargins
                 icon.name: model.actionIcon
                 ToolTip.visible: hovered
                 ToolTip.text: model.actionText
