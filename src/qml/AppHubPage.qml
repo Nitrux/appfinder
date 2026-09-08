@@ -45,7 +45,7 @@ Maui.Page {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Maui.Style.contentMargins
-        spacing: Maui.Style.space.medium
+        spacing: Maui.Style.space.small
 
         RowLayout {
             Layout.fillWidth: true
@@ -128,10 +128,11 @@ Maui.Page {
 
         Maui.ListBrowser {
             id: extensionsBrowser
+            padding: 0
             Layout.fillWidth: true
             Layout.fillHeight: true
             model: appHub.appHubModel
-            spacing: Maui.Style.space.medium
+            spacing: Maui.Style.space.small
             holder.visible: count === 0
             holder.title: qsTr("NX AppHub builds AppBoxes")
             holder.body: qsTr("Refresh the repository or search for software that does not fit the Flatpak or Distrobox roles.")

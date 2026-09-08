@@ -23,7 +23,7 @@ Maui.ApplicationWindow {
 
     Settings {
         id: settings
-        category: "Appfinder"
+        category: "AppFinder"
         property bool sidebarVisible: true
         property bool refreshOnStartup: true
         property bool showOperationNotifications: true
@@ -92,11 +92,17 @@ Maui.ApplicationWindow {
         background: null
         Maui.Theme.colorSet: Maui.Theme.View
 
-        sideBarContent: NavigationSidebar {
+        sideBarContent: Item {
             anchors.fill: parent
             anchors.margins: Maui.Style.contentMargins
-            currentSection: root.currentSection
-            onSectionSelected: function(section) { root.selectSection(section) }
+            anchors.rightMargin: 0
+
+            NavigationSidebar {
+                anchors.fill: parent
+                anchors.rightMargin: 0
+                currentSection: root.currentSection
+                onSectionSelected: function(section) { root.selectSection(section) }
+            }
         }
 
         Connections {
@@ -105,12 +111,23 @@ Maui.ApplicationWindow {
             function onClosed() { settings.sidebarVisible = false }
         }
 
-        Maui.Page {
+        Maui.PageLayout {
             id: page
             anchors.fill: parent
+            clip: true
             background: null
-            headerMargins: Maui.Style.contentMargins
-            headBar.forceCenterMiddleContent: true
+
+            split: false
+            splitIn: ToolBar.Header
+            altHeader: Maui.Handy.isMobile
+            Maui.Controls.showCSD: true
+
+            headBar.visible: true
+            headBar.forceCenterMiddleContent: false
+            headerMargins: Maui.Handy.isMobile ? 0 : Maui.Style.contentMargins
+            footerMargins: headerMargins
+
+            Maui.Theme.colorSet: Maui.Theme.View
 
             headBar.leftContent: [
                 ToolButton {
@@ -161,6 +178,25 @@ Maui.ApplicationWindow {
                     topPadding: 10
                 },
 
+                ToolButton {
+                    visible: root.currentSection === 0 && contentLoader.item !== null
+                    text: root.currentSection === 0 && contentLoader.item && contentLoader.item.installedView ? qsTr("Explore Flathub") : qsTr("Installed applications")
+                    display: AbstractButton.IconOnly
+                    checkable: true
+                    checked: root.currentSection === 0 && contentLoader.item && contentLoader.item.installedView
+                    icon.name: checked ? "go-home" : "view-list-details"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: {
+                        root.searchText = ""
+                        if (contentLoader.item) {
+                            const nextView = !contentLoader.item.installedView
+                            contentLoader.item.installedView = nextView
+                            settings.startInInstalledView = nextView
+                        }
+                    }
+                },
+
                 Maui.ToolButtonMenu {
                 icon.name: "overflow-menu"
                 ToolTip.visible: hovered
@@ -196,7 +232,7 @@ Maui.ApplicationWindow {
     Maui.Notification {
         id: statusNotification
         iconName: "dialog-information"
-        title: qsTr("Appfinder")
+        title: qsTr("AppFinder")
         message: appHub.statusMessage
     }
 
@@ -257,6 +293,7 @@ Maui.ApplicationWindow {
             headBar.visible: false
             Maui.Holder {
                 anchors.fill: parent
+                anchors.margins: Maui.Style.contentMargins
                 emoji: "system-software-update"
                 title: qsTr("Updates available")
                 body: qsTr("Three software updates are ready to review. Update details will appear here when the update service is available.")

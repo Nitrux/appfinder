@@ -1,6 +1,6 @@
-# Appfinder | [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+# AppFinder | [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-Appfinder is a software-management GUI for Nitrux. Built with **[MauiKit](https://mauikit.org/)**.
+AppFinder is a software-management GUI for Nitrux. Built with **[MauiKit](https://mauikit.org/)**.
 
 # Licensing
 

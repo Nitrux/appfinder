@@ -4,7 +4,9 @@
  */
 
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
 
@@ -63,9 +65,12 @@ Maui.Page {
             category: "Productivity"
             identifier: "org.mozilla.firefox"
             icon: "internet-web-browser"
+            iconUrl: "https://dl.flathub.org/media/icons/128x128/org.mozilla.firefox.png"
             size: "112 MB"
             accent: "steelblue"
             screenshots: "Browse the web with a focused, private workspace."
+            screenshot: "https://dl.flathub.org/media/org.mozilla.firefox-stable/1248x702/org.mozilla.firefox-af5d1ae7c121ea4864b3c5a1098f8f9c.png"
+            screenshotCaption: "Browse the web with a focused, private workspace."
             changelog: "The latest Flathub release includes current security and stability updates."
             permissions: "Network access, desktop notifications, and access to selected user files."
         }
@@ -76,11 +81,78 @@ Maui.Page {
             category: "Games"
             identifier: "com.valvesoftware.Steam"
             icon: "applications-games"
+            iconUrl: "https://dl.flathub.org/media/com/valvesoftware/Steam/f0343a4b277e822cce53b904454d3a7d/icons/128x128/com.valvesoftware.Steam.png"
             size: "1.2 GB"
             accent: "mediumpurple"
             screenshots: "Explore your library and discover new games in the Steam client."
+            screenshot: "https://dl.flathub.org/media/com/valvesoftware/Steam/f0343a4b277e822cce53b904454d3a7d/screenshots/image-2_1248x702@1.png"
+            screenshotCaption: "Explore the Steam store and your game library."
             changelog: "The latest Flathub release includes client updates and compatibility improvements."
             permissions: "Network access, game data in user directories, and device access required by games."
+        }
+        ListElement {
+            name: "Krita"
+            summary: "Digital painting for artists."
+            description: "A professional application for concept art, illustration, comics, and texture painting."
+            category: "Graphics"
+            identifier: "org.kde.krita"
+            icon: "applications-graphics"
+            iconUrl: "https://dl.flathub.org/media/org/kde/krita/2d1e8935a00814a3aae96df66090a85a/icons/128x128/org.kde.krita.png"
+            size: "286 MB"
+            accent: "darkorange"
+            screenshots: "Paint, illustrate, and create with a professional digital art workspace."
+            screenshot: "https://dl.flathub.org/media/org/kde/krita/2d1e8935a00814a3aae96df66090a85a/screenshots/image-1_1248x677@1.png"
+            screenshotCaption: "Create digital paintings and illustrations."
+            changelog: "The latest Flathub release includes current painting tools and stability updates."
+            permissions: "Access to selected user files and graphics hardware."
+        }
+        ListElement {
+            name: "VLC"
+            summary: "Play almost anything."
+            description: "A versatile media player that supports a wide range of audio and video formats."
+            category: "Audio"
+            identifier: "org.videolan.VLC"
+            icon: "multimedia-player"
+            iconUrl: "https://dl.flathub.org/media/org/videolan/VLC/34e7c2b6a026c5c290606225a84582d3/icons/128x128/org.videolan.VLC.png"
+            size: "82 MB"
+            accent: "darkgoldenrod"
+            screenshots: "Play local and network media from a familiar, capable player."
+            screenshot: "https://dl.flathub.org/media/org/videolan/VLC/34e7c2b6a026c5c290606225a84582d3/screenshots/image-1_1248x702@1.png"
+            screenshotCaption: "Play local and network media."
+            changelog: "The latest Flathub release includes playback and compatibility improvements."
+            permissions: "Access to selected media files, removable devices, and network media."
+        }
+        ListElement {
+            name: "GIMP"
+            summary: "Powerful image editor."
+            description: "A flexible image editor for photo retouching, composition, and original artwork."
+            category: "Graphics"
+            identifier: "org.gimp.GIMP"
+            icon: "applications-graphics"
+            iconUrl: "https://dl.flathub.org/media/org/gimp/GIMP/ab48223ba11e3bad9493fcda45e9ac04/icons/128x128/org.gimp.GIMP.png"
+            size: "214 MB"
+            accent: "slateblue"
+            screenshots: "Edit images and compose artwork with a flexible creative toolkit."
+            screenshot: "https://dl.flathub.org/media/org/gimp/GIMP/ab48223ba11e3bad9493fcda45e9ac04/screenshots/image-1_1248x702@1.png"
+            screenshotCaption: "Edit images and compose original artwork."
+            changelog: "The latest Flathub release includes image processing and stability updates."
+            permissions: "Access to selected user files and graphics hardware."
+        }
+        ListElement {
+            name: "Discord"
+            summary: "Voice and video communication."
+            description: "A place to talk, share, and build communities with voice, video, and text."
+            category: "Video"
+            identifier: "com.discordapp.Discord"
+            icon: "internet-services"
+            iconUrl: "https://dl.flathub.org/media/com/discordapp/Discord/bf53f3a5ea595d82659f2ef73fbd51f7/icons/128x128/com.discordapp.Discord.png"
+            size: "188 MB"
+            accent: "royalblue"
+            screenshots: "Stay connected with communities through text, voice, and video."
+            screenshot: "https://dl.flathub.org/media/com/discordapp/Discord/bf53f3a5ea595d82659f2ef73fbd51f7/screenshots/image-1_1248x957@1.png"
+            screenshotCaption: "Connect with communities through text, voice, and video."
+            changelog: "The latest Flathub release includes current communication and stability updates."
+            permissions: "Network access, notifications, microphone, and camera access."
         }
     }
 
@@ -106,12 +178,13 @@ Maui.Page {
         id: exploreView
 
         Maui.ScrollColumn {
-            spacing: Maui.Style.space.medium
+            padding: Maui.Style.contentMargins
+            spacing: Maui.Style.space.small
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
-                text1: qsTr("Flathub")
-                text2: qsTr("Explore and manage applications from Flathub.")
+                text1: qsTr("Explore Flathub")
+                text2: qsTr("Find and install hundreds of apps and games for Linux.")
                 label2.wrapMode: Text.Wrap
             }
 
@@ -132,322 +205,241 @@ Maui.Page {
                     Maui.SectionHeader {
                         Layout.fillWidth: true
                         text1: qsTr("Featured")
-                        text2: qsTr("Discover popular desktop software from Flathub.")
+                        text2: qsTr("Popular picks from Flathub.")
                         label2.wrapMode: Text.Wrap
                     }
 
-                    Maui.GridBrowser {
-                        id: featuredGrid
+                    Item {
+                        id: featuredCarouselFrame
                         Layout.fillWidth: true
-                        Layout.preferredHeight: width < Maui.Style.units.gridUnit * 42 ? 400 : 204
-                        itemSize: 360
-                        itemHeight: 188
-                        adaptContent: true
-                        model: featuredModel
-                        holder.visible: false
+                        Layout.preferredHeight: width < Maui.Style.units.gridUnit * 42 ? 400 : Maui.Style.units.gridUnit * 16
+                        clip: true
 
-                        delegate: Item {
-                            id: featuredCard
-                            width: GridView.view.cellWidth
-                            height: GridView.view.cellHeight
+                        ListView {
+                            id: featuredCarousel
+                            anchors.fill: parent
+                            interactive: true
+                            clip: true
+                            orientation: ListView.Horizontal
+                            snapMode: ListView.SnapOneItem
+                            boundsBehavior: Flickable.StopAtBounds
+                            highlightRangeMode: ListView.StrictlyEnforceRange
+                            highlightFollowsCurrentItem: true
+                            preferredHighlightBegin: 0
+                            preferredHighlightEnd: width
+                            highlightMoveDuration: Maui.Style.units.longDuration * 2
+                            highlightMoveVelocity: -1
 
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Maui.Style.radiusV
-                                color: Maui.Theme.alternateBackgroundColor
-                                border.color: Maui.Theme.backgroundColor
-                                clip: true
+                            property bool randomized: false
 
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: control.showDetails({
-                                        name: model.name,
-                                        summary: model.summary,
-                                        description: model.description,
-                                        identifier: model.identifier,
-                                        category: model.category,
-                                        size: model.size,
-                                        icon: model.icon,
-                                        accent: model.accent,
-                                        screenshots: model.screenshots,
-                                        changelog: model.changelog,
-                                        permissions: model.permissions
-                                    })
+                            function nextRandomIndex() {
+                                if (count < 2)
+                                    return currentIndex
+
+                                var nextIndex = currentIndex
+                                while (nextIndex === currentIndex)
+                                    nextIndex = Math.floor(Math.random() * count)
+                                return nextIndex
+                            }
+
+                            onCountChanged: {
+                                if (!randomized && count > 1) {
+                                    randomized = true
+                                    currentIndex = Math.floor(Math.random() * count)
                                 }
+                            }
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: Maui.Style.space.medium
-                                    spacing: Maui.Style.space.medium
+                            onCurrentIndexChanged: {
+                                if (featuredRotationTimer.running)
+                                    featuredRotationTimer.restart()
+                            }
+
+                            model: featuredModel
+
+                            delegate: Item {
+                                    id: featuredSlide
+                                    width: featuredCarousel.width
+                                    height: featuredCarousel.height
+
+                                    onVisibleChanged: {
+                                        if (visible && screenshotImage.status === Image.Ready)
+                                            bannerColors.update()
+                                    }
+
+                                    property color bannerBackground: Maui.ColorUtils.tintWithAlpha(bannerColors.dominant, Maui.Theme.backgroundColor, 0.28)
+                                    property color bannerForeground: Maui.ColorUtils.brightnessForColor(bannerBackground) === Maui.ColorUtils.Light ? "#20202a" : "#ffffff"
+                                    property color bannerSecondaryForeground: Maui.ColorUtils.tintWithAlpha(bannerForeground, bannerBackground, 0.55)
+                                    readonly property bool paletteSourceReady: visible && Window.window && Window.window.visible && screenshotImage.status === Image.Ready
+                                    readonly property real previewWidth: Math.max(Maui.Style.units.gridUnit * 24, Math.min(Maui.Style.units.gridUnit * 48, featuredSlide.width * 0.5))
 
                                     Rectangle {
-                                        Layout.fillHeight: true
-                                        Layout.preferredWidth: 124
+                                        anchors.fill: parent
                                         radius: Maui.Style.radiusV
-                                        gradient: Gradient {
-                                            GradientStop { position: 0.0; color: model.accent }
-                                            GradientStop { position: 1.0; color: Maui.Theme.backgroundColor }
+                                        color: featuredSlide.bannerBackground
+                                        border.color: Maui.ColorUtils.tintWithAlpha(featuredSlide.bannerBackground, featuredSlide.bannerForeground, 0.18)
+                                        border.width: 1
+                                        clip: true
+
+                                        Maui.ImageColors {
+                                            id: bannerColors
+                                            source: featuredSlide.paletteSourceReady ? screenshotImage : null
+                                            fallbackDominant: model.accent
+                                            fallbackForeground: Maui.Theme.textColor
+                                            fallbackBackground: Maui.Theme.backgroundColor
                                         }
 
-                                        Maui.IconItem {
-                                            anchors.centerIn: parent
-                                            width: 64
-                                            height: 64
-                                            iconSizeHint: 64
-                                            iconSource: model.icon
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: control.showDetails({
+                                                name: model.name,
+                                                summary: model.summary,
+                                                description: model.description,
+                                                identifier: model.identifier,
+                                                category: model.category,
+                                                size: model.size,
+                                                icon: model.icon,
+                                                accent: model.accent,
+                                                screenshots: model.screenshots,
+                                                changelog: model.changelog,
+                                                permissions: model.permissions
+                                            })
                                         }
-
-                                        Label {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.bottom: parent.bottom
-                                            anchors.margins: Maui.Style.space.small
-                                            text: qsTr("FLATHUB FEATURE")
-                                            color: "white"
-                                            font.pointSize: Maui.Style.fontSizes.tiny
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                    }
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        spacing: Maui.Style.space.small
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: model.name
-                                            font: Maui.Style.h2Font
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: model.summary
-                                            color: Maui.Theme.disabledTextColor
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Item { Layout.fillHeight: true }
 
                                         RowLayout {
-                                            Layout.fillWidth: true
+                                            anchors.centerIn: parent
+                                            height: parent.height - Maui.Style.space.medium * 2
+                                            spacing: Maui.Style.space.big
 
-                                            Label {
-                                                Layout.fillWidth: true
-                                                text: model.category
-                                                color: Maui.Theme.disabledTextColor
-                                                elide: Text.ElideRight
+                                            ColumnLayout {
+                                                Layout.fillHeight: true
+                                                Layout.preferredWidth: Maui.Style.units.gridUnit * 10
+                                                Layout.minimumWidth: 0
+                                                spacing: Maui.Style.space.small
+
+                                                Maui.IconItem {
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                    width: Maui.Style.iconSizes.huge
+                                                    height: Maui.Style.iconSizes.huge
+                                                    iconSizeHint: Maui.Style.iconSizes.huge
+                                                    imageSource: model.iconUrl
+                                                    iconSource: model.icon
+                                                }
+
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: model.name
+                                                    color: featuredSlide.bannerForeground
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    font: Maui.Style.h2Font
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: model.summary
+                                                    color: featuredSlide.bannerSecondaryForeground
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 3
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Maui.Chip {
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                    text: model.category
+                                                    enabled: false
+                                                    hoverEnabled: false
+                                                    color: Qt.rgba(0, 0, 0, 0.3)
+                                                    label.font.weight: Font.Medium
+                                                }
+
                                             }
 
-                                            ToolButton {
-                                                text: {
-                                                    appHub.busy
-                                                    appHub.statusMessage
-                                                    return appHub.isFlatpakInstalled(model.identifier) ? qsTr("Remove") : qsTr("Install")
+                                            Rectangle {
+                                                id: screenshotFrame
+                                                Layout.fillHeight: true
+                                                Layout.preferredWidth: featuredSlide.previewWidth
+                                                Layout.minimumWidth: 0
+                                                color: Maui.ColorUtils.tintWithAlpha(featuredSlide.bannerBackground, featuredSlide.bannerForeground, 0.08)
+                                                radius: Maui.Style.radiusV
+                                                border.color: Maui.ColorUtils.tintWithAlpha(featuredSlide.bannerBackground, featuredSlide.bannerForeground, 0.32)
+                                                border.width: 1
+                                                clip: true
+                                                Image {
+                                                    id: screenshotImage
+                                                    anchors.fill: parent
+                                                    anchors.margins: screenshotFrame.border.width
+                                                    source: model.screenshot
+                                                    fillMode: Image.PreserveAspectCrop
+                                                    asynchronous: true
+                                                    cache: true
+                                                    visible: status === Image.Ready
+                                                    onStatusChanged: if (status === Image.Ready) bannerColors.update()
+                                                    layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
+                                                    layer.effect: MultiEffect {
+                                                        maskEnabled: true
+                                                        maskThresholdMin: 0.5
+                                                        maskSpreadAtMin: 1.0
+                                                        maskSpreadAtMax: 0.0
+                                                        maskThresholdMax: 1.0
+                                                        maskSource: ShaderEffectSource {
+                                                            sourceItem: Rectangle {
+                                                                width: screenshotImage.width
+                                                                height: screenshotImage.height
+                                                                radius: screenshotFrame.radius
+                                                            }
+                                                        }
+                                                    }
                                                 }
-                                                icon.name: {
-                                                    appHub.statusMessage
-                                                    return appHub.isFlatpakInstalled(model.identifier) ? "edit-delete" : "list-add"
+
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    width: parent.width - Maui.Style.space.big * 2
+                                                    text: model.screenshotCaption
+                                                    color: featuredSlide.bannerSecondaryForeground
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    wrapMode: Text.WordWrap
+                                                    visible: !screenshotImage.visible
                                                 }
-                                                display: ToolButton.TextBesideIcon
-                                                enabled: !appHub.busy
-                                                onClicked: control.flatpakAction(model.identifier)
                                             }
                                         }
                                     }
                                 }
-                            }
+                        }
+
+                        Timer {
+                            id: featuredRotationTimer
+                            interval: 6500
+                            repeat: true
+                            running: featuredCarouselFrame.visible && featuredCarousel.count > 1
+                            onTriggered: featuredCarousel.currentIndex = featuredCarousel.nextRandomIndex()
+                        }
+
+                        ToolButton {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Maui.Style.space.small
+                            anchors.verticalCenter: parent.verticalCenter
+                            z: 2
+                            icon.name: "go-previous"
+                            display: ToolButton.IconOnly
+                            Accessible.name: qsTr("Previous featured application")
+                            onClicked: featuredCarousel.currentIndex = featuredCarousel.nextRandomIndex()
+                        }
+
+                        ToolButton {
+                            anchors.right: parent.right
+                            anchors.rightMargin: Maui.Style.space.small
+                            anchors.verticalCenter: parent.verticalCenter
+                            z: 2
+                            icon.name: "go-next"
+                            display: ToolButton.IconOnly
+                            Accessible.name: qsTr("Next featured application")
+                            onClicked: featuredCarousel.currentIndex = featuredCarousel.nextRandomIndex()
                         }
                     }
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                color: Maui.Theme.alternateBackgroundColor
-                radius: Maui.Style.radiusV
-                border.color: Maui.Theme.backgroundColor
-                border.width: 1
-                implicitHeight: categoriesLayout.implicitHeight + Maui.Style.contentMargins * 2
-
-                ColumnLayout {
-                    id: categoriesLayout
-                    anchors.fill: parent
-                    anchors.margins: Maui.Style.contentMargins
-                    spacing: Maui.Style.space.small
-
-                    Maui.SectionHeader {
-                        Layout.fillWidth: true
-                        text1: qsTr("Categories")
-                        text2: qsTr("Browse applications by what you want to do.")
-                        label2.wrapMode: Text.Wrap
-                    }
-
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: Maui.Style.space.small
-
-                        Maui.Chip {
-                            text: qsTr("Games")
-                            icon.name: "applications-games"
-                            checkable: false
-                            checked: control.selectedCategory === text
-                            onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-                        }
-                        Maui.Chip {
-                            text: qsTr("Productivity")
-                            icon.name: "office-calendar"
-                            checkable: false
-                            checked: control.selectedCategory === text
-                            onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-                        }
-                        Maui.Chip {
-                            text: qsTr("Graphics")
-                            icon.name: "applications-graphics"
-                            checkable: false
-                            checked: control.selectedCategory === text
-                            onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-                        }
-                        Maui.Chip {
-                            text: qsTr("Audio")
-                            icon.name: "applications-multimedia"
-                            checkable: false
-                            checked: control.selectedCategory === text
-                            onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-                        }
-                        Maui.Chip {
-                            text: qsTr("Video")
-                            icon.name: "camera-video"
-                            checkable: false
-                            checked: control.selectedCategory === text
-                            onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                color: Maui.Theme.alternateBackgroundColor
-                radius: Maui.Style.radiusV
-                border.color: Maui.Theme.backgroundColor
-                border.width: 1
-                implicitHeight: popularLayout.implicitHeight + Maui.Style.contentMargins * 2
-
-                ColumnLayout {
-                    id: popularLayout
-                    anchors.fill: parent
-                    anchors.margins: Maui.Style.contentMargins
-                    spacing: Maui.Style.space.small
-
-                    Maui.SectionHeader {
-                        Layout.fillWidth: true
-                        text1: qsTr("Popular Apps")
-                        text2: qsTr("Useful applications to get started.")
-                        label2.wrapMode: Text.Wrap
-                    }
-
-                    Maui.GridBrowser {
-                        id: recommendedGrid
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: width < Maui.Style.units.gridUnit * 42 ? 400 : 204
-                        itemSize: 360
-                        itemHeight: 96
-                        adaptContent: true
-                        model: recommendedModel
-                        holder.visible: false
-
-                        delegate: Item {
-                            id: recommendedCard
-                            width: GridView.view.cellWidth
-                            height: GridView.view.cellHeight
-                            property bool categoryVisible: control.selectedCategory.length === 0 || model.category === control.selectedCategory
-                            visible: categoryVisible
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Maui.Style.radiusV
-                                color: Maui.Theme.alternateBackgroundColor
-                                border.color: appHub.isFlatpakInstalled(model.identifier) ? Maui.Theme.positiveBackgroundColor : Maui.Theme.backgroundColor
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: control.showDetails({
-                                        name: model.name,
-                                        summary: model.summary,
-                                        description: model.summary,
-                                        identifier: model.identifier,
-                                        category: model.category,
-                                        size: model.size,
-                                        icon: model.icon,
-                                        accent: model.accent,
-                                        screenshots: qsTr("A preview of the %1 workspace is available from Flathub.").arg(model.name),
-                                        changelog: qsTr("The latest Flathub release is ready to install."),
-                                        permissions: qsTr("Permissions are managed by the Flatpak sandbox.")
-                                    })
-                                }
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: Maui.Style.space.medium
-                                    spacing: Maui.Style.space.medium
-
-                                    Maui.IconItem {
-                                        Layout.preferredWidth: 48
-                                        Layout.preferredHeight: 48
-                                        iconSizeHint: 48
-                                        iconSource: model.icon
-                                    }
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: Maui.Style.space.small
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: model.name
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: model.summary
-                                            color: Maui.Theme.disabledTextColor
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: model.category
-                                            color: Maui.Theme.disabledTextColor
-                                            font.pointSize: Maui.Style.fontSizes.tiny
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-
-                                    ToolButton {
-                                        text: {
-                                            appHub.busy
-                                            appHub.statusMessage
-                                            return appHub.isFlatpakInstalled(model.identifier) ? qsTr("Remove") : qsTr("Install")
-                                        }
-                                        icon.name: {
-                                            appHub.statusMessage
-                                            return appHub.isFlatpakInstalled(model.identifier) ? "edit-delete" : "list-add"
-                                        }
-                                        display: ToolButton.TextBesideIcon
-                                        enabled: !appHub.busy
-                                        onClicked: control.flatpakAction(model.identifier)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -455,7 +447,8 @@ Maui.Page {
         id: installedViewComponent
 
         Maui.ScrollColumn {
-            spacing: Maui.Style.space.medium
+            padding: Maui.Style.contentMargins
+            spacing: Maui.Style.space.small
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
@@ -488,7 +481,8 @@ Maui.Page {
 
                     Maui.ListBrowser {
                 id: installedBrowser
-                Layout.fillWidth: true
+                padding: 0
+                        Layout.fillWidth: true
                 Layout.fillHeight: true
                 model: appHub.flathubModel
                 spacing: Maui.Style.space.small
@@ -581,7 +575,8 @@ Maui.Page {
         id: searchView
 
         Maui.ScrollColumn {
-            spacing: Maui.Style.space.medium
+            padding: Maui.Style.contentMargins
+            spacing: Maui.Style.space.small
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
@@ -614,7 +609,8 @@ Maui.Page {
 
                     Maui.GridBrowser {
                 id: searchGrid
-                Layout.fillWidth: true
+                padding: 0
+                        Layout.fillWidth: true
                 Layout.fillHeight: true
                 itemSize: 360
                 itemHeight: 112

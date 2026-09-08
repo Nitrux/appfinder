@@ -53,6 +53,16 @@ QString cleanValue(QString value)
     return value.trimmed();
 }
 
+bool isFlathubRemote(const QString value)
+{
+    const auto remotes = value.split(QStringLiteral(","), Qt::SkipEmptyParts);
+    for (const auto &remote : remotes) {
+        if (remote.trimmed().compare(QStringLiteral("flathub"), Qt::CaseInsensitive) == 0)
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 AppHubBackend::AppHubBackend(QObject *parent)
@@ -257,7 +267,7 @@ void AppHubBackend::search(const QString &query)
             refreshFlatpakInstalled();
         } else {
             startOperation(QStringLiteral("flatpak"),
-                           {QStringLiteral("search"), QStringLiteral("--columns=application,name,description,version"), QStringLiteral("--arch=%1").arg(architecture()), QStringLiteral("--"), m_query},
+                           {QStringLiteral("search"), QStringLiteral("--columns=application,name,description,version,remotes"), QStringLiteral("--arch=%1").arg(architecture()), QStringLiteral("--"), m_query},
                            Operation::FlatpakSearch);
         }
         break;
@@ -451,25 +461,26 @@ void AppHubBackend::enterDistrobox(const QString &name)
 void AppHubBackend::refreshFlatpakInstalled()
 {
     const QByteArray output = runCommand(QStringLiteral("flatpak"),
-                                         {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"), QStringLiteral("--columns=application,name,version,arch,size")});
+                                         {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"), QStringLiteral("--columns=application,name,origin,version,arch,size")});
     QList<AppModel::Item> items;
     m_installedFlatpaks.clear();
 
     for (const QByteArray &line : output.split('\n')) {
         const QStringList fields = QString::fromLocal8Bit(line).split('\t');
-        if (fields.size() < 4 || fields.first().trimmed().isEmpty())
+        if (fields.size() < 6 || fields.first().trimmed().isEmpty())
             continue;
 
         const QString identifier = fields.at(0).trimmed();
-        if (identifier == QLatin1String("Application") || !isSafeIdentifier(identifier))
+        const QString origin = fields.value(2).trimmed();
+        if (identifier == QLatin1String("Application") || !isSafeIdentifier(identifier) || !isFlathubRemote(origin))
             continue;
 
         m_installedFlatpaks.insert(identifier);
         items.append({
             fields.value(1, identifier).trimmed(),
             QStringLiteral("Installed through Flathub"),
-            fields.value(2).trimmed(),
             fields.value(3).trimmed(),
+            fields.value(4).trimmed(),
             identifier,
             QStringLiteral("Desktop Application"),
             QStringLiteral("Remove"),
@@ -482,7 +493,7 @@ void AppHubBackend::refreshFlatpakInstalled()
             QStringLiteral("Installed through Flathub"),
             {},
             QStringLiteral("GUI Application"),
-            fields.value(4).trimmed()
+            fields.value(5).trimmed()
         });
     }
 
@@ -506,11 +517,11 @@ void AppHubBackend::parseFlatpakSearch(const QByteArray &output)
     QList<AppModel::Item> items;
     for (const QByteArray &line : output.split('\n')) {
         const QStringList fields = QString::fromLocal8Bit(line).split('\t');
-        if (fields.size() < 4 || fields.first().trimmed().isEmpty())
+        if (fields.size() < 5 || fields.first().trimmed().isEmpty())
             continue;
 
         const QString identifier = fields.at(0).trimmed();
-        if (identifier == QLatin1String("Application") || !isSafeIdentifier(identifier))
+        if (identifier == QLatin1String("Application") || !isSafeIdentifier(identifier) || !isFlathubRemote(fields.value(4)))
             continue;
 
         const bool installed = m_installedFlatpaks.contains(identifier);
@@ -531,7 +542,7 @@ void AppHubBackend::parseFlatpakSearch(const QByteArray &output)
             fields.value(2).trimmed(),
             {},
             QStringLiteral("GUI Application"),
-            fields.value(4).trimmed()
+            QString()
         });
     }
 

@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
     KLocalizedString::setApplicationDomain(QByteArrayLiteral("appfinder"));
 
     KAboutData about(QStringLiteral("appfinder"),
-                     i18n("Appfinder"),
+                     i18n("AppFinder"),
                      QStringLiteral("0.1.0"),
                      i18n("Software management for Nitrux."),
                      KAboutLicense::BSD_3_Clause,

@@ -22,6 +22,8 @@ Maui.Page {
     Maui.ListBrowser {
         id: browser
         anchors.fill: parent
+        padding: Maui.Style.contentMargins
+        spacing: Maui.Style.space.small
         model: control.sourceModel
         holder.visible: count === 0
         holder.title: control.emptyTitle

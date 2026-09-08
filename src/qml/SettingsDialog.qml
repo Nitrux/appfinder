@@ -12,11 +12,11 @@ Maui.SettingsDialog {
 
     Maui.SectionGroup {
         title: qsTr("General")
-        description: qsTr("Configure how Appfinder starts and reports operations.")
+        description: qsTr("Configure how AppFinder starts and reports operations.")
 
         Maui.FlexSectionItem {
             label1.text: qsTr("Refresh sources on startup")
-            label2.text: qsTr("Update Flathub, NX AppHub, and Distrobox data when Appfinder opens.")
+            label2.text: qsTr("Update Flathub, NX AppHub, and Distrobox data when AppFinder opens.")
             label2.wrapMode: Text.WordWrap
 
             Switch {
@@ -40,7 +40,7 @@ Maui.SettingsDialog {
 
         Maui.FlexSectionItem {
             label1.text: qsTr("Show sidebar at startup")
-            label2.text: qsTr("Keep the source navigation sidebar open when Appfinder starts.")
+            label2.text: qsTr("Keep the source navigation sidebar open when AppFinder starts.")
             label2.wrapMode: Text.WordWrap
 
             Switch {

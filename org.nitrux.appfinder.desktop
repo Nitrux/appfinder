@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=Appfinder
+Name=AppFinder
 Comment=Manage Flatpaks, NX AppHub AppBoxes, and Distrobox containers
 TryExec=appfinder
 Exec=appfinder
