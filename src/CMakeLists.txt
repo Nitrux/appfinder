@@ -23,11 +23,17 @@ qt_add_qml_module(${PROJECT_NAME}
     QML_FILES
         qml/Main.qml
         qml/SourcePage.qml
+        qml/NavigationSidebar.qml
+        qml/SettingsDialog.qml
+        qml/FlathubPage.qml
+        qml/AppHubPage.qml
+        qml/DistroboxPage.qml
 )
 
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         MauiKit4
+        KF6::CoreAddons
         KF6::I18n
         Qt6::Core
         Qt6::Gui

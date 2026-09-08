@@ -49,6 +49,22 @@ QVariant AppModel::data(const QModelIndex &index, int role) const
         return item.actionIcon;
     case IconRole:
         return item.icon;
+    case StatusRole:
+        return item.status;
+    case BaseImageRole:
+        return item.baseImage;
+    case CreatedRole:
+        return item.created;
+    case IntegratedAppsRole:
+        return item.integratedApps;
+    case DescriptionRole:
+        return item.description;
+    case IntegrationRole:
+        return item.integration;
+    case TypeRole:
+        return item.type;
+    case SizeRole:
+        return item.size;
     default:
         return {};
     }
@@ -66,6 +82,14 @@ QHash<int, QByteArray> AppModel::roleNames() const
         {ActionTextRole, "actionText"},
         {ActionIconRole, "actionIcon"},
         {IconRole, "icon"},
+        {StatusRole, "status"},
+        {BaseImageRole, "baseImage"},
+        {CreatedRole, "created"},
+        {IntegratedAppsRole, "integratedApps"},
+        {DescriptionRole, "description"},
+        {IntegrationRole, "integration"},
+        {TypeRole, "type"},
+        {SizeRole, "size"},
     };
 }
 

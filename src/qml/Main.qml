@@ -4,6 +4,7 @@
  */
 
 import QtQuick
+import QtCore
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
@@ -11,21 +12,60 @@ import org.mauikit.controls as Maui
 Maui.ApplicationWindow {
     id: root
 
-    title: currentSection === 0 ? qsTr("Flathub")
-                                : currentSection === 1 ? qsTr("NX AppHub")
-                                                        : qsTr("Distrobox")
+    title: currentTitle
     color: "transparent"
     background: null
 
     property int currentSection: 0
-    property string searchText
+    property string searchText: ""
+    property bool suppressStartupNotification: false
+    readonly property alias appSettings: settings
 
-    function selectSection(section) {
-        currentSection = section
-        appHub.currentSection = section
+    Settings {
+        id: settings
+        category: "Appfinder"
+        property bool sidebarVisible: true
+        property bool refreshOnStartup: true
+        property bool showOperationNotifications: true
+        property bool startInInstalledView: false
     }
 
-    Component.onCompleted: appHub.refresh()
+    readonly property string currentTitle: currentSection === 0 ? qsTr("Flathub")
+                                           : currentSection === 1 ? qsTr("NX AppHub")
+                                           : currentSection === 2 ? qsTr("Distrobox")
+                                           : currentSection === 3 ? qsTr("Updates")
+                                                                   : qsTr("Settings")
+
+    function selectSection(section) {
+        if (section === 4) {
+            openSettingsDialog()
+            return
+        }
+
+        currentSection = section
+        if (section <= 2)
+            appHub.currentSection = section
+        if (sidebar.sideBar.collapsed)
+            sidebar.sideBar.close()
+    }
+
+    function openSettingsDialog() {
+        const dialog = settingsDialogComponent.createObject(root)
+        dialog.open()
+    }
+
+    function submitSearch() {
+        if (root.currentSection <= 2)
+            appHub.search(root.searchText)
+    }
+
+    Component.onCompleted: {
+        if (settings.refreshOnStartup) {
+            suppressStartupNotification = true
+            appHub.refresh()
+            suppressStartupNotification = false
+        }
+    }
 
     Maui.WindowBlur {
         view: root
@@ -41,123 +81,231 @@ Maui.ApplicationWindow {
         radius: Maui.Style.radiusV
     }
 
-    Maui.Page {
-        id: page
+    Maui.SideBarView {
+        id: sidebar
         anchors.fill: parent
-        title: root.title
+        sideBar.preferredWidth: Maui.Style.units.gridUnit * 12
+        sideBar.minimumWidth: Maui.Style.units.gridUnit * 12
+        sideBar.autoShow: settings.sidebarVisible
+        sideBar.autoHide: true
+        sideBar.floats: sideBar.collapsed
         background: null
-        headerMargins: Maui.Style.contentMargins
+        Maui.Theme.colorSet: Maui.Theme.View
 
-        headBar.leftContent: [
-            ToolButton {
-                icon.name: "applications-internet"
-                checked: root.currentSection === 0
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Flathub")
-                onClicked: root.selectSection(0)
-            },
-            ToolButton {
-                icon.name: "application-x-iso9660-appimage"
-                checked: root.currentSection === 1
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("NX AppHub")
-                onClicked: root.selectSection(1)
-            },
-            ToolButton {
-                icon.name: "utilities-terminal"
-                checked: root.currentSection === 2
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Distrobox")
-                onClicked: root.selectSection(2)
-            }
-        ]
-
-        headBar.middleContent: Maui.SearchField {
-            Layout.fillWidth: true
-            Layout.maximumWidth: Maui.Style.units.gridUnit * 32
-            placeholderText: root.currentSection === 0 ? qsTr("Search Flathub")
-                                                         : root.currentSection === 1 ? qsTr("Search NX AppHub")
-                                                                                       : qsTr("Filter containers")
-            onAccepted: {
-                root.searchText = text
-                appHub.search(text)
-            }
-            onCleared: {
-                root.searchText = ""
-                appHub.search("")
-            }
-        }
-
-        headBar.rightContent: [
-            ToolButton {
-                icon.name: "view-refresh"
-                enabled: !appHub.busy
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Refresh sources")
-                onClicked: appHub.refresh()
-            },
-            ToolButton {
-                visible: root.currentSection === 1
-                icon.name: "repository-update"
-                enabled: !appHub.busy
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Refresh NX AppHub repository")
-                onClicked: appHub.refreshAppHubRepository()
-            }
-        ]
-
-        Loader {
-            id: contentLoader
+        sideBarContent: NavigationSidebar {
             anchors.fill: parent
-            sourceComponent: root.currentSection === 0 ? flathubPage
-                             : root.currentSection === 1 ? appHubPage
-                                                          : distroboxPage
+            anchors.margins: Maui.Style.contentMargins
+            currentSection: root.currentSection
+            onSectionSelected: function(section) { root.selectSection(section) }
         }
 
-        Label {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.margins: Maui.Style.contentMargins
-            visible: appHub.statusMessage.length > 0
-            text: appHub.statusMessage
-            color: Maui.Theme.disabledTextColor
-            elide: Text.ElideRight
+        Connections {
+            target: sidebar.sideBar
+            function onOpened() { settings.sidebarVisible = true }
+            function onClosed() { settings.sidebarVisible = false }
         }
+
+        Maui.Page {
+            id: page
+            anchors.fill: parent
+            background: null
+            headerMargins: Maui.Style.contentMargins
+            headBar.forceCenterMiddleContent: true
+
+            headBar.leftContent: [
+                ToolButton {
+                    text: qsTr("Toggle Sidebar")
+                    display: AbstractButton.IconOnly
+                    checkable: true
+                    icon.name: sidebar.sideBar.visible ? "sidebar-collapse" : "sidebar-expand"
+                    checked: sidebar.sideBar.visible
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Toggle navigation")
+                    onClicked: sidebar.sideBar.toggle()
+                },
+
+                ToolSeparator {
+                    bottomPadding: 10
+                    topPadding: 10
+                }
+            ]
+
+            headBar.middleContent: Maui.SearchField {
+                id: globalSearch
+                Layout.preferredWidth: Maui.Style.units.gridUnit * 18
+                Layout.maximumWidth: Maui.Style.units.gridUnit * 26
+                Layout.alignment: Qt.AlignCenter
+                visible: root.currentSection <= 2
+                enabled: visible
+                placeholderText: qsTr("Search %1").arg(root.currentTitle)
+                text: root.searchText
+
+                onTextChanged: {
+                    root.searchText = text
+                    searchTimer.restart()
+                }
+                onAccepted: {
+                    searchTimer.stop()
+                    root.submitSearch()
+                }
+                onCleared: {
+                    root.searchText = ""
+                    searchTimer.stop()
+                    root.submitSearch()
+                }
+            }
+
+            headBar.rightContent: [
+                ToolSeparator {
+                    bottomPadding: 10
+                    topPadding: 10
+                },
+
+                Maui.ToolButtonMenu {
+                icon.name: "overflow-menu"
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Menu")
+
+                MenuItem {
+                    text: qsTr("Settings")
+                    icon.name: "settings-configure"
+                    onTriggered: root.selectSection(4)
+                }
+
+                MenuSeparator {}
+
+                MenuItem {
+                    text: qsTr("About")
+                    icon.name: "documentinfo"
+                    onTriggered: Maui.App.aboutDialog()
+                }
+                }
+            ]
+
+            Loader {
+                id: contentLoader
+                anchors.fill: parent
+                sourceComponent: root.currentSection === 0 ? flathubPage
+                                 : root.currentSection === 1 ? appHubPage
+                                 : root.currentSection === 2 ? distroboxPage
+                                                              : updatesPage
+            }
+        }
+    }
+
+    Maui.Notification {
+        id: statusNotification
+        iconName: "dialog-information"
+        title: qsTr("Appfinder")
+        message: appHub.statusMessage
+    }
+
+    Connections {
+        target: appHub
+        function onStatusMessageChanged() {
+            if (root.suppressStartupNotification)
+                return
+            if (settings.showOperationNotifications && appHub.statusMessage.length > 0)
+                statusNotification.dispatch()
+        }
+    }
+
+    Timer {
+        id: searchTimer
+        interval: 250
+        repeat: false
+        onTriggered: root.submitSearch()
     }
 
     Component {
         id: flathubPage
-        SourcePage {
-            sourceModel: appHub.flathubModel
-            emptyTitle: qsTr("Search Flathub")
-            emptyBody: qsTr("Search Flathub for desktop applications and install them as Flatpaks.")
-            actionHandler: function(identifier, actionText) {
-                if (actionText === "Remove")
-                    appHub.removeFlatpak(identifier)
-                else
-                    appHub.installFlatpak(identifier)
-            }
+        FlathubPage {
+            query: root.searchText
+            initialInstalledView: settings.startInInstalledView
+            onViewModeChanged: settings.startInInstalledView = installed
+        }
+    }
+
+    Component {
+        id: settingsDialogComponent
+        SettingsDialog {
+            appSettings: root.appSettings
+            onClosed: destroy()
         }
     }
 
     Component {
         id: appHubPage
-        SourcePage {
-            sourceModel: appHub.appHubModel
-            emptyTitle: qsTr("NX AppHub builds AppBoxes")
-            emptyBody: qsTr("Search the NX AppHub Apps metadata repository for software that does not fit the Flatpak or Distrobox roles.")
-            actionHandler: function(identifier) { appHub.appHubAction(identifier) }
-        }
+        AppHubPage {}
     }
 
     Component {
         id: distroboxPage
-        SourcePage {
-            sourceModel: appHub.distroboxModel
-            emptyTitle: qsTr("No Distrobox containers")
-            emptyBody: qsTr("Distrobox containers are development sandboxes. Create them with Distrobox, then refresh this view to keep track of them.")
-            actionHandler: function(identifier) { appHub.enterDistrobox(identifier) }
+        DistroboxPage {
+            onCreateContainerRequested: createDialog.open()
+            onCloneRequested: function(source) {
+                cloneDialog.sourceName = source
+                cloneDialog.open()
+            }
+        }
+    }
+
+    Component {
+        id: updatesPage
+        Maui.Page {
+            background: null
+            headBar.visible: false
+            Maui.Holder {
+                anchors.fill: parent
+                emoji: "system-software-update"
+                title: qsTr("Updates available")
+                body: qsTr("Three software updates are ready to review. Update details will appear here when the update service is available.")
+            }
+        }
+    }
+
+    Maui.InfoDialog {
+        id: createDialog
+        title: qsTr("New Container")
+        message: qsTr("Create a development sandbox with Distrobox.")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        Maui.TextField {
+            id: containerNameField
+            Layout.fillWidth: true
+            placeholderText: qsTr("Container name")
+        }
+
+        Maui.TextField {
+            id: containerImageField
+            Layout.fillWidth: true
+            placeholderText: qsTr("Base image (for example, ubuntu:24.04)")
+            text: "ubuntu:24.04"
+        }
+
+        Maui.TextField {
+            id: containerHomeField
+            Layout.fillWidth: true
+            placeholderText: qsTr("Custom home directory (optional)")
+        }
+
+        onAccepted: {
+            appHub.createDistrobox(containerNameField.text, containerImageField.text, containerHomeField.text)
+            containerNameField.clear()
+            containerHomeField.clear()
+            close()
+        }
+        onRejected: close()
+    }
+
+    Maui.InputDialog {
+        id: cloneDialog
+        property string sourceName: ""
+        title: qsTr("Clone Container")
+        message: qsTr("Choose a name for the cloned Distrobox container.")
+        textEntry.placeholderText: qsTr("New container name")
+        onFinished: function(text) {
+            appHub.cloneDistrobox(sourceName, text)
         }
     }
 }

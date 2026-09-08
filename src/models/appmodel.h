@@ -28,6 +28,14 @@ public:
         QString actionText;
         QString actionIcon;
         QString icon;
+        QString status;
+        QString baseImage;
+        QString created;
+        QString integratedApps;
+        QString description;
+        QString integration;
+        QString type;
+        QString size;
     };
 
     enum Role
@@ -40,7 +48,15 @@ public:
         CategoryRole,
         ActionTextRole,
         ActionIconRole,
-        IconRole
+        IconRole,
+        StatusRole,
+        BaseImageRole,
+        CreatedRole,
+        IntegratedAppsRole,
+        DescriptionRole,
+        IntegrationRole,
+        TypeRole,
+        SizeRole
     };
     Q_ENUM(Role)
 

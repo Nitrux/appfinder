@@ -24,6 +24,7 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(int currentSection READ currentSection WRITE setCurrentSection NOTIFY currentSectionChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
+    Q_PROPERTY(QString operationLog READ operationLog NOTIFY operationLogChanged)
 
 public:
     enum Section
@@ -45,6 +46,7 @@ public:
 
     bool busy() const;
     QString statusMessage() const;
+    QString operationLog() const;
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void refreshAppHubRepository();
@@ -52,12 +54,20 @@ public:
     Q_INVOKABLE void installFlatpak(const QString &identifier);
     Q_INVOKABLE void removeFlatpak(const QString &identifier);
     Q_INVOKABLE void appHubAction(const QString &identifier);
+    Q_INVOKABLE void rebuildAppHub(const QString &identifier);
     Q_INVOKABLE void enterDistrobox(const QString &name);
+    Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {});
+    Q_INVOKABLE void startDistrobox(const QString &name);
+    Q_INVOKABLE void stopDistrobox(const QString &name);
+    Q_INVOKABLE void cloneDistrobox(const QString &source, const QString &name);
+    Q_INVOKABLE void removeDistrobox(const QString &name);
+    Q_INVOKABLE bool isFlatpakInstalled(const QString &identifier) const;
 
 signals:
     void currentSectionChanged();
     void busyChanged();
     void statusMessageChanged();
+    void operationLogChanged();
 
 private slots:
     void processFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -73,7 +83,12 @@ private:
         FlatpakInstall,
         FlatpakRemove,
         AppHubInstall,
-        AppHubRemove
+        AppHubRemove,
+        DistroboxCreate,
+        DistroboxStart,
+        DistroboxStop,
+        DistroboxClone,
+        DistroboxRemove
     };
 
     QByteArray runCommand(const QString &program, const QStringList &arguments, int timeout = 10000) const;
@@ -99,6 +114,8 @@ private:
     bool appHubItemInstalled(const QString &name) const;
     bool matches(const AppModel::Item &item) const;
     QString findExecutable(const QString &program) const;
+    QString containerEngine() const;
+    void appendOperationLog(const QByteArray &output);
 
     void setBusy(bool busy);
     void setStatusMessage(const QString &message);
@@ -120,4 +137,5 @@ private:
     int m_currentSection = Flathub;
     bool m_busy = false;
     QString m_statusMessage;
+    QString m_operationLog;
 };

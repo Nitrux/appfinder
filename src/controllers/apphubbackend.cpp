@@ -18,6 +18,7 @@
 namespace {
 
 constexpr qsizetype MaxProcessOutputBytes = 8 * 1024 * 1024;
+constexpr qsizetype MaxOperationLogBytes = 64 * 1024;
 constexpr qint64 MaxMetadataBytes = 2 * 1024 * 1024;
 constexpr qsizetype MaxQueryLength = 256;
 constexpr int MaxCatalogItems = 10000;
@@ -105,6 +106,11 @@ bool AppHubBackend::busy() const
 QString AppHubBackend::statusMessage() const
 {
     return m_statusMessage;
+}
+
+QString AppHubBackend::operationLog() const
+{
+    return m_operationLog;
 }
 
 void AppHubBackend::setBusy(bool busy)
@@ -205,6 +211,8 @@ bool AppHubBackend::startOperation(const QString &program,
     m_processOutputTooLarge = false;
     m_operation = operation;
     m_operationIdentifier = identifier;
+    m_operationLog = QStringLiteral("Starting %1…").arg(program);
+    emit operationLogChanged();
     setBusy(true);
     m_process->start(executable, arguments);
     return true;
@@ -307,6 +315,115 @@ void AppHubBackend::appHubAction(const QString &identifier)
     setStatusMessage(QStringLiteral("%1 %2 through NX AppHub…").arg(installed ? QStringLiteral("Removing") : QStringLiteral("Building"), identifier));
 }
 
+void AppHubBackend::rebuildAppHub(const QString &identifier)
+{
+    if (!isSafeIdentifier(identifier)) {
+        setStatusMessage(QStringLiteral("Invalid NX AppHub identifier."));
+        return;
+    }
+    if (!startOperation(QStringLiteral("nx-apphub-cli"),
+                        {QStringLiteral("install"), identifier},
+                        Operation::AppHubInstall,
+                        identifier))
+        return;
+    setStatusMessage(QStringLiteral("Rebuilding %1 through NX AppHub…").arg(identifier));
+}
+
+bool AppHubBackend::isFlatpakInstalled(const QString &identifier) const
+{
+    return isSafeIdentifier(identifier) && m_installedFlatpaks.contains(identifier);
+}
+
+void AppHubBackend::createDistrobox(const QString &name, const QString &image, const QString &home)
+{
+    const QString normalizedName = name.trimmed();
+    const QString normalizedImage = image.trimmed();
+    const QString normalizedHome = home.trimmed();
+    if (!isSafeIdentifier(normalizedName) || normalizedImage.isEmpty() || normalizedImage.size() > MaxQueryLength
+        || normalizedImage.startsWith(QLatin1Char('-')) || normalizedHome.startsWith(QLatin1Char('-'))) {
+        setStatusMessage(QStringLiteral("Invalid Distrobox details."));
+        return;
+    }
+
+    const QString executable = findExecutable(QStringLiteral("distrobox-create"));
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("distrobox-create is not installed."));
+        return;
+    }
+
+    QStringList arguments {QStringLiteral("--name"), normalizedName, QStringLiteral("--image"), normalizedImage};
+    if (!normalizedHome.isEmpty())
+        arguments << QStringLiteral("--home") << normalizedHome;
+
+    if (!startOperation(executable, arguments, Operation::DistroboxCreate, normalizedName))
+        return;
+    setStatusMessage(QStringLiteral("Creating %1…").arg(normalizedName));
+}
+
+void AppHubBackend::startDistrobox(const QString &name)
+{
+    if (!isSafeIdentifier(name)) {
+        setStatusMessage(QStringLiteral("Invalid Distrobox name."));
+        return;
+    }
+    const QString executable = containerEngine();
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("Neither podman nor docker is installed."));
+        return;
+    }
+    if (!startOperation(executable, {QStringLiteral("start"), name}, Operation::DistroboxStart, name))
+        return;
+    setStatusMessage(QStringLiteral("Starting %1…").arg(name));
+}
+
+void AppHubBackend::stopDistrobox(const QString &name)
+{
+    if (!isSafeIdentifier(name)) {
+        setStatusMessage(QStringLiteral("Invalid Distrobox name."));
+        return;
+    }
+    const QString executable = containerEngine();
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("Neither podman nor docker is installed."));
+        return;
+    }
+    if (!startOperation(executable, {QStringLiteral("stop"), name}, Operation::DistroboxStop, name))
+        return;
+    setStatusMessage(QStringLiteral("Stopping %1…").arg(name));
+}
+
+void AppHubBackend::cloneDistrobox(const QString &source, const QString &name)
+{
+    if (!isSafeIdentifier(source) || !isSafeIdentifier(name)) {
+        setStatusMessage(QStringLiteral("Invalid Distrobox name."));
+        return;
+    }
+    const QString executable = findExecutable(QStringLiteral("distrobox-create"));
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("distrobox-create is not installed."));
+        return;
+    }
+    if (!startOperation(executable, {QStringLiteral("--clone"), source, QStringLiteral("--name"), name}, Operation::DistroboxClone, name))
+        return;
+    setStatusMessage(QStringLiteral("Cloning %1 as %2…").arg(source, name));
+}
+
+void AppHubBackend::removeDistrobox(const QString &name)
+{
+    if (!isSafeIdentifier(name)) {
+        setStatusMessage(QStringLiteral("Invalid Distrobox name."));
+        return;
+    }
+    const QString executable = containerEngine();
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("Neither podman nor docker is installed."));
+        return;
+    }
+    if (!startOperation(executable, {QStringLiteral("rm"), QStringLiteral("--force"), name}, Operation::DistroboxRemove, name))
+        return;
+    setStatusMessage(QStringLiteral("Removing %1…").arg(name));
+}
+
 void AppHubBackend::enterDistrobox(const QString &name)
 {
     if (!isSafeIdentifier(name)) {
@@ -334,7 +451,7 @@ void AppHubBackend::enterDistrobox(const QString &name)
 void AppHubBackend::refreshFlatpakInstalled()
 {
     const QByteArray output = runCommand(QStringLiteral("flatpak"),
-                                         {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"), QStringLiteral("--columns=application,name,version,arch")});
+                                         {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"), QStringLiteral("--columns=application,name,version,arch,size")});
     QList<AppModel::Item> items;
     m_installedFlatpaks.clear();
 
@@ -354,10 +471,18 @@ void AppHubBackend::refreshFlatpakInstalled()
             fields.value(2).trimmed(),
             fields.value(3).trimmed(),
             identifier,
-            QStringLiteral("Installed"),
+            QStringLiteral("Desktop Application"),
             QStringLiteral("Remove"),
             QStringLiteral("edit-delete"),
-            QStringLiteral("application-x-flatpak")
+            QStringLiteral("application-x-flatpak"),
+            QStringLiteral("Installed"),
+            {},
+            {},
+            {},
+            QStringLiteral("Installed through Flathub"),
+            {},
+            QStringLiteral("GUI Application"),
+            fields.value(4).trimmed()
         });
     }
 
@@ -395,10 +520,18 @@ void AppHubBackend::parseFlatpakSearch(const QByteArray &output)
             fields.value(3).trimmed(),
             architecture(),
             identifier,
-            QStringLiteral("Flathub"),
+            QStringLiteral("Flathub Application"),
             installed ? QStringLiteral("Remove") : QStringLiteral("Install"),
             installed ? QStringLiteral("edit-delete") : QStringLiteral("list-add"),
-            QStringLiteral("application-x-flatpak")
+            QStringLiteral("application-x-flatpak"),
+            installed ? QStringLiteral("Installed") : QStringLiteral("Available"),
+            {},
+            {},
+            {},
+            fields.value(2).trimmed(),
+            {},
+            QStringLiteral("GUI Application"),
+            fields.value(4).trimmed()
         });
     }
 
@@ -484,7 +617,15 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
             category,
             installed ? QStringLiteral("Remove") : QStringLiteral("Build AppBox"),
             installed ? QStringLiteral("edit-delete") : QStringLiteral("run-build"),
-            QStringLiteral("application-x-iso9660-appimage")
+            QStringLiteral("application-x-iso9660-appimage"),
+            installed ? QStringLiteral("Active Extension") : QStringLiteral("Not Built"),
+            {},
+            {},
+            {},
+            summary,
+            integration,
+            category.section(QChar(u'.'), -1),
+            {}
         });
     }
 
@@ -507,16 +648,26 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
         if (name.isEmpty() || name == QLatin1String("NAME") || !isSafeIdentifier(name))
             continue;
 
+        const QString status = fields.at(2).trimmed();
+        const QString baseImage = fields.at(3).trimmed();
         items.append({
             name,
-            QStringLiteral("%1 · %2").arg(fields.at(2).trimmed(), fields.at(3).trimmed()),
+            QStringLiteral("%1 · %2").arg(status, baseImage),
             {},
             {},
             name,
             QStringLiteral("Distrobox"),
             QStringLiteral("Enter"),
             QStringLiteral("utilities-terminal"),
-            QStringLiteral("utilities-terminal")
+            QStringLiteral("utilities-terminal"),
+            status,
+            baseImage,
+            {},
+            QStringLiteral("0"),
+            {},
+            {},
+            QStringLiteral("Development Sandbox"),
+            {}
         });
     }
     return items;
@@ -599,6 +750,29 @@ bool AppHubBackend::matches(const AppModel::Item &item) const
         || item.category.contains(m_query, sensitivity);
 }
 
+QString AppHubBackend::containerEngine() const
+{
+    const QString podman = findExecutable(QStringLiteral("podman"));
+    if (!podman.isEmpty())
+        return podman;
+    return findExecutable(QStringLiteral("docker"));
+}
+
+void AppHubBackend::appendOperationLog(const QByteArray &output)
+{
+    if (output.isEmpty())
+        return;
+
+    QString log = m_operationLog + QString::fromLocal8Bit(output);
+    if (log.size() > MaxOperationLogBytes)
+        log = log.right(MaxOperationLogBytes);
+    if (log == m_operationLog)
+        return;
+
+    m_operationLog = log;
+    emit operationLogChanged();
+}
+
 void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
 {
     if (error != QProcess::FailedToStart)
@@ -617,8 +791,12 @@ void AppHubBackend::processOutputReady()
         return;
     }
 
-    m_processOutput += m_process->readAllStandardOutput();
-    m_processErrorOutput += m_process->readAllStandardError();
+    const QByteArray standardOutput = m_process->readAllStandardOutput();
+    const QByteArray standardError = m_process->readAllStandardError();
+    m_processOutput += standardOutput;
+    m_processErrorOutput += standardError;
+    appendOperationLog(standardOutput);
+    appendOperationLog(standardError);
     if (m_processOutput.size() + m_processErrorOutput.size() > MaxProcessOutputBytes) {
         m_processOutputTooLarge = true;
         m_process->kill();
@@ -665,6 +843,14 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     case Operation::AppHubRemove:
         refreshAppHubCatalog();
         setStatusMessage(QStringLiteral("NX AppHub operation completed."));
+        break;
+    case Operation::DistroboxCreate:
+    case Operation::DistroboxStart:
+    case Operation::DistroboxStop:
+    case Operation::DistroboxClone:
+    case Operation::DistroboxRemove:
+        refreshDistrobox();
+        setStatusMessage(QStringLiteral("Distrobox operation completed."));
         break;
     case Operation::None:
         break;
