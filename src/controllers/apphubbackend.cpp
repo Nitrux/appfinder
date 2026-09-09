@@ -5,15 +5,28 @@
 
 #include "apphubbackend.h"
 
+#include <QColor>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QImage>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QSysInfo>
+#include <QUrl>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
 
 namespace {
 
@@ -22,6 +35,9 @@ constexpr qsizetype MaxOperationLogBytes = 64 * 1024;
 constexpr qint64 MaxMetadataBytes = 2 * 1024 * 1024;
 constexpr qsizetype MaxQueryLength = 256;
 constexpr int MaxCatalogItems = 10000;
+constexpr int MaxFeaturedItems = 8;
+constexpr qsizetype MaxFeaturedResponseBytes = 8 * 1024 * 1024;
+constexpr qsizetype MaxFeaturedIconBytes = 2 * 1024 * 1024;
 
 bool isSafeIdentifier(const QString &value)
 {
@@ -43,6 +59,107 @@ QByteArray readBoundedFile(const QString &path, qint64 maximumBytes)
     return content.size() <= maximumBytes ? content : QByteArray();
 }
 
+QColor clampAccentColor(const QColor &color)
+{
+    const QColor hslColor = color.toHsl();
+    qreal hue = hslColor.hslHueF();
+    if (hue < 0.0)
+        hue = 0.55;
+
+    const qreal saturation = std::clamp<qreal>(hslColor.hslSaturationF(), 0.35, 0.95);
+    const qreal lightness = std::clamp<qreal>(hslColor.lightnessF(), 0.35, 0.62);
+
+    QColor result;
+    result.setHslF(hue, saturation, lightness, 1.0);
+    return result;
+}
+
+QColor accentFromArtwork(const QImage &sourceImage)
+{
+    if (sourceImage.isNull())
+        return {};
+
+    const QImage image = sourceImage.convertToFormat(QImage::Format_ARGB32)
+                             .scaled(96, 96, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    if (image.isNull())
+        return {};
+
+    struct Bucket
+    {
+        double weight = 0.0;
+        double red = 0.0;
+        double green = 0.0;
+        double blue = 0.0;
+        double saturation = 0.0;
+        double lightness = 0.0;
+    };
+
+    constexpr int HueBuckets = 24;
+    constexpr int SaturationBuckets = 6;
+    constexpr int LightnessBuckets = 6;
+    std::array<Bucket, HueBuckets * SaturationBuckets * LightnessBuckets> buckets;
+
+    const auto bucketIndexFor = [=](const QColor &color) {
+        const int hue = qMax(0, color.hslHue());
+        const int hueIndex = std::clamp(hue / 15, 0, HueBuckets - 1);
+        const int saturationIndex = std::clamp(static_cast<int>(color.hslSaturationF() * SaturationBuckets), 0, SaturationBuckets - 1);
+        const int lightnessIndex = std::clamp(static_cast<int>(color.lightnessF() * LightnessBuckets), 0, LightnessBuckets - 1);
+        return hueIndex + saturationIndex * HueBuckets + lightnessIndex * HueBuckets * SaturationBuckets;
+    };
+
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            const QColor color = image.pixelColor(x, y).toHsl();
+            if (color.alpha() < 24)
+                continue;
+
+            const double saturation = color.hslSaturationF();
+            const double lightness = color.lightnessF();
+            if (lightness <= 0.02 || lightness >= 0.98)
+                continue;
+            if (saturation < 0.06 && (lightness <= 0.18 || lightness >= 0.82))
+                continue;
+
+            const double vividness = std::clamp((saturation - 0.08) / 0.92, 0.0, 1.0);
+            const double midtoneBalance = 1.0 - std::min(1.0, std::abs(lightness - 0.52) / 0.52);
+            const double weight = 0.12 + vividness * vividness * 0.7 + midtoneBalance * 0.18;
+
+            auto &bucket = buckets[bucketIndexFor(color)];
+            bucket.weight += weight;
+            bucket.red += color.redF() * weight;
+            bucket.green += color.greenF() * weight;
+            bucket.blue += color.blueF() * weight;
+            bucket.saturation += saturation * weight;
+            bucket.lightness += lightness * weight;
+        }
+    }
+
+    double bestScore = 0.0;
+    QColor bestColor;
+    for (const auto &bucket : buckets) {
+        if (bucket.weight <= 0.0)
+            continue;
+
+        const double averageSaturation = bucket.saturation / bucket.weight;
+        const double averageLightness = bucket.lightness / bucket.weight;
+        if (averageSaturation < 0.12)
+            continue;
+
+        const double score = bucket.weight * (0.4 + averageSaturation * 0.9)
+            * (1.0 - std::min(0.85, std::abs(averageLightness - 0.5)));
+        if (score <= bestScore)
+            continue;
+
+        bestScore = score;
+        bestColor.setRgbF(bucket.red / bucket.weight,
+                          bucket.green / bucket.weight,
+                          bucket.blue / bucket.weight,
+                          1.0);
+    }
+
+    return bestColor.isValid() ? clampAccentColor(bestColor) : QColor();
+}
+
 QString cleanValue(QString value)
 {
     value = value.trimmed();
@@ -51,6 +168,41 @@ QString cleanValue(QString value)
     if (value.startsWith('\'') && value.endsWith('\'') && value.size() > 1)
         value = value.mid(1, value.size() - 2);
     return value.trimmed();
+}
+
+QString displayCategory(QString category)
+{
+    category = category.trimmed();
+    QString key = category.toCaseFolded();
+    key.remove(QStringLiteral(" "));
+    key.remove(QStringLiteral("-"));
+    key.remove(QStringLiteral("_"));
+    key.remove(QStringLiteral("/"));
+
+    static const QHash<QString, QString> labels = {
+        {QStringLiteral("audiovideo"), QStringLiteral("Audio/Video")},
+        {QStringLiteral("audioandvideo"), QStringLiteral("Audio/Video")},
+        {QStringLiteral("development"), QStringLiteral("Development")},
+        {QStringLiteral("education"), QStringLiteral("Education")},
+        {QStringLiteral("game"), QStringLiteral("Games")},
+        {QStringLiteral("games"), QStringLiteral("Games")},
+        {QStringLiteral("graphics"), QStringLiteral("Graphics")},
+        {QStringLiteral("network"), QStringLiteral("Network")},
+        {QStringLiteral("office"), QStringLiteral("Office")},
+        {QStringLiteral("science"), QStringLiteral("Science")},
+        {QStringLiteral("settings"), QStringLiteral("Settings")},
+        {QStringLiteral("system"), QStringLiteral("System")},
+        {QStringLiteral("utilities"), QStringLiteral("Utilities")},
+        {QStringLiteral("utility"), QStringLiteral("Utilities")},
+    };
+
+    const auto label = labels.constFind(key);
+    if (label != labels.cend())
+        return label.value();
+
+    if (!category.isEmpty())
+        category[0] = category.at(0).toUpper();
+    return category;
 }
 
 bool isFlathubRemote(const QString value)
@@ -68,9 +220,11 @@ bool isFlathubRemote(const QString value)
 AppHubBackend::AppHubBackend(QObject *parent)
     : QObject(parent)
     , m_flathubModel(new AppModel(this))
+    , m_flathubFeaturedModel(new AppModel(this))
     , m_appHubModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
     , m_process(new QProcess(this))
+    , m_network(new QNetworkAccessManager(this))
 {
     connect(m_process, &QProcess::finished, this, &AppHubBackend::processFinished);
     connect(m_process, &QProcess::errorOccurred, this, &AppHubBackend::processErrorOccurred);
@@ -81,6 +235,11 @@ AppHubBackend::AppHubBackend(QObject *parent)
 AppModel *AppHubBackend::flathubModel()
 {
     return m_flathubModel;
+}
+
+AppModel *AppHubBackend::flathubFeaturedModel()
+{
+    return m_flathubFeaturedModel;
 }
 
 AppModel *AppHubBackend::appHubModel()
@@ -231,6 +390,7 @@ bool AppHubBackend::startOperation(const QString &program,
 void AppHubBackend::refresh()
 {
     refreshFlatpakInstalled();
+    refreshFlathubFeatured();
     refreshAppHubCatalog();
     refreshDistrobox();
     setStatusMessage(QStringLiteral("Sources refreshed."));
@@ -493,11 +653,194 @@ void AppHubBackend::refreshFlatpakInstalled()
             QStringLiteral("Installed through Flathub"),
             {},
             QStringLiteral("GUI Application"),
-            fields.value(5).trimmed()
+            fields.value(5).trimmed(),
+            {},
+            {},
+            {}
         });
     }
 
     m_flathubModel->setItems(filterItems(items));
+}
+
+void AppHubBackend::cancelFlathubFeaturedRequests()
+{
+    if (m_featuredCollectionReply) {
+        m_featuredCollectionReply->abort();
+        m_featuredCollectionReply->deleteLater();
+        m_featuredCollectionReply = nullptr;
+    }
+
+    const auto detailReplies = m_featuredDetailReplies.keys();
+    m_featuredDetailReplies.clear();
+    for (QNetworkReply *reply : detailReplies) {
+        reply->abort();
+        reply->deleteLater();
+    }
+
+    const auto iconReplies = m_featuredIconReplies.keys();
+    m_featuredIconReplies.clear();
+    for (QNetworkReply *reply : iconReplies) {
+        reply->abort();
+        reply->deleteLater();
+    }
+}
+
+void AppHubBackend::refreshFlathubFeatured()
+{
+    cancelFlathubFeaturedRequests();
+    m_featuredItems.clear();
+    m_flathubFeaturedModel->setItems({});
+
+    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/collection/popular?page=0&per_page=%1&locale=en").arg(MaxFeaturedItems)));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+    m_featuredCollectionReply = m_network->get(request);
+    QNetworkReply *reply = m_featuredCollectionReply;
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        if (m_featuredCollectionReply != reply) {
+            reply->deleteLater();
+            return;
+        }
+
+        m_featuredCollectionReply = nullptr;
+        const QByteArray response = reply->readAll();
+        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
+        reply->deleteLater();
+        if (valid)
+            parseFlathubFeaturedCollection(response);
+    });
+}
+
+void AppHubBackend::parseFlathubFeaturedCollection(const QByteArray &output)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    const QJsonArray hits = document.object().value(QStringLiteral("hits")).toArray();
+    for (const QJsonValue &value : hits) {
+        if (m_featuredItems.size() >= MaxFeaturedItems || !value.isObject())
+            break;
+
+        const QJsonObject object = value.toObject();
+        const QString identifier = object.value(QStringLiteral("app_id")).toString().trimmed();
+        const QString iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
+        if (!isSafeIdentifier(identifier) || iconUrl.isEmpty())
+            continue;
+
+        AppModel::Item item;
+        item.name = object.value(QStringLiteral("name")).toString(identifier).trimmed();
+        item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
+        item.identifier = identifier;
+        item.category = displayCategory(object.value(QStringLiteral("main_categories")).toString());
+        item.actionText = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Remove") : QStringLiteral("Install");
+        item.actionIcon = m_installedFlatpaks.contains(identifier) ? QStringLiteral("edit-delete") : QStringLiteral("list-add");
+        item.icon = QStringLiteral("application-x-flatpak");
+        item.status = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Installed") : QStringLiteral("Available");
+        item.description = object.value(QStringLiteral("description")).toString().trimmed();
+        item.type = object.value(QStringLiteral("type")).toString().trimmed();
+        item.iconUrl = iconUrl;
+        m_featuredItems.append(item);
+    }
+
+    m_flathubFeaturedModel->setItems(m_featuredItems);
+    for (int index = 0; index < m_featuredItems.size(); ++index) {
+        QNetworkRequest iconRequest(QUrl(m_featuredItems.at(index).iconUrl));
+        iconRequest.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+        QNetworkReply *iconReply = m_network->get(iconRequest);
+        m_featuredIconReplies.insert(iconReply, index);
+        connect(iconReply, &QNetworkReply::finished, this, [this, iconReply] {
+            const auto iterator = m_featuredIconReplies.find(iconReply);
+            if (iterator == m_featuredIconReplies.end()) {
+                iconReply->deleteLater();
+                return;
+            }
+
+            const int index = iterator.value();
+            m_featuredIconReplies.erase(iterator);
+            const QByteArray response = iconReply->readAll();
+            const bool valid = iconReply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedIconBytes;
+            iconReply->deleteLater();
+            if (valid && index >= 0 && index < m_featuredItems.size()) {
+                const QImage image = QImage::fromData(response);
+                if (!image.isNull()) {
+                    const QColor accentColor = accentFromArtwork(image);
+                    if (accentColor.isValid()) {
+                        m_featuredItems[index].accentColor = accentColor.name(QColor::HexRgb);
+                        m_flathubFeaturedModel->setItems(m_featuredItems);
+                    }
+                }
+            }
+        });
+
+        const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(m_featuredItems.at(index).identifier));
+        QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
+        request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+        QNetworkReply *reply = m_network->get(request);
+        m_featuredDetailReplies.insert(reply, index);
+        connect(reply, &QNetworkReply::finished, this, [this, reply] {
+            const auto iterator = m_featuredDetailReplies.find(reply);
+            if (iterator == m_featuredDetailReplies.end()) {
+                reply->deleteLater();
+                return;
+            }
+
+            const int index = iterator.value();
+            m_featuredDetailReplies.erase(iterator);
+            const QByteArray response = reply->readAll();
+            const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
+            reply->deleteLater();
+            if (valid)
+                parseFlathubFeaturedAppstream(response, index);
+        });
+    }
+}
+
+void AppHubBackend::parseFlathubFeaturedAppstream(const QByteArray &output, int index)
+{
+    if (index < 0 || index >= m_featuredItems.size())
+        return;
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    QString screenshotUrl;
+    QString screenshotCaption;
+    qint64 largestArea = -1;
+    const QJsonArray screenshots = document.object().value(QStringLiteral("screenshots")).toArray();
+    for (const QJsonValue &screenshotValue : screenshots) {
+        if (!screenshotValue.isObject())
+            continue;
+
+        const QJsonObject screenshot = screenshotValue.toObject();
+        const QString caption = screenshot.value(QStringLiteral("caption")).toString().trimmed();
+        const QJsonArray sizes = screenshot.value(QStringLiteral("sizes")).toArray();
+        for (const QJsonValue &sizeValue : sizes) {
+            if (!sizeValue.isObject())
+                continue;
+
+            const QJsonObject size = sizeValue.toObject();
+            const QString source = size.value(QStringLiteral("src")).toString().trimmed();
+            const qint64 width = size.value(QStringLiteral("width")).toString().toLongLong();
+            const qint64 height = size.value(QStringLiteral("height")).toString().toLongLong();
+            const qint64 area = width > 0 && height > 0 ? width * height : 0;
+            if (!source.isEmpty() && area > largestArea) {
+                screenshotUrl = source;
+                screenshotCaption = caption;
+                largestArea = area;
+            }
+        }
+    }
+
+    if (screenshotUrl.isEmpty())
+        return;
+
+    m_featuredItems[index].screenshot = screenshotUrl;
+    m_featuredItems[index].screenshotCaption = screenshotCaption;
+    m_flathubFeaturedModel->setItems(m_featuredItems);
 }
 
 void AppHubBackend::refreshAppHubCatalog()
@@ -542,7 +885,10 @@ void AppHubBackend::parseFlatpakSearch(const QByteArray &output)
             fields.value(2).trimmed(),
             {},
             QStringLiteral("GUI Application"),
-            QString()
+            QString(),
+            {},
+            {},
+            {}
         });
     }
 
@@ -636,6 +982,9 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
             summary,
             integration,
             category.section(QChar(u'.'), -1),
+            {},
+            {},
+            {},
             {}
         });
     }
@@ -678,6 +1027,9 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
             {},
             {},
             QStringLiteral("Development Sandbox"),
+            {},
+            {},
+            {},
             {}
         });
     }

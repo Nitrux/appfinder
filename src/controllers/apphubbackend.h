@@ -7,6 +7,7 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QHash>
 #include <QList>
 #include <QProcess>
 #include <QSet>
@@ -15,10 +16,14 @@
 
 #include "../models/appmodel.h"
 
+class QNetworkAccessManager;
+class QNetworkReply;
+
 class AppHubBackend final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(AppModel *flathubModel READ flathubModel CONSTANT)
+    Q_PROPERTY(AppModel *flathubFeaturedModel READ flathubFeaturedModel CONSTANT)
     Q_PROPERTY(AppModel *appHubModel READ appHubModel CONSTANT)
     Q_PROPERTY(AppModel *distroboxModel READ distroboxModel CONSTANT)
     Q_PROPERTY(int currentSection READ currentSection WRITE setCurrentSection NOTIFY currentSectionChanged)
@@ -38,6 +43,7 @@ public:
     explicit AppHubBackend(QObject *parent = nullptr);
 
     AppModel *flathubModel();
+    AppModel *flathubFeaturedModel();
     AppModel *appHubModel();
     AppModel *distroboxModel();
 
@@ -98,6 +104,10 @@ private:
                         const QString &identifier = {});
 
     void refreshFlatpakInstalled();
+    void refreshFlathubFeatured();
+    void cancelFlathubFeaturedRequests();
+    void parseFlathubFeaturedCollection(const QByteArray &output);
+    void parseFlathubFeaturedAppstream(const QByteArray &output, int index);
     void refreshAppHubCatalog();
     void refreshDistrobox();
     void parseFlatpakSearch(const QByteArray &output);
@@ -121,14 +131,20 @@ private:
     void setStatusMessage(const QString &message);
 
     AppModel *m_flathubModel;
+    AppModel *m_flathubFeaturedModel;
     AppModel *m_appHubModel;
     AppModel *m_distroboxModel;
     QProcess *m_process;
+    QNetworkAccessManager *m_network;
+    QNetworkReply *m_featuredCollectionReply = nullptr;
+    QHash<QNetworkReply *, int> m_featuredDetailReplies;
+    QHash<QNetworkReply *, int> m_featuredIconReplies;
     QByteArray m_processOutput;
     QByteArray m_processErrorOutput;
     bool m_processOutputTooLarge = false;
 
     QList<AppModel::Item> m_allAppHubItems;
+    QList<AppModel::Item> m_featuredItems;
     QList<AppModel::Item> m_allDistroboxItems;
     QSet<QString> m_installedFlatpaks;
     QString m_query;

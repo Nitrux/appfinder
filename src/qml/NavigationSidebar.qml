@@ -18,7 +18,7 @@ Loader {
     property int currentSection: 0
     property var groups: [
         {
-            title: qsTr("Sources"),
+            title: qsTr("Explore"),
             items: [
                 { label: qsTr("Flathub"), icon: "get-hot-new-stuff", section: 0 },
                 { label: qsTr("NX AppHub"), icon: "package", section: 1 }

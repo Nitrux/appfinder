@@ -27,18 +27,6 @@ Maui.SettingsDialog {
         }
 
         Maui.FlexSectionItem {
-            label1.text: qsTr("Show operation notifications")
-            label2.text: qsTr("Display source refresh and install status in the MauiKit toast area.")
-            label2.wrapMode: Text.WordWrap
-
-            Switch {
-                checkable: true
-                checked: control.appSettings && control.appSettings.showOperationNotifications
-                onToggled: control.appSettings.showOperationNotifications = checked
-            }
-        }
-
-        Maui.FlexSectionItem {
             label1.text: qsTr("Show sidebar at startup")
             label2.text: qsTr("Keep the source navigation sidebar open when AppFinder starts.")
             label2.wrapMode: Text.WordWrap

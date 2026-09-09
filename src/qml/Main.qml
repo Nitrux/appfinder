@@ -18,7 +18,7 @@ Maui.ApplicationWindow {
 
     property int currentSection: 0
     property string searchText: ""
-    property bool suppressStartupNotification: false
+    property bool compactSearchOpen: false
     readonly property alias appSettings: settings
 
     Settings {
@@ -26,7 +26,6 @@ Maui.ApplicationWindow {
         category: "AppFinder"
         property bool sidebarVisible: true
         property bool refreshOnStartup: true
-        property bool showOperationNotifications: true
         property bool startInInstalledView: false
     }
 
@@ -60,11 +59,8 @@ Maui.ApplicationWindow {
     }
 
     Component.onCompleted: {
-        if (settings.refreshOnStartup) {
-            suppressStartupNotification = true
+        if (settings.refreshOnStartup)
             appHub.refresh()
-            suppressStartupNotification = false
-        }
     }
 
     Maui.WindowBlur {
@@ -117,10 +113,18 @@ Maui.ApplicationWindow {
             clip: true
             background: null
 
-            split: false
+            readonly property bool compactSearch: width < Maui.Style.units.gridUnit * 42
+
+            split: compactSearch && root.compactSearchOpen && root.currentSection <= 2
+            splitSection: Maui.PageLayout.Section.Middle
             splitIn: ToolBar.Header
             altHeader: Maui.Handy.isMobile
             Maui.Controls.showCSD: true
+
+            onCompactSearchChanged: {
+                if (!compactSearch)
+                    root.compactSearchOpen = false
+            }
 
             headBar.visible: true
             headBar.forceCenterMiddleContent: false
@@ -144,18 +148,61 @@ Maui.ApplicationWindow {
                 ToolSeparator {
                     bottomPadding: 10
                     topPadding: 10
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 0 && contentLoader.item !== null
+                    text: qsTr("Explore Flathub")
+                    display: AbstractButton.IconOnly
+                    checkable: true
+                    autoExclusive: true
+                    checked: root.currentSection === 0 && contentLoader.item && !contentLoader.item.installedView
+                    icon.name: "go-home"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: {
+                        root.searchText = ""
+                        if (contentLoader.item) {
+                            contentLoader.item.installedView = false
+                            settings.startInInstalledView = false
+                        }
+                    }
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 0 && contentLoader.item !== null
+                    text: qsTr("Installed applications")
+                    display: AbstractButton.IconOnly
+                    checkable: true
+                    autoExclusive: true
+                    checked: root.currentSection === 0 && contentLoader.item && contentLoader.item.installedView
+                    icon.name: "appfinder-library-flatpak"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: {
+                        root.searchText = ""
+                        if (contentLoader.item) {
+                            contentLoader.item.installedView = true
+                            settings.startInInstalledView = true
+                        }
+                    }
                 }
             ]
 
-            headBar.middleContent: Maui.SearchField {
-                id: globalSearch
-                Layout.preferredWidth: Maui.Style.units.gridUnit * 18
+            middleContent: Maui.SearchField {
+                id: compactGlobalSearch
+                Layout.fillWidth: true
                 Layout.maximumWidth: Maui.Style.units.gridUnit * 26
                 Layout.alignment: Qt.AlignCenter
-                visible: root.currentSection <= 2
+                visible: page.compactSearch && root.compactSearchOpen && root.currentSection <= 2
                 enabled: visible
                 placeholderText: qsTr("Search %1").arg(root.currentTitle)
                 text: root.searchText
+
+                onVisibleChanged: {
+                    if (visible)
+                        forceActiveFocus()
+                }
 
                 onTextChanged: {
                     root.searchText = text
@@ -173,28 +220,46 @@ Maui.ApplicationWindow {
             }
 
             headBar.rightContent: [
-                ToolSeparator {
-                    bottomPadding: 10
-                    topPadding: 10
+                Maui.SearchField {
+                    id: globalSearch
+                    Layout.preferredWidth: Maui.Style.units.gridUnit * 18
+                    Layout.maximumWidth: Maui.Style.units.gridUnit * 26
+                    Layout.alignment: Qt.AlignRight
+                    visible: root.currentSection <= 2 && !page.compactSearch
+                    enabled: visible
+                    placeholderText: qsTr("Search %1").arg(root.currentTitle)
+                    text: root.searchText
+
+                    onTextChanged: {
+                        root.searchText = text
+                        searchTimer.restart()
+                    }
+                    onAccepted: {
+                        searchTimer.stop()
+                        root.submitSearch()
+                    }
+                    onCleared: {
+                        root.searchText = ""
+                        searchTimer.stop()
+                        root.submitSearch()
+                    }
                 },
 
                 ToolButton {
-                    visible: root.currentSection === 0 && contentLoader.item !== null
-                    text: root.currentSection === 0 && contentLoader.item && contentLoader.item.installedView ? qsTr("Explore Flathub") : qsTr("Installed applications")
+                    visible: root.currentSection <= 2 && page.compactSearch
+                    text: qsTr("Search %1").arg(root.currentTitle)
                     display: AbstractButton.IconOnly
                     checkable: true
-                    checked: root.currentSection === 0 && contentLoader.item && contentLoader.item.installedView
-                    icon.name: checked ? "go-home" : "view-list-details"
+                    checked: root.compactSearchOpen
+                    icon.name: "edit-find"
                     ToolTip.visible: hovered
                     ToolTip.text: text
-                    onClicked: {
-                        root.searchText = ""
-                        if (contentLoader.item) {
-                            const nextView = !contentLoader.item.installedView
-                            contentLoader.item.installedView = nextView
-                            settings.startInInstalledView = nextView
-                        }
-                    }
+                    onClicked: root.compactSearchOpen = !root.compactSearchOpen
+                },
+
+                ToolSeparator {
+                    bottomPadding: 10
+                    topPadding: 10
                 },
 
                 Maui.ToolButtonMenu {
@@ -226,23 +291,6 @@ Maui.ApplicationWindow {
                                  : root.currentSection === 2 ? distroboxPage
                                                               : updatesPage
             }
-        }
-    }
-
-    Maui.Notification {
-        id: statusNotification
-        iconName: "dialog-information"
-        title: qsTr("AppFinder")
-        message: appHub.statusMessage
-    }
-
-    Connections {
-        target: appHub
-        function onStatusMessageChanged() {
-            if (root.suppressStartupNotification)
-                return
-            if (settings.showOperationNotifications && appHub.statusMessage.length > 0)
-                statusNotification.dispatch()
         }
     }
 

@@ -28,7 +28,7 @@ include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
 include(FeatureSummary)
 
-find_package(Qt6 6.9 REQUIRED COMPONENTS Core Gui Qml Quick Widgets)
+find_package(Qt6 6.9 REQUIRED COMPONENTS Core Gui Network Qml Quick Widgets)
 find_package(KF6 6.13.0 REQUIRED COMPONENTS CoreAddons I18n)
 find_package(MauiKit4 4.0.4 REQUIRED)
 

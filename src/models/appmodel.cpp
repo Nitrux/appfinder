@@ -65,6 +65,14 @@ QVariant AppModel::data(const QModelIndex &index, int role) const
         return item.type;
     case SizeRole:
         return item.size;
+    case IconUrlRole:
+        return item.iconUrl;
+    case ScreenshotRole:
+        return item.screenshot;
+    case ScreenshotCaptionRole:
+        return item.screenshotCaption;
+    case AccentColorRole:
+        return item.accentColor;
     default:
         return {};
     }
@@ -90,6 +98,10 @@ QHash<int, QByteArray> AppModel::roleNames() const
         {IntegrationRole, "integration"},
         {TypeRole, "type"},
         {SizeRole, "size"},
+        {IconUrlRole, "iconUrl"},
+        {ScreenshotRole, "screenshot"},
+        {ScreenshotCaptionRole, "screenshotCaption"},
+        {AccentColorRole, "accentColor"},
     };
 }
 

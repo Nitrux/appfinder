@@ -37,6 +37,7 @@ target_link_libraries(${PROJECT_NAME}
         KF6::I18n
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Qml
         Qt6::Quick
         Qt6::Widgets

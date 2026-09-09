@@ -36,6 +36,10 @@ public:
         QString integration;
         QString type;
         QString size;
+        QString iconUrl;
+        QString screenshot;
+        QString screenshotCaption;
+        QString accentColor {};
     };
 
     enum Role
@@ -56,7 +60,11 @@ public:
         DescriptionRole,
         IntegrationRole,
         TypeRole,
-        SizeRole
+        SizeRole,
+        IconUrlRole,
+        ScreenshotRole,
+        ScreenshotCaptionRole,
+        AccentColorRole
     };
     Q_ENUM(Role)
 

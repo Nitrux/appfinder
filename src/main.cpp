@@ -28,6 +28,7 @@ int main(int argc, char *argv[])
 
     QApplication application(argc, argv);
     application.setApplicationName(QStringLiteral("appfinder"));
+    application.setDesktopFileName(QStringLiteral("org.nitrux.appfinder"));
     application.setOrganizationName(QStringLiteral("Nitrux"));
     application.setWindowIcon(QIcon::fromTheme(QStringLiteral("application-x-iso9660-appimage")));
 
