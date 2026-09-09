@@ -108,6 +108,7 @@ private:
     void cancelFlathubFeaturedRequests();
     void parseFlathubFeaturedCollection(const QByteArray &output);
     void parseFlathubFeaturedAppstream(const QByteArray &output, int index);
+    void finalizeFlathubFeatured();
     void refreshAppHubCatalog();
     void refreshDistrobox();
     void parseFlatpakSearch(const QByteArray &output);

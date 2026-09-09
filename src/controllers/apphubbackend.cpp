@@ -6,6 +6,7 @@
 #include "apphubbackend.h"
 
 #include <QColor>
+#include <QDate>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -692,7 +693,8 @@ void AppHubBackend::refreshFlathubFeatured()
     m_featuredItems.clear();
     m_flathubFeaturedModel->setItems({});
 
-    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/collection/popular?page=0&per_page=%1&locale=en").arg(MaxFeaturedItems)));
+    const QString date = QDate::currentDate().toString(Qt::ISODate);
+    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/app-picks/apps-of-the-week/%1").arg(date)));
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
     m_featuredCollectionReply = m_network->get(request);
     QNetworkReply *reply = m_featuredCollectionReply;
@@ -718,33 +720,128 @@ void AppHubBackend::parseFlathubFeaturedCollection(const QByteArray &output)
     if (parseError.error != QJsonParseError::NoError || !document.isObject())
         return;
 
-    const QJsonArray hits = document.object().value(QStringLiteral("hits")).toArray();
-    for (const QJsonValue &value : hits) {
-        if (m_featuredItems.size() >= MaxFeaturedItems || !value.isObject())
+    const QJsonArray apps = document.object().value(QStringLiteral("apps")).toArray();
+    for (const QJsonValue &value : apps) {
+        if (m_featuredItems.size() >= MaxFeaturedItems)
             break;
+        if (!value.isObject())
+            continue;
 
-        const QJsonObject object = value.toObject();
-        const QString identifier = object.value(QStringLiteral("app_id")).toString().trimmed();
-        const QString iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
-        if (!isSafeIdentifier(identifier) || iconUrl.isEmpty())
+        const QString identifier = value.toObject().value(QStringLiteral("app_id")).toString().trimmed();
+        if (!isSafeIdentifier(identifier))
             continue;
 
         AppModel::Item item;
-        item.name = object.value(QStringLiteral("name")).toString(identifier).trimmed();
-        item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
+        item.name = identifier;
         item.identifier = identifier;
-        item.category = displayCategory(object.value(QStringLiteral("main_categories")).toString());
         item.actionText = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Remove") : QStringLiteral("Install");
         item.actionIcon = m_installedFlatpaks.contains(identifier) ? QStringLiteral("edit-delete") : QStringLiteral("list-add");
         item.icon = QStringLiteral("application-x-flatpak");
         item.status = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Installed") : QStringLiteral("Available");
-        item.description = object.value(QStringLiteral("description")).toString().trimmed();
-        item.type = object.value(QStringLiteral("type")).toString().trimmed();
-        item.iconUrl = iconUrl;
         m_featuredItems.append(item);
     }
 
+    for (int index = 0; index < m_featuredItems.size(); ++index) {
+        const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(m_featuredItems.at(index).identifier));
+        QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
+        request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+        QNetworkReply *reply = m_network->get(request);
+        m_featuredDetailReplies.insert(reply, index);
+        connect(reply, &QNetworkReply::finished, this, [this, reply] {
+            const auto iterator = m_featuredDetailReplies.find(reply);
+            if (iterator == m_featuredDetailReplies.end()) {
+                reply->deleteLater();
+                return;
+            }
+
+            const int index = iterator.value();
+            m_featuredDetailReplies.erase(iterator);
+            const QByteArray response = reply->readAll();
+            const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
+            reply->deleteLater();
+            if (valid)
+                parseFlathubFeaturedAppstream(response, index);
+            if (m_featuredDetailReplies.isEmpty())
+                finalizeFlathubFeatured();
+        });
+    }
+}
+
+void AppHubBackend::parseFlathubFeaturedAppstream(const QByteArray &output, int index)
+{
+    if (index < 0 || index >= m_featuredItems.size())
+        return;
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    const QJsonObject object = document.object();
+    AppModel::Item &item = m_featuredItems[index];
+    item.name = object.value(QStringLiteral("name")).toString(item.identifier).trimmed();
+    item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
+    item.description = object.value(QStringLiteral("description")).toString().trimmed();
+    item.type = object.value(QStringLiteral("type")).toString().trimmed();
+    item.iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
+
+    const QJsonArray categories = object.value(QStringLiteral("categories")).toArray();
+    for (const QJsonValue &category : categories) {
+        const QString value = category.toString().trimmed();
+        if (!value.isEmpty()) {
+            item.category = displayCategory(value);
+            break;
+        }
+    }
+    if (item.category.isEmpty())
+        item.category = QStringLiteral("Application");
+
+    QString screenshotUrl;
+    QString screenshotCaption;
+    qint64 largestArea = -1;
+    const QJsonArray screenshots = object.value(QStringLiteral("screenshots")).toArray();
+    for (const QJsonValue &screenshotValue : screenshots) {
+        if (!screenshotValue.isObject())
+            continue;
+
+        const QJsonObject screenshot = screenshotValue.toObject();
+        const QString caption = screenshot.value(QStringLiteral("caption")).toString().trimmed();
+        const QJsonArray sizes = screenshot.value(QStringLiteral("sizes")).toArray();
+        for (const QJsonValue &sizeValue : sizes) {
+            if (!sizeValue.isObject())
+                continue;
+
+            const QJsonObject size = sizeValue.toObject();
+            const QString source = size.value(QStringLiteral("src")).toString().trimmed();
+            const qint64 width = size.value(QStringLiteral("width")).toString().toLongLong();
+            const qint64 height = size.value(QStringLiteral("height")).toString().toLongLong();
+            const qint64 area = width > 0 && height > 0 ? width * height : 0;
+            if (!source.isEmpty() && area > largestArea) {
+                screenshotUrl = source;
+                screenshotCaption = caption;
+                largestArea = area;
+            }
+        }
+    }
+
+    if (screenshotUrl.isEmpty())
+        return;
+
+    item.screenshot = screenshotUrl;
+    item.screenshotCaption = screenshotCaption;
+}
+
+void AppHubBackend::finalizeFlathubFeatured()
+{
+    QList<AppModel::Item> readyItems;
+    for (const AppModel::Item &item : m_featuredItems) {
+        if (!item.iconUrl.isEmpty() && !item.screenshot.isEmpty())
+            readyItems.append(item);
+    }
+
+    m_featuredItems = readyItems;
     m_flathubFeaturedModel->setItems(m_featuredItems);
+
     for (int index = 0; index < m_featuredItems.size(); ++index) {
         QNetworkRequest iconRequest(QUrl(m_featuredItems.at(index).iconUrl));
         iconRequest.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
@@ -773,74 +870,7 @@ void AppHubBackend::parseFlathubFeaturedCollection(const QByteArray &output)
                 }
             }
         });
-
-        const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(m_featuredItems.at(index).identifier));
-        QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
-        request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-        QNetworkReply *reply = m_network->get(request);
-        m_featuredDetailReplies.insert(reply, index);
-        connect(reply, &QNetworkReply::finished, this, [this, reply] {
-            const auto iterator = m_featuredDetailReplies.find(reply);
-            if (iterator == m_featuredDetailReplies.end()) {
-                reply->deleteLater();
-                return;
-            }
-
-            const int index = iterator.value();
-            m_featuredDetailReplies.erase(iterator);
-            const QByteArray response = reply->readAll();
-            const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
-            reply->deleteLater();
-            if (valid)
-                parseFlathubFeaturedAppstream(response, index);
-        });
     }
-}
-
-void AppHubBackend::parseFlathubFeaturedAppstream(const QByteArray &output, int index)
-{
-    if (index < 0 || index >= m_featuredItems.size())
-        return;
-
-    QJsonParseError parseError;
-    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !document.isObject())
-        return;
-
-    QString screenshotUrl;
-    QString screenshotCaption;
-    qint64 largestArea = -1;
-    const QJsonArray screenshots = document.object().value(QStringLiteral("screenshots")).toArray();
-    for (const QJsonValue &screenshotValue : screenshots) {
-        if (!screenshotValue.isObject())
-            continue;
-
-        const QJsonObject screenshot = screenshotValue.toObject();
-        const QString caption = screenshot.value(QStringLiteral("caption")).toString().trimmed();
-        const QJsonArray sizes = screenshot.value(QStringLiteral("sizes")).toArray();
-        for (const QJsonValue &sizeValue : sizes) {
-            if (!sizeValue.isObject())
-                continue;
-
-            const QJsonObject size = sizeValue.toObject();
-            const QString source = size.value(QStringLiteral("src")).toString().trimmed();
-            const qint64 width = size.value(QStringLiteral("width")).toString().toLongLong();
-            const qint64 height = size.value(QStringLiteral("height")).toString().toLongLong();
-            const qint64 area = width > 0 && height > 0 ? width * height : 0;
-            if (!source.isEmpty() && area > largestArea) {
-                screenshotUrl = source;
-                screenshotCaption = caption;
-                largestArea = area;
-            }
-        }
-    }
-
-    if (screenshotUrl.isEmpty())
-        return;
-
-    m_featuredItems[index].screenshot = screenshotUrl;
-    m_featuredItems[index].screenshotCaption = screenshotCaption;
-    m_flathubFeaturedModel->setItems(m_featuredItems);
 }
 
 void AppHubBackend::refreshAppHubCatalog()

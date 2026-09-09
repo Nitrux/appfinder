@@ -20,20 +20,14 @@ Loader {
         {
             title: qsTr("Explore"),
             items: [
-                { label: qsTr("Flathub"), icon: "get-hot-new-stuff", section: 0 },
-                { label: qsTr("NX AppHub"), icon: "package", section: 1 }
+                { label: qsTr("Flathub"), icon: "appfinder-flathub", section: 0 },
+                { label: qsTr("NX AppHub"), icon: "appfinder-nx-apphub", section: 1 }
             ]
         },
         {
             title: qsTr("Containers"),
             items: [
-                { label: qsTr("Distrobox"), icon: "system-run", section: 2 }
-            ]
-        },
-        {
-            title: qsTr("Management"),
-            items: [
-                { label: qsTr("Updates"), icon: "view-refresh", section: 3 }
+                { label: qsTr("Distrobox"), icon: "appfinder-distrobox", section: 2 }
             ]
         }
     ]

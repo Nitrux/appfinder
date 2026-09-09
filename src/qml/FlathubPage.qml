@@ -78,7 +78,7 @@ Maui.Page {
                     Maui.SectionHeader {
                         Layout.fillWidth: true
                         text1: qsTr("Featured")
-                        text2: qsTr("Popular picks from Flathub.")
+                        text2: qsTr("Apps of the week from Flathub.")
                         label2.wrapMode: Text.Wrap
                     }
 

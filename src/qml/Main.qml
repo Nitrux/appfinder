@@ -31,9 +31,7 @@ Maui.ApplicationWindow {
 
     readonly property string currentTitle: currentSection === 0 ? qsTr("Flathub")
                                            : currentSection === 1 ? qsTr("NX AppHub")
-                                           : currentSection === 2 ? qsTr("Distrobox")
-                                           : currentSection === 3 ? qsTr("Updates")
-                                                                   : qsTr("Settings")
+                                                                  : qsTr("Distrobox")
 
     function selectSection(section) {
         if (section === 4) {
@@ -176,7 +174,7 @@ Maui.ApplicationWindow {
                     checkable: true
                     autoExclusive: true
                     checked: root.currentSection === 0 && contentLoader.item && contentLoader.item.installedView
-                    icon.name: "appfinder-library-flatpak"
+                    icon.name: "appfinder-library"
                     ToolTip.visible: hovered
                     ToolTip.text: text
                     onClicked: {
@@ -288,8 +286,7 @@ Maui.ApplicationWindow {
                 anchors.fill: parent
                 sourceComponent: root.currentSection === 0 ? flathubPage
                                  : root.currentSection === 1 ? appHubPage
-                                 : root.currentSection === 2 ? distroboxPage
-                                                              : updatesPage
+                                                              : distroboxPage
             }
         }
     }
@@ -330,21 +327,6 @@ Maui.ApplicationWindow {
             onCloneRequested: function(source) {
                 cloneDialog.sourceName = source
                 cloneDialog.open()
-            }
-        }
-    }
-
-    Component {
-        id: updatesPage
-        Maui.Page {
-            background: null
-            headBar.visible: false
-            Maui.Holder {
-                anchors.fill: parent
-                anchors.margins: Maui.Style.contentMargins
-                emoji: "system-software-update"
-                title: qsTr("Updates available")
-                body: qsTr("Three software updates are ready to review. Update details will appear here when the update service is available.")
             }
         }
     }
