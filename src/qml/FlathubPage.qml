@@ -36,6 +36,19 @@ Maui.Page {
         return text.length > 0 ? text : qsTr("Size unavailable")
     }
 
+    function flathubCollectionTitle(collection) {
+        switch (collection) {
+        case 1:
+            return qsTr("Popular")
+        case 2:
+            return qsTr("New")
+        case 3:
+            return qsTr("Updated")
+        default:
+            return qsTr("Trending")
+        }
+    }
+
     Loader {
         id: viewLoader
         anchors.top: parent.top
@@ -282,6 +295,110 @@ Maui.Page {
                         }
                     }
                 }
+            }
+
+            Maui.TabBar {
+                id: collectionTabs
+                Layout.fillWidth: true
+                Layout.maximumWidth: Maui.Style.units.gridUnit * 40
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: Maui.Style.space.medium
+                Layout.bottomMargin: Maui.Style.space.medium
+                showNewTabButton: false
+                Maui.Controls.showCSD: false
+                currentIndex: appHub.flathubCollection
+                clip: true
+
+                readonly property real uniformTabWidth: Math.max(0, (width - leftPadding - rightPadding - spacing * 3) / 4)
+
+                onCurrentIndexChanged: {
+                    if (currentIndex >= 0 && appHub.flathubCollection !== currentIndex)
+                        appHub.flathubCollection = currentIndex
+                }
+
+                background: Rectangle {
+                    color: Maui.Theme.alternateBackgroundColor
+                    radius: height / 2
+                }
+
+                Maui.TabButton {
+                    width: collectionTabs.uniformTabWidth
+                    text: qsTr("Trending")
+                    closeButtonVisible: false
+                }
+
+                Maui.TabButton {
+                    width: collectionTabs.uniformTabWidth
+                    text: qsTr("Popular")
+                    closeButtonVisible: false
+                }
+
+                Maui.TabButton {
+                    width: collectionTabs.uniformTabWidth
+                    text: qsTr("New")
+                    closeButtonVisible: false
+                }
+
+                Maui.TabButton {
+                    width: collectionTabs.uniformTabWidth
+                    text: qsTr("Updated")
+                    closeButtonVisible: false
+                }
+            }
+
+            Maui.GridBrowser {
+                id: collectionGrid
+                readonly property real availableLayoutWidth: parent ? parent.width : 0
+                readonly property int fittedColumns: Math.max(1, Math.min(4, count, Math.floor(availableLayoutWidth / itemSize)))
+
+                Layout.fillWidth: false
+                Layout.preferredWidth: Math.min(availableLayoutWidth, itemSize * fittedColumns)
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredHeight: Math.max(contentHeight, holder.visible ? Maui.Style.units.gridUnit * 10 : 0)
+                padding: 0
+                itemSize: Maui.Style.units.gridUnit * 17
+                itemHeight: Maui.Style.units.gridUnit * 6
+                adaptContent: true
+                wheelResizeEnabled: false
+                pinchEnabled: false
+                verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                model: appHub.flathubCollectionModel
+                flickable.interactive: false
+
+                holder.visible: count === 0
+                holder.title: appHub.flathubCollectionLoading ? qsTr("Loading...") : qsTr("No apps available!")
+                holder.body: appHub.flathubCollectionLoading ? qsTr("Fetching from Flathub.") : qsTr("Flathub could not be loaded.")
+
+                delegate: Item {
+                    width: GridView.view.cellWidth
+                    height: GridView.view.cellHeight
+
+                    Maui.ListBrowserDelegate {
+                        anchors.fill: parent
+                        anchors.margins: Maui.Style.space.small
+                        flat: false
+                        imageSource: model.iconUrl
+                        iconSource: model.icon
+                        iconSizeHint: Maui.Style.iconSizes.big
+                        label1.text: model.name
+                        label1.font.weight: Font.DemiBold
+                        label1.elide: Text.ElideRight
+                        label2.text: model.summary
+                        label2.wrapMode: Text.WordWrap
+                        label2.maximumLineCount: 2
+                        label2.elide: Text.ElideRight
+                    }
+                }
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                visible: appHub.flathubCollectionHasMore
+                enabled: !appHub.flathubCollectionLoading
+                text: appHub.flathubCollectionLoading
+                      ? qsTr("Loading…")
+                      : qsTr("More %1").arg(control.flathubCollectionTitle(appHub.flathubCollection))
+                onClicked: appHub.loadMoreFlathubCollection()
             }
 
         }

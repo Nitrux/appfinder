@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <utility>
 
 namespace {
 
@@ -37,6 +38,7 @@ constexpr qint64 MaxMetadataBytes = 2 * 1024 * 1024;
 constexpr qsizetype MaxQueryLength = 256;
 constexpr int MaxCatalogItems = 10000;
 constexpr int MaxFeaturedItems = 8;
+constexpr int FlathubCollectionPageSize = 12;
 constexpr qsizetype MaxFeaturedResponseBytes = 8 * 1024 * 1024;
 constexpr qsizetype MaxFeaturedIconBytes = 2 * 1024 * 1024;
 
@@ -216,12 +218,28 @@ bool isFlathubRemote(const QString value)
     return false;
 }
 
+QString flathubCollectionSlug(int collection)
+{
+    switch (collection) {
+    case AppHubBackend::PopularCollection:
+        return QStringLiteral("popular");
+    case AppHubBackend::RecentlyAddedCollection:
+        return QStringLiteral("recently-added");
+    case AppHubBackend::RecentlyUpdatedCollection:
+        return QStringLiteral("recently-updated");
+    case AppHubBackend::TrendingCollection:
+    default:
+        return QStringLiteral("trending");
+    }
+}
+
 } // namespace
 
 AppHubBackend::AppHubBackend(QObject *parent)
     : QObject(parent)
     , m_flathubModel(new AppModel(this))
     , m_flathubFeaturedModel(new AppModel(this))
+    , m_flathubCollectionModel(new AppModel(this))
     , m_appHubModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
     , m_process(new QProcess(this))
@@ -241,6 +259,49 @@ AppModel *AppHubBackend::flathubModel()
 AppModel *AppHubBackend::flathubFeaturedModel()
 {
     return m_flathubFeaturedModel;
+}
+
+AppModel *AppHubBackend::flathubCollectionModel()
+{
+    return m_flathubCollectionModel;
+}
+
+int AppHubBackend::flathubCollection() const
+{
+    return m_flathubCollection;
+}
+
+void AppHubBackend::setFlathubCollection(int collection)
+{
+    if (collection < TrendingCollection || collection > RecentlyUpdatedCollection || collection == m_flathubCollection)
+        return;
+
+    cancelFlathubCollectionRequest();
+    m_flathubCollection = collection;
+    emit flathubCollectionChanged();
+
+    const auto cached = m_flathubCollectionCache.constFind(collection);
+    if (cached != m_flathubCollectionCache.cend()) {
+        m_flathubCollectionModel->setItems(cached.value());
+        emit flathubCollectionHasMoreChanged();
+        return;
+    }
+
+    m_flathubCollectionModel->setItems({});
+    emit flathubCollectionHasMoreChanged();
+    refreshFlathubCollection();
+}
+
+bool AppHubBackend::flathubCollectionLoading() const
+{
+    return m_flathubCollectionLoading;
+}
+
+bool AppHubBackend::flathubCollectionHasMore() const
+{
+    const int nextPage = m_flathubCollectionNextPage.value(m_flathubCollection, 1);
+    const int totalPages = m_flathubCollectionTotalPages.value(m_flathubCollection, 0);
+    return totalPages > 0 && nextPage <= totalPages;
 }
 
 AppModel *AppHubBackend::appHubModel()
@@ -392,9 +453,21 @@ void AppHubBackend::refresh()
 {
     refreshFlatpakInstalled();
     refreshFlathubFeatured();
+    m_flathubCollectionCache.clear();
+    m_flathubCollectionNextPage.clear();
+    m_flathubCollectionTotalPages.clear();
+    refreshFlathubCollection();
     refreshAppHubCatalog();
     refreshDistrobox();
     setStatusMessage(QStringLiteral("Sources refreshed."));
+}
+
+void AppHubBackend::loadMoreFlathubCollection()
+{
+    if (m_flathubCollectionLoading || !flathubCollectionHasMore())
+        return;
+
+    requestFlathubCollectionPage(m_flathubCollectionNextPage.value(m_flathubCollection, 1));
 }
 
 void AppHubBackend::refreshAppHubRepository()
@@ -870,6 +943,112 @@ void AppHubBackend::finalizeFlathubFeatured()
                 }
             }
         });
+    }
+}
+
+void AppHubBackend::setFlathubCollectionLoading(bool loading)
+{
+    if (m_flathubCollectionLoading == loading)
+        return;
+
+    m_flathubCollectionLoading = loading;
+    emit flathubCollectionLoadingChanged();
+}
+
+void AppHubBackend::cancelFlathubCollectionRequest()
+{
+    if (!m_flathubCollectionReply)
+        return;
+
+    m_flathubCollectionReply->abort();
+    m_flathubCollectionReply->deleteLater();
+    m_flathubCollectionReply = nullptr;
+    setFlathubCollectionLoading(false);
+}
+
+void AppHubBackend::refreshFlathubCollection()
+{
+    cancelFlathubCollectionRequest();
+    m_flathubCollectionCache.remove(m_flathubCollection);
+    m_flathubCollectionNextPage.remove(m_flathubCollection);
+    m_flathubCollectionTotalPages.remove(m_flathubCollection);
+    m_flathubCollectionModel->setItems({});
+    emit flathubCollectionHasMoreChanged();
+    requestFlathubCollectionPage(1);
+}
+
+void AppHubBackend::requestFlathubCollectionPage(int page)
+{
+    if (m_flathubCollectionReply || page < 1)
+        return;
+
+    const int requestedCollection = m_flathubCollection;
+    const QString slug = flathubCollectionSlug(requestedCollection);
+    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/collection/%1?page=%2&per_page=%3")
+                                     .arg(slug)
+                                     .arg(page)
+                                     .arg(FlathubCollectionPageSize)));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+    m_flathubCollectionReply = m_network->get(request);
+    QNetworkReply *reply = m_flathubCollectionReply;
+    setFlathubCollectionLoading(true);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, requestedCollection, page] {
+        if (m_flathubCollectionReply != reply) {
+            reply->deleteLater();
+            return;
+        }
+
+        m_flathubCollectionReply = nullptr;
+        const QByteArray response = reply->readAll();
+        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
+        reply->deleteLater();
+        setFlathubCollectionLoading(false);
+        if (valid)
+            parseFlathubCollection(response, requestedCollection, page);
+    });
+}
+
+void AppHubBackend::parseFlathubCollection(const QByteArray &output, int collection, int page)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    const QJsonObject root = document.object();
+    const QJsonArray hits = root.value(QStringLiteral("hits")).toArray();
+    QList<AppModel::Item> items = page == 1 ? QList<AppModel::Item>() : m_flathubCollectionCache.value(collection);
+    QSet<QString> identifiers;
+    for (const AppModel::Item &item : std::as_const(items))
+        identifiers.insert(item.identifier);
+
+    for (const QJsonValue &value : hits) {
+        if (!value.isObject())
+            continue;
+
+        const QJsonObject object = value.toObject();
+        const QString identifier = object.value(QStringLiteral("app_id")).toString().trimmed();
+        if (!isSafeIdentifier(identifier) || identifiers.contains(identifier))
+            continue;
+
+        AppModel::Item item;
+        item.name = object.value(QStringLiteral("name")).toString(identifier).trimmed();
+        item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
+        item.identifier = identifier;
+        item.icon = QStringLiteral("application-x-flatpak");
+        item.iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
+        items.append(item);
+        identifiers.insert(identifier);
+    }
+
+    m_flathubCollectionCache.insert(collection, items);
+    m_flathubCollectionNextPage.insert(collection, page + 1);
+    m_flathubCollectionTotalPages.insert(collection, root.value(QStringLiteral("totalPages")).toInt(page));
+
+    if (collection == m_flathubCollection) {
+        m_flathubCollectionModel->setItems(items);
+        emit flathubCollectionHasMoreChanged();
     }
 }
 
