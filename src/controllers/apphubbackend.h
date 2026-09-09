@@ -30,6 +30,7 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(int flathubCollection READ flathubCollection WRITE setFlathubCollection NOTIFY flathubCollectionChanged)
     Q_PROPERTY(bool flathubCollectionLoading READ flathubCollectionLoading NOTIFY flathubCollectionLoadingChanged)
     Q_PROPERTY(bool flathubCollectionHasMore READ flathubCollectionHasMore NOTIFY flathubCollectionHasMoreChanged)
+    Q_PROPERTY(int flathubCategoryRevision READ flathubCategoryRevision NOTIFY flathubCategoryRevisionChanged)
     Q_PROPERTY(int currentSection READ currentSection WRITE setCurrentSection NOTIFY currentSectionChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
@@ -65,6 +66,7 @@ public:
     void setFlathubCollection(int collection);
     bool flathubCollectionLoading() const;
     bool flathubCollectionHasMore() const;
+    int flathubCategoryRevision() const;
 
     int currentSection() const;
     void setCurrentSection(int section);
@@ -75,6 +77,10 @@ public:
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void loadMoreFlathubCollection();
+    Q_INVOKABLE AppModel *flathubCategoryModel(const QString &category) const;
+    Q_INVOKABLE bool flathubCategoryLoading(const QString &category) const;
+    Q_INVOKABLE bool flathubCategoryHasMore(const QString &category) const;
+    Q_INVOKABLE void loadMoreFlathubCategory(const QString &category);
     Q_INVOKABLE void refreshAppHubRepository();
     Q_INVOKABLE void search(const QString &query);
     Q_INVOKABLE void installFlatpak(const QString &identifier);
@@ -94,6 +100,7 @@ signals:
     void flathubCollectionChanged();
     void flathubCollectionLoadingChanged();
     void flathubCollectionHasMoreChanged();
+    void flathubCategoryRevisionChanged();
     void busyChanged();
     void statusMessageChanged();
     void operationLogChanged();
@@ -137,6 +144,10 @@ private:
     void cancelFlathubCollectionRequest();
     void parseFlathubCollection(const QByteArray &output, int collection, int page);
     void setFlathubCollectionLoading(bool loading);
+    void refreshFlathubCategories();
+    void requestFlathubCategoryPage(const QString &category, int page);
+    void cancelFlathubCategoryRequests();
+    void parseFlathubCategory(const QByteArray &output, const QString &category, int page);
     void refreshAppHubCatalog();
     void refreshDistrobox();
     void parseFlatpakSearch(const QByteArray &output);
@@ -179,6 +190,10 @@ private:
     QHash<int, QList<AppModel::Item>> m_flathubCollectionCache;
     QHash<int, int> m_flathubCollectionNextPage;
     QHash<int, int> m_flathubCollectionTotalPages;
+    QHash<QString, AppModel *> m_flathubCategoryModels;
+    QHash<QString, QNetworkReply *> m_flathubCategoryReplies;
+    QHash<QString, int> m_flathubCategoryNextPage;
+    QHash<QString, int> m_flathubCategoryTotalPages;
     QList<AppModel::Item> m_allDistroboxItems;
     QSet<QString> m_installedFlatpaks;
     QString m_query;
@@ -186,6 +201,7 @@ private:
     Operation m_operation = Operation::None;
     int m_currentSection = Flathub;
     int m_flathubCollection = TrendingCollection;
+    int m_flathubCategoryRevision = 0;
     bool m_flathubCollectionLoading = false;
     bool m_busy = false;
     QString m_statusMessage;

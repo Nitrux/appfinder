@@ -233,6 +233,70 @@ QString flathubCollectionSlug(int collection)
     }
 }
 
+const QStringList &flathubCategorySlugs()
+{
+    static const QStringList categories = {
+        QStringLiteral("office"),
+        QStringLiteral("graphics"),
+        QStringLiteral("audiovideo"),
+        QStringLiteral("mobile"),
+        QStringLiteral("education"),
+        QStringLiteral("network"),
+        QStringLiteral("game-only"),
+        QStringLiteral("emulators"),
+        QStringLiteral("launchers"),
+        QStringLiteral("game-tools"),
+        QStringLiteral("development"),
+        QStringLiteral("science"),
+        QStringLiteral("system"),
+        QStringLiteral("utility"),
+    };
+    return categories;
+}
+
+QString flathubCategoryEndpoint(const QString &category)
+{
+    if (category == QLatin1String("mobile"))
+        return QStringLiteral("mobile?sort_by=trending");
+    if (category == QLatin1String("game-only"))
+        return QStringLiteral("category/game?exclude_subcategories=emulator&exclude_subcategories=packageManager&exclude_subcategories=utility&exclude_subcategories=network&exclude_subcategories=gameTool&exclude_subcategories=launcherStore&sort_by=trending");
+    if (category == QLatin1String("emulators"))
+        return QStringLiteral("category/game/subcategories?subcategory=emulator&sort_by=trending");
+    if (category == QLatin1String("launchers"))
+        return QStringLiteral("category/game/subcategories?subcategory=packageManager&subcategory=launcherStore&sort_by=trending");
+    if (category == QLatin1String("game-tools"))
+        return QStringLiteral("category/game/subcategories?subcategory=utility&subcategory=network&subcategory=gameTool&sort_by=trending");
+    return QStringLiteral("category/%1?sort_by=trending").arg(category);
+}
+
+QList<AppModel::Item> appendFlathubHits(QList<AppModel::Item> items, const QJsonArray &hits)
+{
+    QSet<QString> identifiers;
+    for (const AppModel::Item &item : std::as_const(items))
+        identifiers.insert(item.identifier);
+
+    for (const QJsonValue &value : hits) {
+        if (!value.isObject())
+            continue;
+
+        const QJsonObject object = value.toObject();
+        const QString identifier = object.value(QStringLiteral("app_id")).toString().trimmed();
+        if (!isSafeIdentifier(identifier) || identifiers.contains(identifier))
+            continue;
+
+        AppModel::Item item;
+        item.name = object.value(QStringLiteral("name")).toString(identifier).trimmed();
+        item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
+        item.identifier = identifier;
+        item.icon = QStringLiteral("application-x-flatpak");
+        item.iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
+        items.append(item);
+        identifiers.insert(identifier);
+    }
+
+    return items;
+}
+
 } // namespace
 
 AppHubBackend::AppHubBackend(QObject *parent)
@@ -245,6 +309,9 @@ AppHubBackend::AppHubBackend(QObject *parent)
     , m_process(new QProcess(this))
     , m_network(new QNetworkAccessManager(this))
 {
+    for (const QString &category : flathubCategorySlugs())
+        m_flathubCategoryModels.insert(category, new AppModel(this));
+
     connect(m_process, &QProcess::finished, this, &AppHubBackend::processFinished);
     connect(m_process, &QProcess::errorOccurred, this, &AppHubBackend::processErrorOccurred);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &AppHubBackend::processOutputReady);
@@ -302,6 +369,11 @@ bool AppHubBackend::flathubCollectionHasMore() const
     const int nextPage = m_flathubCollectionNextPage.value(m_flathubCollection, 1);
     const int totalPages = m_flathubCollectionTotalPages.value(m_flathubCollection, 0);
     return totalPages > 0 && nextPage <= totalPages;
+}
+
+int AppHubBackend::flathubCategoryRevision() const
+{
+    return m_flathubCategoryRevision;
 }
 
 AppModel *AppHubBackend::appHubModel()
@@ -457,6 +529,7 @@ void AppHubBackend::refresh()
     m_flathubCollectionNextPage.clear();
     m_flathubCollectionTotalPages.clear();
     refreshFlathubCollection();
+    refreshFlathubCategories();
     refreshAppHubCatalog();
     refreshDistrobox();
     setStatusMessage(QStringLiteral("Sources refreshed."));
@@ -468,6 +541,31 @@ void AppHubBackend::loadMoreFlathubCollection()
         return;
 
     requestFlathubCollectionPage(m_flathubCollectionNextPage.value(m_flathubCollection, 1));
+}
+
+AppModel *AppHubBackend::flathubCategoryModel(const QString &category) const
+{
+    return m_flathubCategoryModels.value(category, nullptr);
+}
+
+bool AppHubBackend::flathubCategoryLoading(const QString &category) const
+{
+    return m_flathubCategoryReplies.contains(category);
+}
+
+bool AppHubBackend::flathubCategoryHasMore(const QString &category) const
+{
+    const int nextPage = m_flathubCategoryNextPage.value(category, 1);
+    const int totalPages = m_flathubCategoryTotalPages.value(category, 0);
+    return totalPages > 0 && nextPage <= totalPages;
+}
+
+void AppHubBackend::loadMoreFlathubCategory(const QString &category)
+{
+    if (!m_flathubCategoryModels.contains(category) || flathubCategoryLoading(category) || !flathubCategoryHasMore(category))
+        return;
+
+    requestFlathubCategoryPage(category, m_flathubCategoryNextPage.value(category, 1));
 }
 
 void AppHubBackend::refreshAppHubRepository()
@@ -1017,30 +1115,8 @@ void AppHubBackend::parseFlathubCollection(const QByteArray &output, int collect
         return;
 
     const QJsonObject root = document.object();
-    const QJsonArray hits = root.value(QStringLiteral("hits")).toArray();
-    QList<AppModel::Item> items = page == 1 ? QList<AppModel::Item>() : m_flathubCollectionCache.value(collection);
-    QSet<QString> identifiers;
-    for (const AppModel::Item &item : std::as_const(items))
-        identifiers.insert(item.identifier);
-
-    for (const QJsonValue &value : hits) {
-        if (!value.isObject())
-            continue;
-
-        const QJsonObject object = value.toObject();
-        const QString identifier = object.value(QStringLiteral("app_id")).toString().trimmed();
-        if (!isSafeIdentifier(identifier) || identifiers.contains(identifier))
-            continue;
-
-        AppModel::Item item;
-        item.name = object.value(QStringLiteral("name")).toString(identifier).trimmed();
-        item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
-        item.identifier = identifier;
-        item.icon = QStringLiteral("application-x-flatpak");
-        item.iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
-        items.append(item);
-        identifiers.insert(identifier);
-    }
+    const QList<AppModel::Item> items = appendFlathubHits(page == 1 ? QList<AppModel::Item>() : m_flathubCollectionCache.value(collection),
+                                                         root.value(QStringLiteral("hits")).toArray());
 
     m_flathubCollectionCache.insert(collection, items);
     m_flathubCollectionNextPage.insert(collection, page + 1);
@@ -1050,6 +1126,83 @@ void AppHubBackend::parseFlathubCollection(const QByteArray &output, int collect
         m_flathubCollectionModel->setItems(items);
         emit flathubCollectionHasMoreChanged();
     }
+}
+
+void AppHubBackend::cancelFlathubCategoryRequests()
+{
+    const auto replies = m_flathubCategoryReplies;
+    m_flathubCategoryReplies.clear();
+    for (auto iterator = replies.cbegin(); iterator != replies.cend(); ++iterator) {
+        iterator.value()->abort();
+        iterator.value()->deleteLater();
+    }
+    if (!replies.isEmpty()) {
+        ++m_flathubCategoryRevision;
+        emit flathubCategoryRevisionChanged();
+    }
+}
+
+void AppHubBackend::refreshFlathubCategories()
+{
+    cancelFlathubCategoryRequests();
+    m_flathubCategoryNextPage.clear();
+    m_flathubCategoryTotalPages.clear();
+
+    for (auto iterator = m_flathubCategoryModels.cbegin(); iterator != m_flathubCategoryModels.cend(); ++iterator) {
+        iterator.value()->setItems({});
+        requestFlathubCategoryPage(iterator.key(), 1);
+    }
+}
+
+void AppHubBackend::requestFlathubCategoryPage(const QString &category, int page)
+{
+    if (!m_flathubCategoryModels.contains(category) || m_flathubCategoryReplies.contains(category) || page < 1)
+        return;
+
+    const QString endpoint = flathubCategoryEndpoint(category);
+    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/collection/%1&page=%2&per_page=%3")
+                                     .arg(endpoint)
+                                     .arg(page)
+                                     .arg(FlathubCollectionPageSize)));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+    QNetworkReply *reply = m_network->get(request);
+    m_flathubCategoryReplies.insert(category, reply);
+    ++m_flathubCategoryRevision;
+    emit flathubCategoryRevisionChanged();
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, category, page] {
+        if (m_flathubCategoryReplies.value(category) != reply) {
+            reply->deleteLater();
+            return;
+        }
+
+        m_flathubCategoryReplies.remove(category);
+        const QByteArray response = reply->readAll();
+        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
+        reply->deleteLater();
+        if (valid)
+            parseFlathubCategory(response, category, page);
+        ++m_flathubCategoryRevision;
+        emit flathubCategoryRevisionChanged();
+    });
+}
+
+void AppHubBackend::parseFlathubCategory(const QByteArray &output, const QString &category, int page)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    AppModel *model = m_flathubCategoryModels.value(category, nullptr);
+    if (!model)
+        return;
+
+    const QJsonObject root = document.object();
+    model->setItems(appendFlathubHits(page == 1 ? QList<AppModel::Item>() : model->items(),
+                                     root.value(QStringLiteral("hits")).toArray()));
+    m_flathubCategoryNextPage.insert(category, page + 1);
+    m_flathubCategoryTotalPages.insert(category, root.value(QStringLiteral("totalPages")).toInt(page));
 }
 
 void AppHubBackend::refreshAppHubCatalog()

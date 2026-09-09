@@ -18,6 +18,22 @@ Maui.Page {
     signal viewModeChanged(bool installed)
     property string selectedCategory: ""
     readonly property bool searchActive: query.trim().length > 0
+    readonly property var flathubCategorySections: [
+        { category: "office", title: qsTr("Productivity"), moreTitle: qsTr("More Productivity") },
+        { category: "graphics", title: qsTr("Graphics & Photography"), moreTitle: qsTr("More Graphics & Photography") },
+        { category: "audiovideo", title: qsTr("Audio & Video"), moreTitle: qsTr("More Audio & Video") },
+        { category: "mobile", title: qsTr("Mobile"), moreTitle: qsTr("More Mobile") },
+        { category: "education", title: qsTr("Education"), moreTitle: qsTr("More Education") },
+        { category: "network", title: qsTr("Networking"), moreTitle: qsTr("More Networking") },
+        { category: "game-only", title: qsTr("Gaming"), moreTitle: qsTr("More Gaming") },
+        { category: "emulators", title: qsTr("Emulators"), moreTitle: qsTr("More Emulators") },
+        { category: "launchers", title: qsTr("Launchers"), moreTitle: qsTr("More Game Launchers") },
+        { category: "game-tools", title: qsTr("Game Tools"), moreTitle: qsTr("More Game Tools") },
+        { category: "development", title: qsTr("Developer Tools"), moreTitle: qsTr("More Developer Tools") },
+        { category: "science", title: qsTr("Science"), moreTitle: qsTr("More Science") },
+        { category: "system", title: qsTr("System"), moreTitle: qsTr("More System") },
+        { category: "utility", title: qsTr("Utilities"), moreTitle: qsTr("More Utilities") }
+    ]
 
     Component.onCompleted: installedView = initialInstalledView
 
@@ -63,8 +79,25 @@ Maui.Page {
         id: exploreView
 
         Maui.ScrollColumn {
+            id: exploreScroll
             padding: Maui.Style.contentMargins
             spacing: Maui.Style.space.small
+
+            function forwardGridWheel(wheel) {
+                const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
+                const horizontalDelta = usePixelDelta ? wheel.pixelDelta.x : wheel.angleDelta.x
+                const verticalDelta = usePixelDelta ? wheel.pixelDelta.y : wheel.angleDelta.y
+
+                if (Math.abs(verticalDelta) < Math.abs(horizontalDelta)) {
+                    wheel.accepted = false
+                    return
+                }
+
+                const pageFlickable = exploreScroll.flickable
+                const maximumContentY = Math.max(0, pageFlickable.contentHeight - pageFlickable.height)
+                pageFlickable.contentY = Math.max(0, Math.min(maximumContentY, pageFlickable.contentY - verticalDelta))
+                wheel.accepted = true
+            }
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
@@ -389,6 +422,15 @@ Maui.Page {
                         label2.elide: Text.ElideRight
                     }
                 }
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    propagateComposedEvents: true
+                    scrollGestureEnabled: false
+                    z: 100
+                    onWheel: (wheel) => exploreScroll.forwardGridWheel(wheel)
+                }
             }
 
             Button {
@@ -399,6 +441,100 @@ Maui.Page {
                       ? qsTr("Loading…")
                       : qsTr("More %1").arg(control.flathubCollectionTitle(appHub.flathubCollection))
                 onClicked: appHub.loadMoreFlathubCollection()
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.preferredWidth: exploreScroll.container.width
+                spacing: Maui.Style.space.small
+
+                Repeater {
+                    model: control.flathubCategorySections
+
+                    delegate: ColumnLayout {
+                        id: categorySection
+                        required property var modelData
+
+                        readonly property var apps: appHub.flathubCategoryModel(modelData.category)
+                        readonly property bool loading: appHub.flathubCategoryRevision >= 0 && appHub.flathubCategoryLoading(modelData.category)
+                        readonly property bool hasMore: appHub.flathubCategoryRevision >= 0 && appHub.flathubCategoryHasMore(modelData.category)
+
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: exploreScroll.container.width
+                        spacing: Maui.Style.space.small
+                        visible: loading || (apps && apps.count > 0)
+
+                        Maui.SectionHeader {
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: categoryGrid.width
+                            Layout.alignment: Qt.AlignHCenter
+                            text1: categorySection.modelData.title
+                        }
+
+                        Maui.GridBrowser {
+                            id: categoryGrid
+                            readonly property real availableLayoutWidth: exploreScroll.container.width
+                            readonly property int fittedColumns: Math.max(1, Math.min(4, count, Math.floor(availableLayoutWidth / itemSize)))
+
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: Math.min(availableLayoutWidth, itemSize * fittedColumns)
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredHeight: Math.max(contentHeight, holder.visible ? Maui.Style.units.gridUnit * 10 : 0)
+                            padding: 0
+                            itemSize: Maui.Style.units.gridUnit * 17
+                            itemHeight: Maui.Style.units.gridUnit * 6
+                            adaptContent: true
+                            wheelResizeEnabled: false
+                            pinchEnabled: false
+                            verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                            model: categorySection.apps
+                            flickable.interactive: false
+
+                            holder.visible: count === 0
+                            holder.title: qsTr("Loading applications")
+                            holder.body: qsTr("Fetching this Flathub category.")
+
+                            delegate: Item {
+                                width: GridView.view.cellWidth
+                                height: GridView.view.cellHeight
+
+                                Maui.ListBrowserDelegate {
+                                    anchors.fill: parent
+                                    anchors.margins: Maui.Style.space.small
+                                    flat: false
+                                    imageSource: model.iconUrl
+                                    iconSource: model.icon
+                                    iconSizeHint: Maui.Style.iconSizes.big
+                                    label1.text: model.name
+                                    label1.font.weight: Font.DemiBold
+                                    label1.elide: Text.ElideRight
+                                    label2.text: model.summary
+                                    label2.wrapMode: Text.WordWrap
+                                    label2.maximumLineCount: 2
+                                    label2.elide: Text.ElideRight
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.NoButton
+                                propagateComposedEvents: true
+                                scrollGestureEnabled: false
+                                z: 100
+                                onWheel: (wheel) => exploreScroll.forwardGridWheel(wheel)
+                            }
+                        }
+
+                        Button {
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: categorySection.apps && categorySection.apps.count > 0 && categorySection.hasMore
+                            enabled: !categorySection.loading
+                            text: categorySection.loading ? qsTr("Loading…") : categorySection.modelData.moreTitle
+                            onClicked: appHub.loadMoreFlathubCategory(categorySection.modelData.category)
+                        }
+
+                    }
+                }
             }
 
         }
