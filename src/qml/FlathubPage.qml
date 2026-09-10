@@ -16,8 +16,43 @@ Maui.Page {
     property bool installedView: false
     property bool initialInstalledView: false
     signal viewModeChanged(bool installed)
+    property bool categoriesView: false
     property string selectedCategory: ""
+    property string selectedSubcategory: ""
+    readonly property var flathubBrowseCategories: [
+        { category: "audiovideo", title: qsTr("Multimedia"), icon: "applications-multimedia", color: "#ff7043", filters: [
+            { value: "", title: qsTr("All") }, { value: "audioVideoEditing", title: qsTr("Editing") }, { value: "midi", title: qsTr("MIDI") }, { value: "mixer", title: qsTr("Mixer") }, { value: "music", title: qsTr("Music") }, { value: "player", title: qsTr("Player") }, { value: "recorder", title: qsTr("Recorder") }, { value: "sequencer", title: qsTr("Sequencer") }, { value: "tuner", title: qsTr("Tuner") }, { value: "tv", title: qsTr("Television") }
+        ] },
+        { category: "development", title: qsTr("Development"), icon: "applications-development", color: "#795548", filters: [
+            { value: "", title: qsTr("All") }, { value: "building", title: qsTr("Building") }, { value: "debugger", title: qsTr("Debugging") }, { value: "ide", title: qsTr("IDEs") }, { value: "guiDesigner", title: qsTr("GUI Design") }, { value: "profiling", title: qsTr("Profiling") }, { value: "revisionControl", title: qsTr("Revision Control") }, { value: "translation", title: qsTr("Translation") }, { value: "webDevelopment", title: qsTr("Web Development") }
+        ] },
+        { category: "education", title: qsTr("Learning"), icon: "applications-education", color: "#43a047", filters: [
+            { value: "", title: qsTr("All") }, { value: "art", title: qsTr("Art") }, { value: "computerScience", title: qsTr("Computer Science") }, { value: "geography", title: qsTr("Geography") }, { value: "history", title: qsTr("History") }, { value: "languages", title: qsTr("Languages") }, { value: "literature", title: qsTr("Literature") }, { value: "math", title: qsTr("Mathematics") }, { value: "music", title: qsTr("Music") }
+        ] },
+        { category: "game", title: qsTr("Gaming"), icon: "applications-games", color: "#ec407a", filters: [
+            { value: "", title: qsTr("All") }, { value: "actionGame", title: qsTr("Action") }, { value: "adventureGame", title: qsTr("Adventure") }, { value: "arcadeGame", title: qsTr("Arcade") }, { value: "boardGame", title: qsTr("Board") }, { value: "cardGame", title: qsTr("Card") }, { value: "logicGame", title: qsTr("Logic") }, { value: "rolePlaying", title: qsTr("Role Playing") }, { value: "shooter", title: qsTr("Shooter") }, { value: "simulation", title: qsTr("Simulation") }, { value: "sportsGame", title: qsTr("Sports") }, { value: "strategyGame", title: qsTr("Strategy") }
+        ] },
+        { category: "graphics", title: qsTr("Creation"), icon: "applications-graphics", color: "#8e5cb5", filters: [
+            { value: "", title: qsTr("All") }, { value: "2dGraphics", title: qsTr("2D Graphics") }, { value: "3dGraphics", title: qsTr("3D Graphics") }, { value: "photography", title: qsTr("Photography") }, { value: "rasterGraphics", title: qsTr("Raster Graphics") }, { value: "scanning", title: qsTr("Scanning") }, { value: "vectorGraphics", title: qsTr("Vector Graphics") }, { value: "viewer", title: qsTr("Viewers") }
+        ] },
+        { category: "network", title: qsTr("Internet"), icon: "applications-internet", color: "#f44336", filters: [
+            { value: "", title: qsTr("All") }, { value: "chat", title: qsTr("Chat") }, { value: "email", title: qsTr("Email") }, { value: "fileTransfer", title: qsTr("File Transfer") }, { value: "instantMessaging", title: qsTr("Messaging") }, { value: "p2p", title: qsTr("Peer-to-Peer") }, { value: "remoteAccess", title: qsTr("Remote Access") }, { value: "videoConference", title: qsTr("Video Conference") }, { value: "webBrowser", title: qsTr("Web Browsers") }
+        ] },
+        { category: "office", title: qsTr("Work"), icon: "applications-office", color: "#29b6f6", filters: [
+            { value: "", title: qsTr("All") }, { value: "calendar", title: qsTr("Calendar") }, { value: "database", title: qsTr("Database") }, { value: "dictionary", title: qsTr("Dictionary") }, { value: "finance", title: qsTr("Finance") }, { value: "presentation", title: qsTr("Presentation") }, { value: "projectManagement", title: qsTr("Project Management") }, { value: "spreadsheet", title: qsTr("Spreadsheets") }, { value: "wordProcessor", title: qsTr("Word Processing") }
+        ] },
+        { category: "science", title: qsTr("Science"), icon: "applications-science", color: "#42a5a8", filters: [
+            { value: "", title: qsTr("All") }, { value: "artificialIntelligence", title: qsTr("Artificial Intelligence") }, { value: "astronomy", title: qsTr("Astronomy") }, { value: "biology", title: qsTr("Biology") }, { value: "chemistry", title: qsTr("Chemistry") }, { value: "dataVisualization", title: qsTr("Data Visualization") }, { value: "geography", title: qsTr("Geography") }, { value: "math", title: qsTr("Mathematics") }, { value: "physics", title: qsTr("Physics") }, { value: "robotics", title: qsTr("Robotics") }
+        ] },
+        { category: "system", title: qsTr("System"), icon: "applications-system", color: "#8d6e63", filters: [
+            { value: "", title: qsTr("All") }, { value: "emulator", title: qsTr("Emulators") }, { value: "fileManager", title: qsTr("File Managers") }, { value: "fileTools", title: qsTr("File Tools") }, { value: "filesystem", title: qsTr("Filesystems") }, { value: "monitor", title: qsTr("Monitoring") }, { value: "security", title: qsTr("Security") }, { value: "terminalEmulator", title: qsTr("Terminals") }
+        ] },
+        { category: "utility", title: qsTr("Tools"), icon: "applications-utilities", color: "#ef9a9a", filters: [
+            { value: "", title: qsTr("All") }, { value: "accessibility", title: qsTr("Accessibility") }, { value: "archiving", title: qsTr("Archiving") }, { value: "calculator", title: qsTr("Calculators") }, { value: "clock", title: qsTr("Clocks") }, { value: "compression", title: qsTr("Compression") }, { value: "documentation", title: qsTr("Documentation") }, { value: "textEditor", title: qsTr("Text Editors") }, { value: "textTools", title: qsTr("Text Tools") }
+        ] }
+    ]
     readonly property bool searchActive: query.trim().length > 0
+    readonly property var selectedCategoryInfo: categoryInfo(selectedCategory)
     readonly property var flathubCategorySections: [
         { category: "office", title: qsTr("Productivity"), moreTitle: qsTr("More Productivity") },
         { category: "graphics", title: qsTr("Graphics & Photography"), moreTitle: qsTr("More Graphics & Photography") },
@@ -52,6 +87,15 @@ Maui.Page {
         return text.length > 0 ? text : qsTr("Size unavailable")
     }
 
+    function contrastingForeground(background) {
+        const effectiveBackground = background.a > 0
+                                  ? background
+                                  : control.Maui.Theme.alternateBackgroundColor
+        return Maui.ColorUtils.brightnessForColor(effectiveBackground) === Maui.ColorUtils.Light
+               ? "#333333"
+               : "#fafafa"
+    }
+
     function flathubCollectionTitle(collection) {
         switch (collection) {
         case 1:
@@ -63,6 +107,20 @@ Maui.Page {
         default:
             return qsTr("Trending")
         }
+    }
+
+    function categoryInfo(category) {
+        for (let index = 0; index < flathubBrowseCategories.length; ++index) {
+            if (flathubBrowseCategories[index].category === category)
+                return flathubBrowseCategories[index]
+        }
+        return null
+    }
+
+    function browseCategory(category, subcategory) {
+        selectedCategory = category
+        selectedSubcategory = subcategory || ""
+        appHub.browseFlathubCategory(selectedCategory, selectedSubcategory)
     }
 
     Maui.SettingsDialog {
@@ -130,7 +188,7 @@ Maui.Page {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.topMargin: 0
-        sourceComponent: control.searchActive ? searchView : control.installedView ? installedViewComponent : exploreView
+        sourceComponent: control.searchActive ? searchView : control.installedView ? installedViewComponent : control.categoriesView ? categoryBrowserView : exploreView
     }
 
     Component {
@@ -601,6 +659,354 @@ Maui.Page {
     }
 
     Component {
+        id: categoryBrowserView
+
+        Loader {
+            anchors.fill: parent
+            sourceComponent: control.selectedCategory.length > 0 ? categoryDetailView : categoryOverviewView
+        }
+    }
+
+    Component {
+        id: categoryOverviewView
+
+        Maui.ScrollColumn {
+            id: categoryOverviewScroll
+            padding: Maui.Style.contentMargins
+            spacing: Maui.Style.space.medium
+
+            Maui.SectionHeader {
+                Layout.fillWidth: true
+                text1: qsTr("Browse Flathub Categories")
+                text2: qsTr("Explore applications by purpose.")
+                label2.wrapMode: Text.Wrap
+            }
+
+            Maui.GridBrowser {
+                id: categoryOverviewGrid
+                readonly property real availableLayoutWidth: parent ? parent.width : 0
+                readonly property int fittedColumns: Math.max(1, Math.min(4, count, Math.floor(availableLayoutWidth / itemSize)))
+
+                Layout.fillWidth: false
+                Layout.preferredWidth: Math.min(availableLayoutWidth, itemSize * fittedColumns)
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredHeight: contentHeight
+                padding: 0
+                itemSize: Maui.Style.units.gridUnit * 16
+                itemHeight: Maui.Style.units.gridUnit * 10
+                adaptContent: true
+                wheelResizeEnabled: false
+                pinchEnabled: false
+                verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                flickable.interactive: false
+                model: control.flathubBrowseCategories
+
+                delegate: Item {
+                    width: GridView.view.cellWidth
+                    height: GridView.view.cellHeight
+                    required property var modelData
+
+                    Maui.GridBrowserDelegate {
+                        anchors.fill: parent
+                        anchors.margins: Maui.Style.space.small
+                        iconSource: modelData.icon
+                        iconSizeHint: Maui.Style.iconSizes.huge
+                        label1.text: modelData.title
+                        label1.font: Maui.Style.h2Font
+                        label1.color: Maui.ColorUtils.brightnessForColor(modelData.color) === Maui.ColorUtils.Light ? "#20202a" : "#ffffff"
+                        background: Rectangle {
+                            color: modelData.color
+                            radius: Maui.Style.radiusV
+                        }
+                        onClicked: control.browseCategory(modelData.category, "")
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    propagateComposedEvents: true
+                    scrollGestureEnabled: false
+                    z: 100
+                    onWheel: (wheel) => {
+                        const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
+                        const verticalDelta = usePixelDelta ? wheel.pixelDelta.y : wheel.angleDelta.y
+                        const flickable = categoryOverviewScroll.flickable
+                        const maximumContentY = Math.max(0, flickable.contentHeight - flickable.height)
+                        flickable.contentY = Math.max(0, Math.min(maximumContentY, flickable.contentY - verticalDelta))
+                        wheel.accepted = true
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: categoryDetailView
+
+        Maui.ScrollColumn {
+            id: categoryDetailScroll
+            padding: Maui.Style.contentMargins
+            spacing: Maui.Style.space.small
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Maui.Style.space.small
+
+                ToolButton {
+                    text: qsTr("All Categories")
+                    display: AbstractButton.IconOnly
+                    icon.name: "go-previous"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: {
+                        control.selectedCategory = ""
+                        control.selectedSubcategory = ""
+                    }
+                }
+
+                Maui.SectionHeader {
+                    Layout.fillWidth: true
+                    text1: control.selectedCategoryInfo ? control.selectedCategoryInfo.title : ""
+                    text2: qsTr("Showing %1 applications from Flathub.").arg(appHub.flathubBrowseModel.count)
+                    label2.wrapMode: Text.Wrap
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                visible: appHub.flathubBrowseFeaturedModel.count > 0
+                implicitHeight: categoryFeaturedFrame.implicitHeight
+                color: "transparent"
+
+                Item {
+                    id: categoryFeaturedFrame
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    implicitHeight: width < Maui.Style.units.gridUnit * 42 ? Maui.Style.units.gridUnit * 13 : Maui.Style.units.gridUnit * 16
+                    clip: true
+
+                    Repeater {
+                        model: appHub.flathubBrowseFeaturedModel
+
+                        delegate: Rectangle {
+                            id: categoryFeaturedSlide
+                            anchors.fill: parent
+                            radius: Maui.Style.radiusV
+                            color: control.selectedCategoryInfo
+                                   ? Maui.ColorUtils.tintWithAlpha(Maui.Theme.alternateBackgroundColor, control.selectedCategoryInfo.color, 0.55)
+                                   : Maui.Theme.alternateBackgroundColor
+                            border.color: Maui.Theme.backgroundColor
+                            border.width: 1
+                            clip: true
+
+                            readonly property color bannerForeground: Maui.ColorUtils.brightnessForColor(color) === Maui.ColorUtils.Light ? "#20202a" : "#ffffff"
+                            readonly property color secondaryForeground: Maui.ColorUtils.tintWithAlpha(bannerForeground, color, 0.55)
+                            readonly property real previewMaximumWidth: Math.max(0, (height - Maui.Style.space.medium * 2) * 5 / 2)
+                            readonly property real previewWidth: Math.max(0, Math.min(previewMaximumWidth, width * 3 / 5))
+
+                            RowLayout {
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.topMargin: Maui.Style.space.medium
+                                anchors.bottomMargin: Maui.Style.space.medium
+                                width: Math.min(parent.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 64)
+                                spacing: Maui.Style.space.big
+
+                                ColumnLayout {
+                                    Layout.fillHeight: true
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: Maui.Style.units.gridUnit * 10
+                                    Layout.minimumWidth: 0
+                                    spacing: Maui.Style.space.small
+
+                                    Maui.IconItem {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        width: Maui.Style.iconSizes.huge
+                                        height: Maui.Style.iconSizes.huge
+                                        iconSizeHint: Maui.Style.iconSizes.huge
+                                        imageSource: model.iconUrl
+                                        iconSource: model.icon
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: model.name
+                                        color: categoryFeaturedSlide.bannerForeground
+                                        horizontalAlignment: Text.AlignHCenter
+                                        font: Maui.Style.h2Font
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: model.summary
+                                        color: categoryFeaturedSlide.secondaryForeground
+                                        horizontalAlignment: Text.AlignHCenter
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 3
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Maui.Chip {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: control.selectedCategoryInfo ? control.selectedCategoryInfo.title : model.category
+                                        enabled: false
+                                        hoverEnabled: false
+                                        color: Qt.rgba(0, 0, 0, 0.3)
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: categoryScreenshotFrame
+                                    visible: categoryFeaturedSlide.width >= Maui.Style.units.gridUnit * 42
+                                    Layout.fillHeight: true
+                                    Layout.minimumWidth: categoryFeaturedSlide.previewWidth
+                                    Layout.preferredWidth: categoryFeaturedSlide.previewWidth
+                                    Layout.maximumWidth: categoryFeaturedSlide.previewWidth
+                                    color: "transparent"
+                                    radius: Maui.Style.radiusV
+                                    clip: true
+                                    layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
+                                    layer.effect: MultiEffect {
+                                        maskEnabled: true
+                                        maskThresholdMin: 0.5
+                                        maskSpreadAtMin: 1.0
+                                        maskSpreadAtMax: 0.0
+                                        maskThresholdMax: 1.0
+                                        maskSource: ShaderEffectSource {
+                                            sourceItem: Rectangle {
+                                                width: categoryScreenshotFrame.width
+                                                height: categoryScreenshotFrame.height
+                                                radius: categoryScreenshotFrame.radius
+                                            }
+                                        }
+                                    }
+
+                                    Image {
+                                        id: categoryScreenshotImage
+                                        anchors.fill: parent
+                                        source: model.screenshot
+                                        fillMode: Image.PreserveAspectCrop
+                                        verticalAlignment: Image.AlignTop
+                                        asynchronous: true
+                                        cache: true
+                                        visible: status === Image.Ready
+                                    }
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        width: parent.width - Maui.Style.space.big * 2
+                                        text: model.screenshotCaption.length > 0 ? model.screenshotCaption : model.summary
+                                        color: categoryFeaturedSlide.secondaryForeground
+                                        horizontalAlignment: Text.AlignHCenter
+                                        wrapMode: Text.WordWrap
+                                        visible: !categoryScreenshotImage.visible
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: false
+                Layout.maximumWidth: parent ? parent.width : implicitWidth
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: Maui.Style.space.medium
+                Layout.bottomMargin: Maui.Style.space.medium
+                spacing: Maui.Style.space.small
+
+                Repeater {
+                    model: control.selectedCategoryInfo ? control.selectedCategoryInfo.filters : []
+
+                    delegate: Maui.Chip {
+                        required property var modelData
+                        text: modelData.title
+                        checkable: true
+                        autoExclusive: true
+                        checked: control.selectedSubcategory === modelData.value
+                        color: Maui.Theme.alternateBackgroundColor
+                        onClicked: control.browseCategory(control.selectedCategory, modelData.value)
+                    }
+                }
+            }
+
+            Maui.GridBrowser {
+                id: categoryBrowseGrid
+                readonly property real availableLayoutWidth: parent ? parent.width : 0
+                readonly property int fittedColumns: Math.max(1, Math.min(4, count, Math.floor(availableLayoutWidth / itemSize)))
+
+                Layout.fillWidth: holder.visible
+                Layout.preferredWidth: holder.visible ? availableLayoutWidth : Math.min(availableLayoutWidth, itemSize * fittedColumns)
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredHeight: holder.visible ? Math.max(holder.implicitHeight, categoryDetailScroll.availableHeight - y) : contentHeight
+                padding: 0
+                itemSize: Maui.Style.units.gridUnit * 17
+                itemHeight: Maui.Style.units.gridUnit * 6
+                adaptContent: true
+                wheelResizeEnabled: false
+                pinchEnabled: false
+                verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                model: appHub.flathubBrowseModel
+                flickable.interactive: false
+
+                holder.visible: count === 0
+                holder.title: appHub.flathubBrowseLoading ? qsTr("Loading applications") : qsTr("No applications found")
+                holder.body: appHub.flathubBrowseLoading ? qsTr("Fetching this Flathub category.") : qsTr("No applications match this category filter.")
+
+                delegate: Item {
+                    width: GridView.view.cellWidth
+                    height: GridView.view.cellHeight
+
+                    Maui.ListBrowserDelegate {
+                        anchors.fill: parent
+                        anchors.margins: Maui.Style.space.small
+                        flat: false
+                        imageSource: model.iconUrl
+                        iconSource: model.icon
+                        iconSizeHint: Maui.Style.iconSizes.big
+                        template.leftLabels.spacing: Maui.Style.space.small
+                        label1.text: model.name
+                        label1.font.weight: Font.DemiBold
+                        label1.elide: Text.ElideRight
+                        label2.text: model.summary
+                        label2.wrapMode: Text.WordWrap
+                        label2.maximumLineCount: 2
+                        label2.elide: Text.ElideRight
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    propagateComposedEvents: true
+                    scrollGestureEnabled: false
+                    z: 100
+                    onWheel: (wheel) => {
+                        const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
+                        const verticalDelta = usePixelDelta ? wheel.pixelDelta.y : wheel.angleDelta.y
+                        const flickable = categoryDetailScroll.flickable
+                        const maximumContentY = Math.max(0, flickable.contentHeight - flickable.height)
+                        flickable.contentY = Math.max(0, Math.min(maximumContentY, flickable.contentY - verticalDelta))
+                        wheel.accepted = true
+                    }
+                }
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                visible: control.selectedSubcategory.length === 0 && appHub.flathubBrowseHasMore
+                enabled: !appHub.flathubBrowseLoading
+                text: appHub.flathubBrowseLoading ? qsTr("Loading…") : qsTr("More Applications")
+                onClicked: appHub.loadMoreFlathubBrowseCategory()
+            }
+        }
+    }
+
+    Component {
         id: installedViewComponent
 
         Maui.ScrollColumn {
@@ -611,7 +1017,7 @@ Maui.Page {
             Maui.SectionHeader {
                 Layout.fillWidth: true
                 text1: qsTr("Manage Flatpaks")
-                text2: qsTr("Browse and manage applications installed from Flathub.")
+                text2: qsTr("Browse and manage installed Flatpak applications.")
                 label2.wrapMode: Text.Wrap
             }
 
@@ -699,7 +1105,7 @@ Maui.Page {
 
                     Maui.SectionHeader {
                         Layout.fillWidth: true
-                        text1: qsTr("Installed Applications (%1)").arg(appHub.flathubModel.count)
+                        text1: qsTr("User Applications (%1)").arg(appHub.flathubModel.count)
                         text2: qsTr("Flatpaks available to the current user.")
                         label2.wrapMode: Text.Wrap
                     }
@@ -713,11 +1119,13 @@ Maui.Page {
                         model: appHub.flathubModel
 
                         holder.visible: count === 0
-                        holder.title: qsTr("No Flatpaks Installed")
-                        holder.body: qsTr("Applications installed from Flathub will appear here.")
+                        holder.title: qsTr("No User Flatpaks Installed")
+                        holder.body: qsTr("Flatpaks installed for the current user will appear here.")
 
                         delegate: Maui.ListBrowserDelegate {
+                            id: userInstalledDelegate
                             width: ListView.view.width
+                            onClicked: ListView.view.currentIndex = index
                             iconSource: model.icon
                             iconSizeHint: Maui.Style.iconSizes.big
                             template.leftLabels.spacing: Maui.Style.space.small
@@ -730,13 +1138,18 @@ Maui.Page {
                             ToolButton {
                                 text: qsTr("Manage Add-ons")
                                 icon.name: "plugins"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                          ? Maui.Theme.highlightColor
+                                                                          : (hovered
+                                                                             ? Maui.Theme.hoverColor
+                                                                             : userInstalledDelegate.effectiveBackgroundColor))
                                 display: ToolButton.IconOnly
                                 enabled: !appHub.busy
                                 ToolTip.visible: hovered
                                 ToolTip.text: text
                                 onClicked: {
                                     flatpakAddonsDialog.applicationName = model.name
-                                    appHub.loadFlatpakAddons(model.identifier)
+                                    appHub.loadFlatpakAddons(model.identifier, false)
                                     flatpakAddonsDialog.open()
                                 }
                             }
@@ -744,11 +1157,98 @@ Maui.Page {
                             ToolButton {
                                 text: qsTr("Remove")
                                 icon.name: "edit-delete"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                          ? Maui.Theme.highlightColor
+                                                                          : (hovered
+                                                                             ? Maui.Theme.hoverColor
+                                                                             : userInstalledDelegate.effectiveBackgroundColor))
                                 display: ToolButton.IconOnly
                                 enabled: !appHub.busy
                                 ToolTip.visible: hovered
                                 ToolTip.text: text
-                                onClicked: control.flatpakAction(model.identifier)
+                                onClicked: appHub.removeInstalledFlatpak(model.identifier, false)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: Math.max(0, Maui.Style.space.big - installedScroll.spacing)
+                visible: appHub.systemFlatpakModel.count > 0
+                color: Maui.Theme.alternateBackgroundColor
+                radius: Maui.Style.radiusV
+                border.color: Maui.Theme.backgroundColor
+                border.width: 1
+                implicitHeight: systemInstalledLayout.implicitHeight + Maui.Style.contentMargins * 2
+
+                ColumnLayout {
+                    id: systemInstalledLayout
+                    anchors.fill: parent
+                    anchors.margins: Maui.Style.contentMargins
+                    spacing: Maui.Style.space.small
+
+                    Maui.SectionHeader {
+                        Layout.fillWidth: true
+                        text1: qsTr("System Applications (%1)").arg(appHub.systemFlatpakModel.count)
+                        text2: qsTr("Flatpaks installed system-wide.")
+                        label2.wrapMode: Text.Wrap
+                    }
+
+                    Maui.ListBrowser {
+                        id: systemInstalledBrowser
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: contentHeight
+                        padding: 0
+                        clip: true
+                        model: appHub.systemFlatpakModel
+
+                        delegate: Maui.ListBrowserDelegate {
+                            id: systemInstalledDelegate
+                            width: ListView.view.width
+                            onClicked: ListView.view.currentIndex = index
+                            iconSource: model.icon
+                            iconSizeHint: Maui.Style.iconSizes.big
+                            template.leftLabels.spacing: Maui.Style.space.small
+                            label1.text: model.name
+                            label1.font.weight: Font.DemiBold
+                            label1.elide: Text.ElideRight
+                            label2.text: qsTr("%1 • %2").arg(model.version.length > 0 ? model.version : qsTr("Version unavailable")).arg(control.sizeText(model.size))
+                            label2.elide: Text.ElideRight
+
+                            ToolButton {
+                                text: qsTr("Manage Add-ons")
+                                icon.name: "plugins"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                          ? Maui.Theme.highlightColor
+                                                                          : (hovered
+                                                                             ? Maui.Theme.hoverColor
+                                                                             : systemInstalledDelegate.effectiveBackgroundColor))
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: {
+                                    flatpakAddonsDialog.applicationName = model.name
+                                    appHub.loadFlatpakAddons(model.identifier, true)
+                                    flatpakAddonsDialog.open()
+                                }
+                            }
+
+                            ToolButton {
+                                text: qsTr("Remove")
+                                icon.name: "edit-delete"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                          ? Maui.Theme.highlightColor
+                                                                          : (hovered
+                                                                             ? Maui.Theme.hoverColor
+                                                                             : systemInstalledDelegate.effectiveBackgroundColor))
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: appHub.removeInstalledFlatpak(model.identifier, true)
                             }
                         }
                     }

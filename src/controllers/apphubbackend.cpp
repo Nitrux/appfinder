@@ -381,6 +381,36 @@ QString flathubCategoryEndpoint(const QString &category)
     return QStringLiteral("category/%1?sort_by=trending").arg(category);
 }
 
+const QStringList &flathubBrowseCategorySlugs()
+{
+    static const QStringList categories = {
+        QStringLiteral("audiovideo"),
+        QStringLiteral("development"),
+        QStringLiteral("education"),
+        QStringLiteral("game"),
+        QStringLiteral("graphics"),
+        QStringLiteral("network"),
+        QStringLiteral("office"),
+        QStringLiteral("science"),
+        QStringLiteral("system"),
+        QStringLiteral("utility"),
+    };
+    return categories;
+}
+
+QString flathubBrowseEndpoint(const QString &category, const QString &subcategory)
+{
+    if (subcategory.isEmpty())
+        return QStringLiteral("category/%1?sort_by=trending").arg(category);
+
+    return QStringLiteral("category/%1/subcategories?subcategory=%2&sort_by=trending").arg(category, subcategory);
+}
+
+QString flathubBrowseCacheKey(const QString &category, const QString &subcategory)
+{
+    return category + QLatin1Char(':') + subcategory;
+}
+
 QList<AppModel::Item> appendFlathubHits(QList<AppModel::Item> items, const QJsonArray &hits)
 {
     QSet<QString> identifiers;
@@ -415,8 +445,11 @@ AppHubBackend::AppHubBackend(QObject *parent)
     : QObject(parent)
     , m_flathubModel(new AppModel(this))
     , m_flathubUpdatesModel(new AppModel(this))
+    , m_systemFlatpakModel(new AppModel(this))
     , m_flatpakAddonsModel(new AppModel(this))
     , m_flathubFeaturedModel(new AppModel(this))
+    , m_flathubBrowseModel(new AppModel(this))
+    , m_flathubBrowseFeaturedModel(new AppModel(this))
     , m_flathubCollectionModel(new AppModel(this))
     , m_appHubModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
@@ -442,6 +475,11 @@ AppModel *AppHubBackend::flathubUpdatesModel()
     return m_flathubUpdatesModel;
 }
 
+AppModel *AppHubBackend::systemFlatpakModel()
+{
+    return m_systemFlatpakModel;
+}
+
 AppModel *AppHubBackend::flatpakAddonsModel()
 {
     return m_flatpakAddonsModel;
@@ -450,6 +488,16 @@ AppModel *AppHubBackend::flatpakAddonsModel()
 AppModel *AppHubBackend::flathubFeaturedModel()
 {
     return m_flathubFeaturedModel;
+}
+
+AppModel *AppHubBackend::flathubBrowseModel()
+{
+    return m_flathubBrowseModel;
+}
+
+AppModel *AppHubBackend::flathubBrowseFeaturedModel()
+{
+    return m_flathubBrowseFeaturedModel;
 }
 
 AppModel *AppHubBackend::flathubCollectionModel()
@@ -500,6 +548,16 @@ int AppHubBackend::flathubCategoryRevision() const
     return m_flathubCategoryRevision;
 }
 
+bool AppHubBackend::flathubBrowseLoading() const
+{
+    return m_flathubBrowseLoading;
+}
+
+bool AppHubBackend::flathubBrowseHasMore() const
+{
+    return m_flathubBrowseTotalPages > 0 && m_flathubBrowseNextPage <= m_flathubBrowseTotalPages;
+}
+
 QString AppHubBackend::flatpakSortMode() const
 {
     return m_flatpakSortMode;
@@ -515,8 +573,10 @@ void AppHubBackend::setFlatpakSortMode(const QString &mode)
     m_flatpakSortMode = normalizedMode;
     emit flatpakSortModeChanged();
 
-    if (m_currentSection == Flathub && m_query.isEmpty())
+    if (m_currentSection == Flathub && m_query.isEmpty()) {
         m_flathubModel->setItems(sortedInstalledFlatpaks(m_flathubModel->items()));
+        m_systemFlatpakModel->setItems(sortedInstalledFlatpaks(m_systemFlatpakModel->items()));
+    }
 }
 
 QString AppHubBackend::flatpakUpdateIdentifier() const
@@ -763,6 +823,50 @@ void AppHubBackend::loadMoreFlathubCategory(const QString &category)
     requestFlathubCategoryPage(category, m_flathubCategoryNextPage.value(category, 1));
 }
 
+void AppHubBackend::browseFlathubCategory(const QString &category, const QString &subcategory)
+{
+    if (!flathubBrowseCategorySlugs().contains(category) || (!subcategory.isEmpty() && !isSafeIdentifier(subcategory)))
+        return;
+
+    if (category == m_flathubBrowseCategory && subcategory == m_flathubBrowseSubcategory)
+        return;
+
+    const bool categoryChanged = category != m_flathubBrowseCategory;
+    cancelFlathubBrowseRequests(categoryChanged);
+    m_flathubBrowseCategory = category;
+    m_flathubBrowseSubcategory = subcategory;
+    const QString cacheKey = flathubBrowseCacheKey(category, subcategory);
+    m_flathubBrowseNextPage = m_flathubBrowseNextPageCache.value(cacheKey, 1);
+    m_flathubBrowseTotalPages = m_flathubBrowseTotalPagesCache.value(cacheKey, 0);
+    m_flathubBrowseModel->setItems(m_flathubBrowseCache.value(cacheKey));
+
+    if (categoryChanged) {
+        const auto featured = m_flathubBrowseFeaturedCache.constFind(category);
+        m_flathubBrowseFeaturedModel->setItems(featured == m_flathubBrowseFeaturedCache.cend()
+                                                   ? QList<AppModel::Item>()
+                                                   : QList<AppModel::Item>{featured.value()});
+    }
+
+    emit flathubBrowseStateChanged();
+
+    if (!m_flathubBrowseCache.contains(cacheKey)) {
+        requestFlathubBrowseCategoryPage(1);
+    } else if (!subcategory.isEmpty() && flathubBrowseHasMore()) {
+        requestFlathubBrowseCategoryPage(m_flathubBrowseNextPage);
+    } else if (categoryChanged && m_flathubBrowseFeaturedModel->items().isEmpty()
+               && !m_flathubBrowseModel->items().isEmpty()) {
+        requestFlathubBrowseFeatured(m_flathubBrowseModel->items().first());
+    }
+}
+
+void AppHubBackend::loadMoreFlathubBrowseCategory()
+{
+    if (m_flathubBrowseLoading || !flathubBrowseHasMore())
+        return;
+
+    requestFlathubBrowseCategoryPage(m_flathubBrowseNextPage);
+}
+
 void AppHubBackend::refreshAppHubRepository()
 {
     const QString executable = findExecutable(QStringLiteral("nx-apphub-cli"));
@@ -839,21 +943,29 @@ void AppHubBackend::updateFlatpak(const QString &identifier)
 
 void AppHubBackend::removeFlatpak(const QString &identifier)
 {
-    if (!isSafeIdentifier(identifier)) {
-        setStatusMessage(QStringLiteral("Invalid Flatpak identifier."));
-        return;
-    }
-    if (!startOperation(QStringLiteral("flatpak"),
-                       {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), identifier},
-                       Operation::FlatpakRemove,
-                       identifier))
-        return;
-    setStatusMessage(QStringLiteral("Removing %1 from Flathub…").arg(identifier));
+    removeInstalledFlatpak(identifier, !m_userInstalledFlatpaks.contains(identifier) && m_systemInstalledFlatpaks.contains(identifier));
 }
 
-void AppHubBackend::loadFlatpakAddons(const QString &identifier)
+void AppHubBackend::removeInstalledFlatpak(const QString &identifier, bool systemWide)
 {
-    if (!isSafeIdentifier(identifier) || !m_installedFlatpaks.contains(identifier)) {
+    const QSet<QString> &installed = systemWide ? m_systemInstalledFlatpaks : m_userInstalledFlatpaks;
+    if (!isSafeIdentifier(identifier) || !installed.contains(identifier)) {
+        setStatusMessage(QStringLiteral("Invalid or uninstalled Flatpak identifier."));
+        return;
+    }
+
+    if (!startOperation(QStringLiteral("flatpak"),
+                        {QStringLiteral("uninstall"), systemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), identifier},
+                        Operation::FlatpakRemove,
+                        identifier))
+        return;
+    setStatusMessage(QStringLiteral("Removing %1…").arg(identifier));
+}
+
+void AppHubBackend::loadFlatpakAddons(const QString &identifier, bool systemWide)
+{
+    const QSet<QString> &installed = systemWide ? m_systemInstalledFlatpaks : m_userInstalledFlatpaks;
+    if (!isSafeIdentifier(identifier) || !installed.contains(identifier)) {
         m_flatpakAddonsApplication.clear();
         m_flatpakAddonsModel->setItems({});
         setStatusMessage(QStringLiteral("Invalid or uninstalled Flatpak identifier."));
@@ -861,6 +973,7 @@ void AppHubBackend::loadFlatpakAddons(const QString &identifier)
     }
 
     m_flatpakAddonsApplication = identifier;
+    m_flatpakAddonsSystemWide = systemWide;
     refreshFlatpakAddons();
 }
 
@@ -872,7 +985,7 @@ void AppHubBackend::installFlatpakAddon(const QString &ref)
     }
 
     if (!startOperation(QStringLiteral("flatpak"),
-                        {QStringLiteral("install"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--runtime"), QStringLiteral("flathub"), ref},
+                        {QStringLiteral("install"), m_flatpakAddonsSystemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--runtime"), QStringLiteral("flathub"), ref},
                         Operation::FlatpakAddonInstall,
                         ref))
         return;
@@ -887,7 +1000,7 @@ void AppHubBackend::removeFlatpakAddon(const QString &ref)
     }
 
     if (!startOperation(QStringLiteral("flatpak"),
-                        {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--runtime"), ref},
+                        {QStringLiteral("uninstall"), m_flatpakAddonsSystemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--runtime"), ref},
                         Operation::FlatpakAddonRemove,
                         ref))
         return;
@@ -1044,47 +1157,62 @@ void AppHubBackend::enterDistrobox(const QString &name)
 
 void AppHubBackend::refreshFlatpakInstalled()
 {
-    const QByteArray output = runCommand(QStringLiteral("flatpak"),
-                                         {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"), QStringLiteral("--columns=application,name,origin,version,arch,size")});
-    QList<AppModel::Item> items;
     m_installedFlatpaks.clear();
+    m_userInstalledFlatpaks.clear();
+    m_systemInstalledFlatpaks.clear();
 
-    for (const QByteArray &line : output.split('\n')) {
-        const QStringList fields = QString::fromLocal8Bit(line).split('\t');
-        if (fields.size() < 6 || fields.first().trimmed().isEmpty())
-            continue;
+    const auto installedItems = [this](const QByteArray &output, bool systemWide) {
+        QList<AppModel::Item> items;
+        for (const QByteArray &line : output.split(10)) {
+            const QStringList fields = QString::fromLocal8Bit(line).split(QLatin1String("\t"));
+            if (fields.size() < 6 || fields.first().trimmed().isEmpty())
+                continue;
 
-        const QString identifier = fields.at(0).trimmed();
-        const QString origin = fields.value(2).trimmed();
-        if (identifier == QLatin1String("Application") || !isSafeIdentifier(identifier) || !isFlathubRemote(origin))
-            continue;
+            const QString identifier = fields.at(0).trimmed();
+            if (identifier == QLatin1String("Application") || !isSafeIdentifier(identifier))
+                continue;
 
-        m_installedFlatpaks.insert(identifier);
-        items.append({
-            fields.value(1, identifier).trimmed(),
-            QStringLiteral("Installed through Flathub"),
-            fields.value(3).trimmed(),
-            fields.value(4).trimmed(),
-            identifier,
-            QStringLiteral("Desktop Application"),
-            QStringLiteral("Remove"),
-            QStringLiteral("edit-delete"),
-            identifier,
-            QStringLiteral("Installed"),
-            {},
-            {},
-            {},
-            QStringLiteral("Installed through Flathub"),
-            {},
-            QStringLiteral("GUI Application"),
-            fields.value(5).trimmed(),
-            {},
-            {},
-            {}
-        });
-    }
+            m_installedFlatpaks.insert(identifier);
+            if (systemWide)
+                m_systemInstalledFlatpaks.insert(identifier);
+            else
+                m_userInstalledFlatpaks.insert(identifier);
 
-    m_flathubModel->setItems(filterItems(sortedInstalledFlatpaks(items)));
+            items.append({
+                fields.value(1, identifier).trimmed(),
+                QStringLiteral("Installed through Flatpak"),
+                fields.value(3).trimmed(),
+                fields.value(4).trimmed(),
+                identifier,
+                QStringLiteral("Desktop Application"),
+                QStringLiteral("Remove"),
+                QStringLiteral("edit-delete"),
+                identifier,
+                QStringLiteral("Installed"),
+                {},
+                {},
+                {},
+                QStringLiteral("Installed through Flatpak"),
+                systemWide ? QStringLiteral("system") : QStringLiteral("user"),
+                QStringLiteral("GUI Application"),
+                fields.value(5).trimmed(),
+                {},
+                {},
+                {}
+            });
+        }
+        return items;
+    };
+
+    const QByteArray userOutput = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"), QStringLiteral("--columns=application,name,origin,version,arch,size")});
+    const QByteArray systemOutput = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("list"), QStringLiteral("--system"), QStringLiteral("--app"), QStringLiteral("--columns=application,name,origin,version,arch,size")});
+
+    m_flathubModel->setItems(filterItems(sortedInstalledFlatpaks(installedItems(userOutput, false))));
+    m_systemFlatpakModel->setItems(filterItems(sortedInstalledFlatpaks(installedItems(systemOutput, true))));
     refreshFlatpakUpdates();
 }
 
@@ -1107,7 +1235,7 @@ void AppHubBackend::refreshFlatpakUpdates()
             continue;
 
         const QString identifier = fields.at(0).trimmed();
-        if (!isSafeIdentifier(identifier) || !m_installedFlatpaks.contains(identifier))
+        if (!isSafeIdentifier(identifier) || !m_userInstalledFlatpaks.contains(identifier))
             continue;
 
         QString name = fields.value(1).trimmed();
@@ -1158,7 +1286,7 @@ void AppHubBackend::refreshFlatpakAddons()
 
     const QString appRef = QString::fromLocal8Bit(
         runCommand(QStringLiteral("flatpak"),
-                   {QStringLiteral("info"), QStringLiteral("--user"), QStringLiteral("--show-ref"), m_flatpakAddonsApplication}))
+                   {QStringLiteral("info"), m_flatpakAddonsSystemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("--show-ref"), m_flatpakAddonsApplication}))
                                .trimmed();
     const QStringList appRefParts = appRef.split(QLatin1String("/"));
     if (appRefParts.size() != 4 || appRefParts.at(0) != QLatin1String("app")
@@ -1172,7 +1300,7 @@ void AppHubBackend::refreshFlatpakAddons()
     const QString appBranch = appRefParts.at(3);
     const QByteArray metadata = runCommand(
         QStringLiteral("flatpak"),
-        {QStringLiteral("info"), QStringLiteral("--user"), QStringLiteral("--show-metadata"), m_flatpakAddonsApplication});
+        {QStringLiteral("info"), m_flatpakAddonsSystemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("--show-metadata"), m_flatpakAddonsApplication});
     const QList<FlatpakExtensionPoint> extensionPoints = flatpakExtensionPoints(metadata, appBranch);
     if (extensionPoints.isEmpty()) {
         m_flatpakAddonsModel->setItems(items);
@@ -1183,7 +1311,7 @@ void AppHubBackend::refreshFlatpakAddons()
     const QByteArray installedOutput = runCommand(
         QStringLiteral("flatpak"),
         {QStringLiteral("list"),
-         QStringLiteral("--user"),
+         m_flatpakAddonsSystemWide ? QStringLiteral("--system") : QStringLiteral("--user"),
          QStringLiteral("--runtime"),
          QStringLiteral("--all"),
          QStringLiteral("--columns=application,arch,branch")});
@@ -1204,7 +1332,7 @@ void AppHubBackend::refreshFlatpakAddons()
     const QByteArray remoteOutput = runCommand(
         QStringLiteral("flatpak"),
         {QStringLiteral("remote-ls"),
-         QStringLiteral("--user"),
+         m_flatpakAddonsSystemWide ? QStringLiteral("--system") : QStringLiteral("--user"),
          QStringLiteral("--runtime"),
          QStringLiteral("--arch=%1").arg(appArchitecture),
          QStringLiteral("--columns=application,name,description,version,branch,arch,download-size"),
@@ -1641,6 +1769,166 @@ void AppHubBackend::parseFlathubCategory(const QByteArray &output, const QString
                                      root.value(QStringLiteral("hits")).toArray()));
     m_flathubCategoryNextPage.insert(category, page + 1);
     m_flathubCategoryTotalPages.insert(category, root.value(QStringLiteral("totalPages")).toInt(page));
+}
+
+void AppHubBackend::cancelFlathubBrowseRequests(bool cancelFeatured)
+{
+    if (m_flathubBrowseReply) {
+        m_flathubBrowseReply->abort();
+        m_flathubBrowseReply->deleteLater();
+        m_flathubBrowseReply = nullptr;
+    }
+    if (cancelFeatured && m_flathubBrowseFeaturedReply) {
+        m_flathubBrowseFeaturedReply->abort();
+        m_flathubBrowseFeaturedReply->deleteLater();
+        m_flathubBrowseFeaturedReply = nullptr;
+    }
+    if (m_flathubBrowseLoading) {
+        m_flathubBrowseLoading = false;
+        emit flathubBrowseStateChanged();
+    }
+}
+
+void AppHubBackend::requestFlathubBrowseCategoryPage(int page)
+{
+    if (m_flathubBrowseCategory.isEmpty() || m_flathubBrowseReply || page < 1)
+        return;
+
+    const QString endpoint = flathubBrowseEndpoint(m_flathubBrowseCategory, m_flathubBrowseSubcategory);
+    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/collection/%1&page=%2&per_page=%3")
+                                     .arg(endpoint)
+                                     .arg(page)
+                                     .arg(FlathubCollectionPageSize)));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+    m_flathubBrowseReply = m_network->get(request);
+    QNetworkReply *reply = m_flathubBrowseReply;
+    m_flathubBrowseLoading = true;
+    emit flathubBrowseStateChanged();
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, page] {
+        if (m_flathubBrowseReply != reply) {
+            reply->deleteLater();
+            return;
+        }
+
+        m_flathubBrowseReply = nullptr;
+        const QByteArray response = reply->readAll();
+        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
+        reply->deleteLater();
+        if (valid)
+            parseFlathubBrowseCategory(response, page);
+
+        if (valid && !m_flathubBrowseSubcategory.isEmpty() && flathubBrowseHasMore()) {
+            requestFlathubBrowseCategoryPage(m_flathubBrowseNextPage);
+            return;
+        }
+
+        m_flathubBrowseLoading = false;
+        emit flathubBrowseStateChanged();
+    });
+}
+
+void AppHubBackend::parseFlathubBrowseCategory(const QByteArray &output, int page)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    const QJsonObject root = document.object();
+    const QList<AppModel::Item> items = appendFlathubHits(
+        page == 1 ? QList<AppModel::Item>() : m_flathubBrowseModel->items(),
+        root.value(QStringLiteral("hits")).toArray());
+    m_flathubBrowseModel->setItems(items);
+    m_flathubBrowseNextPage = page + 1;
+    m_flathubBrowseTotalPages = root.value(QStringLiteral("totalPages")).toInt(page);
+    const QString cacheKey = flathubBrowseCacheKey(m_flathubBrowseCategory, m_flathubBrowseSubcategory);
+    m_flathubBrowseCache.insert(cacheKey, items);
+    m_flathubBrowseNextPageCache.insert(cacheKey, m_flathubBrowseNextPage);
+    m_flathubBrowseTotalPagesCache.insert(cacheKey, m_flathubBrowseTotalPages);
+
+    if (page == 1 && m_flathubBrowseSubcategory.isEmpty() && !items.isEmpty()
+        && !m_flathubBrowseFeaturedCache.contains(m_flathubBrowseCategory))
+        requestFlathubBrowseFeatured(items.first());
+}
+
+void AppHubBackend::requestFlathubBrowseFeatured(const AppModel::Item &item)
+{
+    m_flathubBrowseFeaturedItem = item;
+    m_flathubBrowseFeaturedCategory = m_flathubBrowseCategory;
+    const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(item.identifier));
+    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+    m_flathubBrowseFeaturedReply = m_network->get(request);
+    QNetworkReply *reply = m_flathubBrowseFeaturedReply;
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        if (m_flathubBrowseFeaturedReply != reply) {
+            reply->deleteLater();
+            return;
+        }
+
+        m_flathubBrowseFeaturedReply = nullptr;
+        const QByteArray response = reply->readAll();
+        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
+        reply->deleteLater();
+        if (valid)
+            parseFlathubBrowseFeatured(response);
+    });
+}
+
+void AppHubBackend::parseFlathubBrowseFeatured(const QByteArray &output)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    const QJsonObject object = document.object();
+    AppModel::Item item = m_flathubBrowseFeaturedItem;
+    const QString identifier = item.identifier;
+    if (!isSafeIdentifier(identifier))
+        return;
+    item.name = object.value(QStringLiteral("name")).toString(identifier).trimmed();
+    item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
+    item.description = object.value(QStringLiteral("description")).toString().trimmed();
+    item.type = object.value(QStringLiteral("type")).toString().trimmed();
+    item.icon = QStringLiteral("application-x-flatpak");
+    item.iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
+    item.category = displayCategory(m_flathubBrowseCategory);
+    item.actionText = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Remove") : QStringLiteral("Install");
+    item.actionIcon = m_installedFlatpaks.contains(identifier) ? QStringLiteral("edit-delete") : QStringLiteral("list-add");
+    item.status = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Installed") : QStringLiteral("Available");
+
+    qint64 largestArea = -1;
+    const QJsonArray screenshots = object.value(QStringLiteral("screenshots")).toArray();
+    for (const QJsonValue &screenshotValue : screenshots) {
+        if (!screenshotValue.isObject())
+            continue;
+
+        const QJsonObject screenshot = screenshotValue.toObject();
+        const QString caption = screenshot.value(QStringLiteral("caption")).toString().trimmed();
+        const QJsonArray sizes = screenshot.value(QStringLiteral("sizes")).toArray();
+        for (const QJsonValue &sizeValue : sizes) {
+            if (!sizeValue.isObject())
+                continue;
+
+            const QJsonObject size = sizeValue.toObject();
+            const QString source = size.value(QStringLiteral("src")).toString().trimmed();
+            const qint64 width = size.value(QStringLiteral("width")).toVariant().toLongLong();
+            const qint64 height = size.value(QStringLiteral("height")).toVariant().toLongLong();
+            const qint64 area = width > 0 && height > 0 ? width * height : 0;
+            if (!source.isEmpty() && area > largestArea) {
+                item.screenshot = source;
+                item.screenshotCaption = caption;
+                largestArea = area;
+            }
+        }
+    }
+
+    m_flathubBrowseFeaturedCache.insert(m_flathubBrowseFeaturedCategory, item);
+    if (m_flathubBrowseFeaturedCategory == m_flathubBrowseCategory)
+        m_flathubBrowseFeaturedModel->setItems({item});
 }
 
 void AppHubBackend::refreshAppHubCatalog()

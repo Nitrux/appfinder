@@ -161,7 +161,7 @@ Maui.ApplicationWindow {
                     display: AbstractButton.IconOnly
                     checkable: true
                     autoExclusive: true
-                    checked: root.currentSection === 0 && contentLoader.item && !contentLoader.item.installedView
+                    checked: root.currentSection === 0 && contentLoader.item && !contentLoader.item.installedView && !contentLoader.item.categoriesView
                     icon.name: "go-home"
                     ToolTip.visible: hovered
                     ToolTip.text: text
@@ -169,6 +169,28 @@ Maui.ApplicationWindow {
                         root.searchText = ""
                         if (contentLoader.item) {
                             contentLoader.item.installedView = false
+                            contentLoader.item.categoriesView = false
+                            settings.startInInstalledView = false
+                        }
+                    }
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 0 && contentLoader.item !== null
+                    text: qsTr("Browse Categories")
+                    display: AbstractButton.IconOnly
+                    checkable: true
+                    autoExclusive: true
+                    checked: root.currentSection === 0 && contentLoader.item && contentLoader.item.categoriesView
+                    icon.name: "appfinder-flathub-store"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: {
+                        root.searchText = ""
+                        if (contentLoader.item) {
+                            contentLoader.item.installedView = false
+                            contentLoader.item.categoriesView = true
+                            contentLoader.item.selectedCategory = ""
                             settings.startInInstalledView = false
                         }
                     }
@@ -188,6 +210,7 @@ Maui.ApplicationWindow {
                         root.searchText = ""
                         if (contentLoader.item) {
                             contentLoader.item.installedView = true
+                            contentLoader.item.categoriesView = false
                             settings.startInInstalledView = true
                         }
                     }
