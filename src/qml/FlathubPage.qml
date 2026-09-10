@@ -384,10 +384,10 @@ Maui.Page {
                 readonly property real availableLayoutWidth: parent ? parent.width : 0
                 readonly property int fittedColumns: Math.max(1, Math.min(4, count, Math.floor(availableLayoutWidth / itemSize)))
 
-                Layout.fillWidth: false
-                Layout.preferredWidth: Math.min(availableLayoutWidth, itemSize * fittedColumns)
+                Layout.fillWidth: holder.visible
+                Layout.preferredWidth: holder.visible ? availableLayoutWidth : Math.min(availableLayoutWidth, itemSize * fittedColumns)
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredHeight: Math.max(contentHeight, holder.visible ? Maui.Style.units.gridUnit * 10 : 0)
+                Layout.preferredHeight: holder.visible ? Math.max(holder.implicitHeight, exploreScroll.availableHeight - y) : contentHeight
                 padding: 0
                 itemSize: Maui.Style.units.gridUnit * 17
                 itemHeight: Maui.Style.units.gridUnit * 6
@@ -413,6 +413,7 @@ Maui.Page {
                         imageSource: model.iconUrl
                         iconSource: model.icon
                         iconSizeHint: Maui.Style.iconSizes.big
+                        template.leftLabels.spacing: Maui.Style.space.small
                         label1.text: model.name
                         label1.font.weight: Font.DemiBold
                         label1.elide: Text.ElideRight
@@ -505,6 +506,7 @@ Maui.Page {
                                     imageSource: model.iconUrl
                                     iconSource: model.icon
                                     iconSizeHint: Maui.Style.iconSizes.big
+                                    template.leftLabels.spacing: Maui.Style.space.small
                                     label1.text: model.name
                                     label1.font.weight: Font.DemiBold
                                     label1.elide: Text.ElideRight
@@ -544,6 +546,7 @@ Maui.Page {
         id: installedViewComponent
 
         Maui.ScrollColumn {
+            id: installedScroll
             padding: Maui.Style.contentMargins
             spacing: Maui.Style.space.small
 
@@ -557,6 +560,7 @@ Maui.Page {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredHeight: installedBrowser.holder.visible ? Math.max(implicitHeight, installedScroll.availableHeight - y) : implicitHeight
                 color: Maui.Theme.alternateBackgroundColor
                 radius: Maui.Style.radiusV
                 border.color: Maui.Theme.backgroundColor
@@ -655,6 +659,7 @@ Maui.Page {
         id: searchView
 
         Maui.ScrollColumn {
+            id: searchScroll
             padding: Maui.Style.contentMargins
             spacing: Maui.Style.space.small
 
@@ -668,6 +673,7 @@ Maui.Page {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredHeight: searchGrid.holder.visible ? Math.max(implicitHeight, searchScroll.availableHeight - y) : implicitHeight
                 color: Maui.Theme.alternateBackgroundColor
                 radius: Maui.Style.radiusV
                 border.color: Maui.Theme.backgroundColor

@@ -26,6 +26,9 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(AppModel *flathubFeaturedModel READ flathubFeaturedModel CONSTANT)
     Q_PROPERTY(AppModel *flathubCollectionModel READ flathubCollectionModel CONSTANT)
     Q_PROPERTY(AppModel *appHubModel READ appHubModel CONSTANT)
+    Q_PROPERTY(QStringList appHubCategories READ appHubCategories NOTIFY appHubCategoriesChanged)
+    Q_PROPERTY(QString appHubCategory READ appHubCategory WRITE setAppHubCategory NOTIFY appHubCategoryChanged)
+    Q_PROPERTY(bool appHubInstalledOnly READ appHubInstalledOnly WRITE setAppHubInstalledOnly NOTIFY appHubInstalledOnlyChanged)
     Q_PROPERTY(AppModel *distroboxModel READ distroboxModel CONSTANT)
     Q_PROPERTY(int flathubCollection READ flathubCollection WRITE setFlathubCollection NOTIFY flathubCollectionChanged)
     Q_PROPERTY(bool flathubCollectionLoading READ flathubCollectionLoading NOTIFY flathubCollectionLoadingChanged)
@@ -68,6 +71,12 @@ public:
     bool flathubCollectionHasMore() const;
     int flathubCategoryRevision() const;
 
+    QStringList appHubCategories() const;
+    QString appHubCategory() const;
+    void setAppHubCategory(const QString &category);
+    bool appHubInstalledOnly() const;
+    void setAppHubInstalledOnly(bool installedOnly);
+
     int currentSection() const;
     void setCurrentSection(int section);
 
@@ -101,6 +110,9 @@ signals:
     void flathubCollectionLoadingChanged();
     void flathubCollectionHasMoreChanged();
     void flathubCategoryRevisionChanged();
+    void appHubCategoriesChanged();
+    void appHubCategoryChanged();
+    void appHubInstalledOnlyChanged();
     void busyChanged();
     void statusMessageChanged();
     void operationLogChanged();
@@ -153,6 +165,9 @@ private:
     void parseFlatpakSearch(const QByteArray &output);
 
     QList<AppModel::Item> filterItems(const QList<AppModel::Item> &items) const;
+    QList<AppModel::Item> filterAppHubItems(const QList<AppModel::Item> &items) const;
+    QString normalizedAppHubCategory(const AppModel::Item &item) const;
+    void refreshAppHubCategories();
     QList<AppModel::Item> loadAppHubItems() const;
     QList<AppModel::Item> loadDistroboxItems(const QByteArray &output) const;
 
@@ -201,6 +216,9 @@ private:
     Operation m_operation = Operation::None;
     int m_currentSection = Flathub;
     int m_flathubCollection = TrendingCollection;
+    QStringList m_appHubCategories;
+    QString m_appHubCategory;
+    bool m_appHubInstalledOnly = false;
     int m_flathubCategoryRevision = 0;
     bool m_flathubCollectionLoading = false;
     bool m_busy = false;

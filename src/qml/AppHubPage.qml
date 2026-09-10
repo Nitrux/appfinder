@@ -11,277 +11,164 @@ import org.mauikit.controls as Maui
 Maui.Page {
     id: control
 
-    property string selectedCategory: ""
-
     background: null
     headBar.visible: false
 
-    function categoryMatches(category, type) {
-        if (selectedCategory.length === 0)
-            return true
+    property bool installedView: false
 
-        const value = (String(category) + " " + String(type)).toLowerCase()
-        switch (selectedCategory) {
-        case qsTr("Wayland Compositors"):
-            return value.indexOf("wayland") >= 0 || value.indexOf("compositor") >= 0
-        case qsTr("CLI Tools"):
-            return value.indexOf("cli") >= 0 || value.indexOf("command") >= 0 || value.indexOf("terminal") >= 0
-        case qsTr("System Components"):
-            return value.indexOf("system") >= 0 || value.indexOf("component") >= 0
-        case qsTr("Themes"):
-            return value.indexOf("theme") >= 0 || value.indexOf("appearance") >= 0
-        }
-        return true
-    }
+    onInstalledViewChanged: appHub.appHubInstalledOnly = installedView
+    Component.onCompleted: appHub.appHubInstalledOnly = installedView
+    Component.onDestruction: appHub.appHubInstalledOnly = false
 
-    Maui.InfoDialog {
-        id: detailsDialog
-        title: qsTr("Build Details")
-        message: appHub.operationLog.length > 0 ? appHub.operationLog : qsTr("No build output is available yet.")
-        standardButtons: Dialog.Close
-        template.iconSource: "utilities-terminal"
-    }
-
-    ColumnLayout {
+    Maui.ScrollColumn {
+        id: appHubScroll
         anchors.fill: parent
-        anchors.margins: Maui.Style.contentMargins
+        padding: Maui.Style.contentMargins
         spacing: Maui.Style.space.small
 
-        RowLayout {
-            Layout.fillWidth: true
+        function forwardGridWheel(wheel) {
+            const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
+            const horizontalDelta = usePixelDelta ? wheel.pixelDelta.x : wheel.angleDelta.x
+            const verticalDelta = usePixelDelta ? wheel.pixelDelta.y : wheel.angleDelta.y
 
-            Maui.SectionHeader {
-                Layout.fillWidth: true
-                padding: 0
-                text1: qsTr("NX AppHub")
-                text2: qsTr("Build AppBoxes that extend the Nitrux host system.")
-                label2.wrapMode: Text.Wrap
+            if (Math.abs(verticalDelta) < Math.abs(horizontalDelta)) {
+                wheel.accepted = false
+                return
             }
 
-            ToolButton {
-                text: qsTr("Refresh Repo")
-                icon.name: "repository-update"
-                display: ToolButton.TextBesideIcon
-                enabled: !appHub.busy
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Refresh NX AppHub repository")
-                onClicked: appHub.refreshAppHubRepository()
-            }
+            const pageFlickable = appHubScroll.flickable
+            const maximumContentY = Math.max(0, pageFlickable.contentHeight - pageFlickable.height)
+            pageFlickable.contentY = Math.max(0, Math.min(maximumContentY, pageFlickable.contentY - verticalDelta))
+            wheel.accepted = true
         }
 
-        Rectangle {
+        Maui.SectionHeader {
             Layout.fillWidth: true
-            color: Maui.Theme.alternateBackgroundColor
-            radius: Maui.Style.radiusV
-            border.color: Maui.Theme.backgroundColor
-            border.width: 1
-            implicitHeight: categoriesLayout.implicitHeight + Maui.Style.contentMargins * 2
+            text1: control.installedView ? qsTr("Installed AppBoxes") : qsTr("Explore NX AppHub")
+            text2: control.installedView ? qsTr("Manage AppBoxes installed on this system.") : qsTr("Build AppBoxes to extend Nitrux.")
+            label2.wrapMode: Text.Wrap
+        }
 
-            ColumnLayout {
-                id: categoriesLayout
-                anchors.fill: parent
-                anchors.margins: Maui.Style.contentMargins
-                spacing: Maui.Style.space.small
+        Maui.TabBar {
+            id: appHubTabs
+            Layout.fillWidth: true
+            Layout.maximumWidth: Maui.Style.units.gridUnit * 40
+            implicitWidth: Maui.Style.units.gridUnit * 40
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: Maui.Style.space.medium
+            Layout.bottomMargin: Maui.Style.space.medium
+            visible: !control.installedView
+            showNewTabButton: false
+            Maui.Controls.showCSD: false
+            currentIndex: appHub.appHubCategories.indexOf(appHub.appHubCategory)
+            clip: true
 
-                Maui.SectionHeader {
-                    Layout.fillWidth: true
-                    text1: qsTr("Categories")
-                    text2: qsTr("Filter extensions by their purpose.")
-                    label2.wrapMode: Text.Wrap
+            readonly property int tabCount: Math.max(1, appHub.appHubCategories.length)
+            readonly property real uniformTabWidth: Math.max(0, (width - leftPadding - rightPadding - spacing * (tabCount - 1)) / tabCount)
+
+            onCurrentIndexChanged: {
+                if (currentIndex >= 0 && currentIndex < appHub.appHubCategories.length)
+                    appHub.appHubCategory = appHub.appHubCategories[currentIndex]
+            }
+
+            background: Rectangle {
+                color: Maui.Theme.alternateBackgroundColor
+                radius: height / 2
+            }
+
+            Repeater {
+                model: appHub.appHubCategories
+
+                delegate: Maui.TabButton {
+                    required property string modelData
+                    width: appHubTabs.uniformTabWidth
+                    text: modelData
+                    closeButtonVisible: false
                 }
-
-                Flow {
-            Layout.fillWidth: true
-            spacing: Maui.Style.space.small
-
-            Maui.Chip {
-                text: qsTr("Wayland Compositors")
-                icon.name: "preferences-desktop-display"
-                checkable: false
-                checked: control.selectedCategory === text
-                onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-            }
-            Maui.Chip {
-                text: qsTr("CLI Tools")
-                icon.name: "utilities-terminal"
-                checkable: false
-                checked: control.selectedCategory === text
-                onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-            }
-            Maui.Chip {
-                text: qsTr("System Components")
-                icon.name: "preferences-system"
-                checkable: false
-                checked: control.selectedCategory === text
-                onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-            }
-            Maui.Chip {
-                text: qsTr("Themes")
-                icon.name: "preferences-desktop-theme"
-                checkable: false
-                checked: control.selectedCategory === text
-                onClicked: control.selectedCategory = control.selectedCategory === text ? "" : text
-            }
-        }
             }
         }
 
-        Maui.ListBrowser {
-            id: extensionsBrowser
+        Maui.GridBrowser {
+            id: appHubGrid
+            readonly property real availableLayoutWidth: parent ? parent.width : 0
+            readonly property int fittedColumns: Math.max(1, Math.min(4, count, Math.floor(availableLayoutWidth / itemSize)))
+
+            Layout.fillWidth: holder.visible
+            Layout.preferredWidth: holder.visible ? availableLayoutWidth : Math.min(availableLayoutWidth, itemSize * fittedColumns)
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredHeight: holder.visible ? Math.max(holder.implicitHeight, appHubScroll.availableHeight - y) : contentHeight
             padding: 0
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            itemSize: Maui.Style.units.gridUnit * 17
+            itemHeight: Maui.Style.units.gridUnit * 6
+            adaptContent: true
+            wheelResizeEnabled: false
+            pinchEnabled: false
+            verticalScrollBarPolicy: ScrollBar.AlwaysOff
             model: appHub.appHubModel
-            spacing: Maui.Style.space.small
+            flickable.interactive: false
+
             holder.visible: count === 0
-            holder.title: qsTr("NX AppHub builds AppBoxes")
-            holder.body: qsTr("Refresh the repository or search for software that does not fit the Flatpak or Distrobox roles.")
+            holder.title: control.installedView ? qsTr("No AppBoxes installed") : qsTr("No AppBoxes in this group")
+            holder.body: control.installedView ? qsTr("Build an AppBox to see it here.") : qsTr("Refresh the local NX AppHub repository or adjust the search.")
 
             delegate: Item {
                 id: extensionCard
-                width: ListView.view.width
-                height: categoryVisible ? 182 : 0
-                visible: categoryVisible
-                property bool categoryVisible: control.categoryMatches(model.category, model.type)
-                property bool installed: model.status === "Active Extension" || model.actionText === "Remove"
+                width: GridView.view.cellWidth
+                height: GridView.view.cellHeight
+                readonly property bool installed: model.status === "Active Extension" || model.actionText === "Remove"
 
-                Rectangle {
+                Maui.ListBrowserDelegate {
                     anchors.fill: parent
-                    radius: Maui.Style.radiusV
-                    color: Maui.Theme.alternateBackgroundColor
-                    border.color: Maui.Theme.backgroundColor
-                }
-
-                Maui.IconItem {
-                    id: extensionIcon
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.leftMargin: Maui.Style.space.medium
-                    anchors.topMargin: Maui.Style.space.medium
-                    width: 56
-                    height: 56
-                    iconSizeHint: 56
+                    anchors.margins: Maui.Style.space.small
+                    flat: false
                     iconSource: model.icon
-                }
-
-                ColumnLayout {
-                    anchors.left: extensionIcon.right
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.leftMargin: Maui.Style.space.medium
-                    anchors.rightMargin: Maui.Style.space.medium
-                    anchors.topMargin: Maui.Style.space.medium
-                    spacing: Maui.Style.space.small
+                    iconSizeHint: Maui.Style.iconSizes.big
+                    template.leftLabels.spacing: Maui.Style.space.small
+                    label1.text: model.name
+                    label1.font.weight: Font.DemiBold
+                    label1.elide: Text.ElideRight
+                    label2.text: model.description.length > 0 ? model.description : model.summary
+                    label2.wrapMode: Text.WordWrap
+                    label2.maximumLineCount: 2
+                    label2.elide: Text.ElideRight
 
                     RowLayout {
-                        Layout.fillWidth: true
-                        Label {
-                            Layout.fillWidth: true
-                            text: model.name
-                            font: Maui.Style.h2Font
-                            elide: Text.ElideRight
+                        spacing: Maui.Style.space.small
+
+                        ToolButton {
+                            visible: extensionCard.installed
+                            text: qsTr("Rebuild")
+                            icon.name: "view-refresh"
+                            display: ToolButton.IconOnly
+                            enabled: !appHub.busy
+                            ToolTip.visible: hovered
+                            ToolTip.text: text
+                            onClicked: appHub.rebuildAppHub(model.identifier)
                         }
-                        Maui.Chip {
-                            text: model.status.length > 0 ? model.status : qsTr("Not Built")
-                            color: extensionCard.installed ? Maui.Theme.positiveBackgroundColor : Maui.Theme.neutralBackgroundColor
+
+                        ToolButton {
+                            visible: extensionCard.installed
+                            text: qsTr("Remove")
+                            icon.name: "edit-delete"
+                            display: ToolButton.IconOnly
+                            enabled: !appHub.busy
+                            ToolTip.visible: hovered
+                            ToolTip.text: text
+                            onClicked: appHub.appHubAction(model.identifier)
                         }
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: qsTr("Type: %1").arg(model.type.length > 0 ? model.type : model.category)
-                        color: Maui.Theme.disabledTextColor
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: model.description.length > 0 ? model.description : model.summary
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        visible: model.integration.length > 0
-                        text: qsTr("Integration: %1").arg(model.integration)
-                        color: Maui.Theme.disabledTextColor
-                        elide: Text.ElideRight
-                    }
-                }
-
-                RowLayout {
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    anchors.rightMargin: Maui.Style.space.medium
-                    anchors.bottomMargin: Maui.Style.space.medium
-                    spacing: Maui.Style.space.small
-
-                    ToolButton {
-                        text: extensionCard.installed ? qsTr("Rebuild") : qsTr("Build & Deploy AppBox")
-                        icon.name: extensionCard.installed ? "view-refresh" : "run-build"
-                        display: ToolButton.TextBesideIcon
-                        enabled: !appHub.busy
-                        onClicked: extensionCard.installed ? appHub.rebuildAppHub(model.identifier) : appHub.appHubAction(model.identifier)
-                    }
-
-                    ToolButton {
-                        visible: extensionCard.installed
-                        text: qsTr("Remove")
-                        icon.name: "edit-delete"
-                        display: ToolButton.TextBesideIcon
-                        enabled: !appHub.busy
-                        onClicked: appHub.appHubAction(model.identifier)
                     }
                 }
             }
-        }
 
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: queueLayout.implicitHeight + Maui.Style.contentMargins * 2
-            radius: Maui.Style.radiusV
-            color: Maui.Theme.alternateBackgroundColor
-            border.color: Maui.Theme.backgroundColor
-            border.width: 1
-
-            ColumnLayout {
-                id: queueLayout
+            MouseArea {
                 anchors.fill: parent
-                anchors.margins: Maui.Style.contentMargins
-                spacing: Maui.Style.space.small
-
-                Maui.SectionHeader {
-                    Layout.fillWidth: true
-                    text1: qsTr("Build Queue")
-                    text2: qsTr("Monitor source operations and inspect their output.")
-                    label2.wrapMode: Text.Wrap
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Label {
-                        Layout.fillWidth: true
-                        text: appHub.busy ? appHub.statusMessage : qsTr("No active builds")
-                        color: Maui.Theme.disabledTextColor
-                        elide: Text.ElideRight
-                    }
-                    ToolButton {
-                        text: qsTr("Details")
-                        icon.name: "utilities-terminal"
-                        display: ToolButton.TextBesideIcon
-                        enabled: appHub.operationLog.length > 0
-                        onClicked: detailsDialog.open()
-                    }
-                }
-
-                Maui.ProgressIndicator {
-                    Layout.fillWidth: true
-                    from: 0
-                    to: 1
-                    value: appHub.busy ? 0.8 : 0
-                    indeterminate: appHub.busy
-                }
+                acceptedButtons: Qt.NoButton
+                propagateComposedEvents: true
+                scrollGestureEnabled: false
+                z: 100
+                onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
             }
         }
+
     }
 }

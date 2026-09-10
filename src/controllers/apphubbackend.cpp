@@ -48,6 +48,18 @@ bool isSafeIdentifier(const QString &value)
     return pattern.match(value).hasMatch();
 }
 
+QString appHubDisplayName(const QString &identifier)
+{
+    QStringList words = identifier.split(QRegularExpression(QStringLiteral("[-_]+")), Qt::SkipEmptyParts);
+    for (QString &word : words) {
+        if (word.size() <= 2)
+            word = word.toUpper();
+        else
+            word[0] = word.at(0).toUpper();
+    }
+    return words.join(QChar(u' '));
+}
+
 QByteArray readBoundedFile(const QString &path, qint64 maximumBytes)
 {
     const QFileInfo info(path);
@@ -376,6 +388,41 @@ int AppHubBackend::flathubCategoryRevision() const
     return m_flathubCategoryRevision;
 }
 
+QStringList AppHubBackend::appHubCategories() const
+{
+    return m_appHubCategories;
+}
+
+QString AppHubBackend::appHubCategory() const
+{
+    return m_appHubCategory;
+}
+
+void AppHubBackend::setAppHubCategory(const QString &category)
+{
+    if (!m_appHubCategories.contains(category) || category == m_appHubCategory)
+        return;
+
+    m_appHubCategory = category;
+    emit appHubCategoryChanged();
+    m_appHubModel->setItems(filterAppHubItems(m_allAppHubItems));
+}
+
+bool AppHubBackend::appHubInstalledOnly() const
+{
+    return m_appHubInstalledOnly;
+}
+
+void AppHubBackend::setAppHubInstalledOnly(bool installedOnly)
+{
+    if (installedOnly == m_appHubInstalledOnly)
+        return;
+
+    m_appHubInstalledOnly = installedOnly;
+    emit appHubInstalledOnlyChanged();
+    m_appHubModel->setItems(filterAppHubItems(m_allAppHubItems));
+}
+
 AppModel *AppHubBackend::appHubModel()
 {
     return m_appHubModel;
@@ -606,7 +653,7 @@ void AppHubBackend::search(const QString &query)
     case AppHub:
         if (m_allAppHubItems.isEmpty())
             refreshAppHubCatalog();
-        m_appHubModel->setItems(filterItems(m_allAppHubItems));
+        m_appHubModel->setItems(filterAppHubItems(m_allAppHubItems));
         break;
     case Distrobox:
         m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
@@ -1208,7 +1255,8 @@ void AppHubBackend::parseFlathubCategory(const QByteArray &output, const QString
 void AppHubBackend::refreshAppHubCatalog()
 {
     m_allAppHubItems = loadAppHubItems();
-    m_appHubModel->setItems(filterItems(m_allAppHubItems));
+    refreshAppHubCategories();
+    m_appHubModel->setItems(filterAppHubItems(m_allAppHubItems));
 }
 
 void AppHubBackend::refreshDistrobox()
@@ -1270,6 +1318,69 @@ QList<AppModel::Item> AppHubBackend::filterItems(const QList<AppModel::Item> &it
     return filtered;
 }
 
+QList<AppModel::Item> AppHubBackend::filterAppHubItems(const QList<AppModel::Item> &items) const
+{
+    QList<AppModel::Item> filtered;
+    for (const AppModel::Item &item : items) {
+        if (!m_query.isEmpty() && !matches(item))
+            continue;
+        if (m_appHubInstalledOnly && item.status != QLatin1String("Active Extension"))
+            continue;
+        if (m_appHubInstalledOnly || m_appHubCategory.isEmpty() || normalizedAppHubCategory(item) == m_appHubCategory)
+            filtered.append(item);
+    }
+    return filtered;
+}
+
+QString AppHubBackend::normalizedAppHubCategory(const AppModel::Item &item) const
+{
+    QString category = item.category.section(QChar(u'.'), -1).trimmed();
+    if (category.compare(QLatin1String("Utility"), Qt::CaseInsensitive) == 0)
+        category = QStringLiteral("Utilities");
+    return category;
+}
+
+void AppHubBackend::refreshAppHubCategories()
+{
+    const QStringList categoryOrder = {
+        QStringLiteral("Development"),
+        QStringLiteral("Graphics"),
+        QStringLiteral("Internet"),
+        QStringLiteral("Games"),
+        QStringLiteral("Multimedia"),
+        QStringLiteral("Office"),
+        QStringLiteral("System"),
+        QStringLiteral("Utilities"),
+    };
+
+    QSet<QString> availableCategories;
+    for (const AppModel::Item &item : std::as_const(m_allAppHubItems)) {
+        const QString category = normalizedAppHubCategory(item);
+        if (!category.isEmpty())
+            availableCategories.insert(category);
+    }
+
+    QStringList categories;
+    for (const QString &category : categoryOrder) {
+        if (availableCategories.remove(category))
+            categories.append(category);
+    }
+
+    QStringList additionalCategories = availableCategories.values();
+    additionalCategories.sort(Qt::CaseInsensitive);
+    categories.append(additionalCategories);
+
+    if (categories != m_appHubCategories) {
+        m_appHubCategories = categories;
+        emit appHubCategoriesChanged();
+    }
+
+    if (!m_appHubCategories.contains(m_appHubCategory)) {
+        m_appHubCategory = m_appHubCategories.value(0);
+        emit appHubCategoryChanged();
+    }
+}
+
 QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
 {
     const QString repositoryPath = appHubRepositoryPath();
@@ -1304,7 +1415,7 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
 
         const QString yaml = QString::fromUtf8(yamlData);
         const QString yamlName = appHubValue(yaml, QStringLiteral("name"));
-        const QString name = yamlName.isEmpty() ? application : yamlName;
+        const QString name = appHubDisplayName(yamlName.isEmpty() ? application : yamlName.simplified());
 
         QString markdown;
         const QFileInfo metadataDirectoryInfo(applicationDirectory.filePath(QStringLiteral("metadata")));

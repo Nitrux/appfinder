@@ -39,6 +39,11 @@ Maui.ApplicationWindow {
             return
         }
 
+        if (section === 1 && currentSection === section && contentLoader.item) {
+            root.searchText = ""
+            contentLoader.item.installedView = false
+        }
+
         currentSection = section
         if (section <= 2)
             appHub.currentSection = section
@@ -169,7 +174,7 @@ Maui.ApplicationWindow {
 
                 ToolButton {
                     visible: root.currentSection === 0 && contentLoader.item !== null
-                    text: qsTr("Installed applications")
+                    text: qsTr("Installed Flatpaks")
                     display: AbstractButton.IconOnly
                     checkable: true
                     autoExclusive: true
@@ -184,6 +189,56 @@ Maui.ApplicationWindow {
                             settings.startInInstalledView = true
                         }
                     }
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 1 && contentLoader.item !== null
+                    text: qsTr("Explore NX AppHub")
+                    display: AbstractButton.IconOnly
+                    checkable: true
+                    autoExclusive: true
+                    checked: root.currentSection === 1 && contentLoader.item && !contentLoader.item.installedView
+                    icon.name: "go-home"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: {
+                        root.searchText = ""
+                        if (contentLoader.item)
+                            contentLoader.item.installedView = false
+                    }
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 1 && contentLoader.item !== null
+                    text: qsTr("Installed AppBoxes")
+                    display: AbstractButton.IconOnly
+                    checkable: true
+                    autoExclusive: true
+                    checked: root.currentSection === 1 && contentLoader.item && contentLoader.item.installedView
+                    icon.name: "appfinder-appboxes"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: {
+                        root.searchText = ""
+                        if (contentLoader.item)
+                            contentLoader.item.installedView = true
+                    }
+                },
+
+                ToolSeparator {
+                    bottomPadding: 10
+                    topPadding: 10
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 1
+                    text: qsTr("Refresh Apps Repo")
+                    display: AbstractButton.IconOnly
+                    icon.name: "appfinder-repo-apphub"
+                    enabled: !appHub.busy
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Refresh NX AppHub Apps")
+                    onClicked: appHub.refreshAppHubRepository()
                 }
             ]
 
@@ -262,16 +317,12 @@ Maui.ApplicationWindow {
 
                 Maui.ToolButtonMenu {
                 icon.name: "overflow-menu"
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Menu")
 
                 MenuItem {
-                    text: qsTr("Settings")
+                    text: qsTr("Preferences")
                     icon.name: "settings-configure"
                     onTriggered: root.selectSection(4)
                 }
-
-                MenuSeparator {}
 
                 MenuItem {
                     text: qsTr("About")
