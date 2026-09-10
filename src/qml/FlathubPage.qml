@@ -19,6 +19,8 @@ Maui.Page {
     property bool categoriesView: false
     property string selectedCategory: ""
     property string selectedSubcategory: ""
+    property string selectedInstalledScope: ""
+    property string selectedInstalledIdentifier: ""
     readonly property var flathubBrowseCategories: [
         { category: "audiovideo", title: qsTr("Multimedia"), icon: "applications-multimedia", color: "#ff7043", filters: [
             { value: "", title: qsTr("All") }, { value: "audioVideoEditing", title: qsTr("Editing") }, { value: "midi", title: qsTr("MIDI") }, { value: "mixer", title: qsTr("Mixer") }, { value: "music", title: qsTr("Music") }, { value: "player", title: qsTr("Player") }, { value: "recorder", title: qsTr("Recorder") }, { value: "sequencer", title: qsTr("Sequencer") }, { value: "tuner", title: qsTr("Tuner") }, { value: "tv", title: qsTr("Television") }
@@ -1014,6 +1016,22 @@ Maui.Page {
             padding: Maui.Style.contentMargins
             spacing: Maui.Style.space.small
 
+            function forwardListWheel(wheel) {
+                const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
+                const horizontalDelta = usePixelDelta ? wheel.pixelDelta.x : wheel.angleDelta.x
+                const verticalDelta = usePixelDelta ? wheel.pixelDelta.y : wheel.angleDelta.y
+
+                if (Math.abs(verticalDelta) < Math.abs(horizontalDelta)) {
+                    wheel.accepted = false
+                    return
+                }
+
+                const pageFlickable = installedScroll.flickable
+                const maximumContentY = Math.max(0, pageFlickable.contentHeight - pageFlickable.height)
+                pageFlickable.contentY = Math.max(0, Math.min(maximumContentY, pageFlickable.contentY - verticalDelta))
+                wheel.accepted = true
+            }
+
             Maui.SectionHeader {
                 Layout.fillWidth: true
                 text1: qsTr("Manage Flatpaks")
@@ -1114,6 +1132,7 @@ Maui.Page {
                         id: installedBrowser
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        verticalScrollBarPolicy: ScrollBar.AlwaysOff
                         padding: 0
                         clip: true
                         model: appHub.flathubModel
@@ -1125,7 +1144,12 @@ Maui.Page {
                         delegate: Maui.ListBrowserDelegate {
                             id: userInstalledDelegate
                             width: ListView.view.width
-                            onClicked: ListView.view.currentIndex = index
+                            isCurrentItem: control.selectedInstalledScope === "user" && control.selectedInstalledIdentifier === model.identifier
+                            onClicked: {
+                                ListView.view.currentIndex = index
+                                control.selectedInstalledScope = "user"
+                                control.selectedInstalledIdentifier = model.identifier
+                            }
                             iconSource: model.icon
                             iconSizeHint: Maui.Style.iconSizes.big
                             template.leftLabels.spacing: Maui.Style.space.small
@@ -1169,6 +1193,15 @@ Maui.Page {
                                 onClicked: appHub.removeInstalledFlatpak(model.identifier, false)
                             }
                         }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+                            scrollGestureEnabled: false
+                            z: 100
+                            onWheel: (wheel) => installedScroll.forwardListWheel(wheel)
+                        }
                     }
                 }
             }
@@ -1200,6 +1233,7 @@ Maui.Page {
                         id: systemInstalledBrowser
                         Layout.fillWidth: true
                         Layout.preferredHeight: contentHeight
+                        verticalScrollBarPolicy: ScrollBar.AlwaysOff
                         padding: 0
                         clip: true
                         model: appHub.systemFlatpakModel
@@ -1207,7 +1241,12 @@ Maui.Page {
                         delegate: Maui.ListBrowserDelegate {
                             id: systemInstalledDelegate
                             width: ListView.view.width
-                            onClicked: ListView.view.currentIndex = index
+                            isCurrentItem: control.selectedInstalledScope === "system" && control.selectedInstalledIdentifier === model.identifier
+                            onClicked: {
+                                ListView.view.currentIndex = index
+                                control.selectedInstalledScope = "system"
+                                control.selectedInstalledIdentifier = model.identifier
+                            }
                             iconSource: model.icon
                             iconSizeHint: Maui.Style.iconSizes.big
                             template.leftLabels.spacing: Maui.Style.space.small
@@ -1250,6 +1289,15 @@ Maui.Page {
                                 ToolTip.text: text
                                 onClicked: appHub.removeInstalledFlatpak(model.identifier, true)
                             }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+                            scrollGestureEnabled: false
+                            z: 100
+                            onWheel: (wheel) => installedScroll.forwardListWheel(wheel)
                         }
                     }
                 }

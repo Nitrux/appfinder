@@ -20,6 +20,7 @@
 #include <QNetworkRequest>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QSysInfo>
@@ -452,6 +453,8 @@ AppHubBackend::AppHubBackend(QObject *parent)
     , m_flathubBrowseFeaturedModel(new AppModel(this))
     , m_flathubCollectionModel(new AppModel(this))
     , m_appHubModel(new AppModel(this))
+    , m_appHubFeaturedModel(new AppModel(this))
+    , m_appHubBackupsModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
     , m_process(new QProcess(this))
     , m_network(new QNetworkAccessManager(this))
@@ -627,6 +630,16 @@ void AppHubBackend::setAppHubInstalledOnly(bool installedOnly)
 AppModel *AppHubBackend::appHubModel()
 {
     return m_appHubModel;
+}
+
+AppModel *AppHubBackend::appHubFeaturedModel()
+{
+    return m_appHubFeaturedModel;
+}
+
+AppModel *AppHubBackend::appHubBackupsModel()
+{
+    return m_appHubBackupsModel;
 }
 
 AppModel *AppHubBackend::distroboxModel()
@@ -1022,18 +1035,33 @@ void AppHubBackend::appHubAction(const QString &identifier)
     setStatusMessage(QStringLiteral("%1 %2 through NX AppHub…").arg(installed ? QStringLiteral("Removing") : QStringLiteral("Building"), identifier));
 }
 
-void AppHubBackend::rebuildAppHub(const QString &identifier)
+bool AppHubBackend::appHubHasBackups(const QString &identifier) const
 {
-    if (!isSafeIdentifier(identifier)) {
-        setStatusMessage(QStringLiteral("Invalid NX AppHub identifier."));
+    return !appHubBackupItems(identifier).isEmpty();
+}
+
+void AppHubBackend::loadAppHubBackups(const QString &identifier)
+{
+    m_appHubBackupsModel->setItems(appHubBackupItems(identifier));
+}
+
+void AppHubBackend::restoreAppHubBackup(const QString &identifier, const QString &backup)
+{
+    const QList<AppModel::Item> backups = appHubBackupItems(identifier);
+    const auto selectedBackup = std::find_if(backups.cbegin(), backups.cend(), [&backup](const AppModel::Item &item) {
+        return item.identifier == backup;
+    });
+    if (selectedBackup == backups.cend()) {
+        setStatusMessage(QStringLiteral("Invalid or unavailable NX AppHub backup."));
         return;
     }
+
     if (!startOperation(QStringLiteral("nx-apphub-cli"),
-                        {QStringLiteral("install"), identifier},
-                        Operation::AppHubInstall,
+                        {QStringLiteral("downgrade"), identifier, QStringLiteral("--backup"), backup},
+                        Operation::AppHubRestore,
                         identifier))
         return;
-    setStatusMessage(QStringLiteral("Rebuilding %1 through NX AppHub…").arg(identifier));
+    setStatusMessage(QStringLiteral("Restoring a backup for %1…").arg(identifier));
 }
 
 bool AppHubBackend::isFlatpakInstalled(const QString &identifier) const
@@ -1934,6 +1962,15 @@ void AppHubBackend::parseFlathubBrowseFeatured(const QByteArray &output)
 void AppHubBackend::refreshAppHubCatalog()
 {
     m_allAppHubItems = loadAppHubItems();
+
+    QList<AppModel::Item> featuredItems = m_allAppHubItems;
+    for (qsizetype index = featuredItems.size() - 1; index > 0; --index) {
+        const qsizetype randomIndex = QRandomGenerator::global()->bounded(static_cast<int>(index + 1));
+        featuredItems.swapItemsAt(index, randomIndex);
+    }
+    if (featuredItems.size() > MaxFeaturedItems)
+        featuredItems.resize(MaxFeaturedItems);
+    m_appHubFeaturedModel->setItems(featuredItems);
     refreshAppHubCategories();
     m_appHubModel->setItems(filterAppHubItems(m_allAppHubItems));
 }
@@ -2160,6 +2197,63 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
             {},
             {},
             {}
+        });
+    }
+
+    return items;
+}
+
+QList<AppModel::Item> AppHubBackend::appHubBackupItems(const QString &identifier) const
+{
+    if (!isSafeIdentifier(identifier))
+        return {};
+
+    const QString backupPath = QFileInfo(appHubRepositoryPath()).dir().filePath(QStringLiteral("backups"));
+    const QFileInfo backupDirectoryInfo(backupPath);
+    if (!backupDirectoryInfo.isDir() || backupDirectoryInfo.isSymbolicLink())
+        return {};
+
+    const QDir backupDirectory(backupPath);
+    const QString prefix = identifier + QLatin1Char('-');
+    const QString suffix = QLatin1Char('-') + architecture() + QStringLiteral(".tar");
+    const QStringList backupFiles = backupDirectory.entryList(
+        {prefix + QLatin1Char('*') + suffix},
+        QDir::Files | QDir::NoSymLinks,
+        QDir::Time);
+
+    QList<AppModel::Item> items;
+    for (const QString &backupFile : backupFiles) {
+        const QFileInfo backupInfo(backupDirectory.filePath(backupFile));
+        if (!backupInfo.isFile() || backupInfo.isSymbolicLink()
+            || !backupFile.startsWith(prefix) || !backupFile.endsWith(suffix))
+            continue;
+
+        const QString version = backupFile.mid(prefix.size(), backupFile.size() - prefix.size() - suffix.size());
+        if (version.isEmpty())
+            continue;
+
+        items.append({
+            version,
+            backupFile,
+            version,
+            architecture(),
+            backupFile,
+            QStringLiteral("Backup"),
+            QStringLiteral("Restore"),
+            QStringLiteral("document-revert"),
+            QStringLiteral("document-revert"),
+            QStringLiteral("Available"),
+            {},
+            backupInfo.lastModified().toString(Qt::ISODate),
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
         });
     }
 
@@ -2417,6 +2511,7 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         break;
     case Operation::AppHubInstall:
     case Operation::AppHubRemove:
+    case Operation::AppHubRestore:
         refreshAppHubCatalog();
         setStatusMessage(QStringLiteral("NX AppHub operation completed."));
         break;

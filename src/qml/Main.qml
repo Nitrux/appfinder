@@ -274,7 +274,7 @@ Maui.ApplicationWindow {
                 Layout.alignment: Qt.AlignCenter
                 visible: page.compactSearch && root.compactSearchOpen && root.currentSection <= 2
                 enabled: visible
-                placeholderText: qsTr("Search %1").arg(root.currentTitle)
+                placeholderText: qsTr("Search %1...").arg(root.currentTitle)
                 text: root.searchText
 
                 onVisibleChanged: {
@@ -305,7 +305,7 @@ Maui.ApplicationWindow {
                     Layout.alignment: Qt.AlignRight
                     visible: root.currentSection <= 2 && !page.compactSearch
                     enabled: visible
-                    placeholderText: qsTr("Search %1").arg(root.currentTitle)
+                    placeholderText: qsTr("Search %1...").arg(root.currentTitle)
                     text: root.searchText
 
                     onTextChanged: {
@@ -325,7 +325,7 @@ Maui.ApplicationWindow {
 
                 ToolButton {
                     visible: root.currentSection <= 2 && page.compactSearch
-                    text: qsTr("Search %1").arg(root.currentTitle)
+                    text: qsTr("Search %1...").arg(root.currentTitle)
                     display: AbstractButton.IconOnly
                     checkable: true
                     checked: root.compactSearchOpen

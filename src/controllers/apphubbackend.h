@@ -36,6 +36,8 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(QString flatpakUpdateIdentifier READ flatpakUpdateIdentifier NOTIFY flatpakUpdateStateChanged)
     Q_PROPERTY(int flatpakUpdateProgress READ flatpakUpdateProgress NOTIFY flatpakUpdateStateChanged)
     Q_PROPERTY(AppModel *appHubModel READ appHubModel CONSTANT)
+    Q_PROPERTY(AppModel *appHubFeaturedModel READ appHubFeaturedModel CONSTANT)
+    Q_PROPERTY(AppModel *appHubBackupsModel READ appHubBackupsModel CONSTANT)
     Q_PROPERTY(QStringList appHubCategories READ appHubCategories NOTIFY appHubCategoriesChanged)
     Q_PROPERTY(QString appHubCategory READ appHubCategory WRITE setAppHubCategory NOTIFY appHubCategoryChanged)
     Q_PROPERTY(bool appHubInstalledOnly READ appHubInstalledOnly WRITE setAppHubInstalledOnly NOTIFY appHubInstalledOnlyChanged)
@@ -78,6 +80,8 @@ public:
     AppModel *flathubBrowseFeaturedModel();
     AppModel *flathubCollectionModel();
     AppModel *appHubModel();
+    AppModel *appHubFeaturedModel();
+    AppModel *appHubBackupsModel();
     AppModel *distroboxModel();
 
     int flathubCollection() const;
@@ -123,7 +127,9 @@ public:
     Q_INVOKABLE void installFlatpakAddon(const QString &ref);
     Q_INVOKABLE void removeFlatpakAddon(const QString &ref);
     Q_INVOKABLE void appHubAction(const QString &identifier);
-    Q_INVOKABLE void rebuildAppHub(const QString &identifier);
+    Q_INVOKABLE bool appHubHasBackups(const QString &identifier) const;
+    Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
+    Q_INVOKABLE void restoreAppHubBackup(const QString &identifier, const QString &backup);
     Q_INVOKABLE void enterDistrobox(const QString &name);
     Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {});
     Q_INVOKABLE void startDistrobox(const QString &name);
@@ -166,6 +172,7 @@ private:
         FlatpakAddonRemove,
         AppHubInstall,
         AppHubRemove,
+        AppHubRestore,
         DistroboxCreate,
         DistroboxStart,
         DistroboxStop,
@@ -211,6 +218,7 @@ private:
     QString normalizedAppHubCategory(const AppModel::Item &item) const;
     void refreshAppHubCategories();
     QList<AppModel::Item> loadAppHubItems() const;
+    QList<AppModel::Item> appHubBackupItems(const QString &identifier) const;
     QList<AppModel::Item> loadDistroboxItems(const QByteArray &output) const;
 
     QString appHubRepositoryPath() const;
@@ -237,6 +245,8 @@ private:
     AppModel *m_flathubBrowseFeaturedModel;
     AppModel *m_flathubCollectionModel;
     AppModel *m_appHubModel;
+    AppModel *m_appHubFeaturedModel;
+    AppModel *m_appHubBackupsModel;
     AppModel *m_distroboxModel;
     QProcess *m_process;
     QNetworkAccessManager *m_network;
