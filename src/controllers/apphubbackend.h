@@ -23,8 +23,13 @@ class AppHubBackend final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(AppModel *flathubModel READ flathubModel CONSTANT)
+    Q_PROPERTY(AppModel *flathubUpdatesModel READ flathubUpdatesModel CONSTANT)
+    Q_PROPERTY(AppModel *flatpakAddonsModel READ flatpakAddonsModel CONSTANT)
     Q_PROPERTY(AppModel *flathubFeaturedModel READ flathubFeaturedModel CONSTANT)
     Q_PROPERTY(AppModel *flathubCollectionModel READ flathubCollectionModel CONSTANT)
+    Q_PROPERTY(QString flatpakSortMode READ flatpakSortMode WRITE setFlatpakSortMode NOTIFY flatpakSortModeChanged)
+    Q_PROPERTY(QString flatpakUpdateIdentifier READ flatpakUpdateIdentifier NOTIFY flatpakUpdateStateChanged)
+    Q_PROPERTY(int flatpakUpdateProgress READ flatpakUpdateProgress NOTIFY flatpakUpdateStateChanged)
     Q_PROPERTY(AppModel *appHubModel READ appHubModel CONSTANT)
     Q_PROPERTY(QStringList appHubCategories READ appHubCategories NOTIFY appHubCategoriesChanged)
     Q_PROPERTY(QString appHubCategory READ appHubCategory WRITE setAppHubCategory NOTIFY appHubCategoryChanged)
@@ -60,6 +65,8 @@ public:
     explicit AppHubBackend(QObject *parent = nullptr);
 
     AppModel *flathubModel();
+    AppModel *flathubUpdatesModel();
+    AppModel *flatpakAddonsModel();
     AppModel *flathubFeaturedModel();
     AppModel *flathubCollectionModel();
     AppModel *appHubModel();
@@ -70,6 +77,10 @@ public:
     bool flathubCollectionLoading() const;
     bool flathubCollectionHasMore() const;
     int flathubCategoryRevision() const;
+    QString flatpakSortMode() const;
+    void setFlatpakSortMode(const QString &mode);
+    QString flatpakUpdateIdentifier() const;
+    int flatpakUpdateProgress() const;
 
     QStringList appHubCategories() const;
     QString appHubCategory() const;
@@ -93,7 +104,11 @@ public:
     Q_INVOKABLE void refreshAppHubRepository();
     Q_INVOKABLE void search(const QString &query);
     Q_INVOKABLE void installFlatpak(const QString &identifier);
+    Q_INVOKABLE void updateFlatpak(const QString &identifier);
     Q_INVOKABLE void removeFlatpak(const QString &identifier);
+    Q_INVOKABLE void loadFlatpakAddons(const QString &identifier);
+    Q_INVOKABLE void installFlatpakAddon(const QString &ref);
+    Q_INVOKABLE void removeFlatpakAddon(const QString &ref);
     Q_INVOKABLE void appHubAction(const QString &identifier);
     Q_INVOKABLE void rebuildAppHub(const QString &identifier);
     Q_INVOKABLE void enterDistrobox(const QString &name);
@@ -110,6 +125,8 @@ signals:
     void flathubCollectionLoadingChanged();
     void flathubCollectionHasMoreChanged();
     void flathubCategoryRevisionChanged();
+    void flatpakSortModeChanged();
+    void flatpakUpdateStateChanged();
     void appHubCategoriesChanged();
     void appHubCategoryChanged();
     void appHubInstalledOnlyChanged();
@@ -129,7 +146,10 @@ private:
         FlatpakSearch,
         AppHubSync,
         FlatpakInstall,
+        FlatpakUpdate,
         FlatpakRemove,
+        FlatpakAddonInstall,
+        FlatpakAddonRemove,
         AppHubInstall,
         AppHubRemove,
         DistroboxCreate,
@@ -146,6 +166,8 @@ private:
                         const QString &identifier = {});
 
     void refreshFlatpakInstalled();
+    void refreshFlatpakUpdates();
+    void refreshFlatpakAddons();
     void refreshFlathubFeatured();
     void cancelFlathubFeaturedRequests();
     void parseFlathubFeaturedCollection(const QByteArray &output);
@@ -165,6 +187,7 @@ private:
     void parseFlatpakSearch(const QByteArray &output);
 
     QList<AppModel::Item> filterItems(const QList<AppModel::Item> &items) const;
+    QList<AppModel::Item> sortedInstalledFlatpaks(const QList<AppModel::Item> &items) const;
     QList<AppModel::Item> filterAppHubItems(const QList<AppModel::Item> &items) const;
     QString normalizedAppHubCategory(const AppModel::Item &item) const;
     void refreshAppHubCategories();
@@ -181,11 +204,14 @@ private:
     QString findExecutable(const QString &program) const;
     QString containerEngine() const;
     void appendOperationLog(const QByteArray &output);
+    void clearFlatpakUpdateState();
 
     void setBusy(bool busy);
     void setStatusMessage(const QString &message);
 
     AppModel *m_flathubModel;
+    AppModel *m_flathubUpdatesModel;
+    AppModel *m_flatpakAddonsModel;
     AppModel *m_flathubFeaturedModel;
     AppModel *m_flathubCollectionModel;
     AppModel *m_appHubModel;
@@ -213,9 +239,13 @@ private:
     QSet<QString> m_installedFlatpaks;
     QString m_query;
     QString m_operationIdentifier;
+    QString m_flatpakAddonsApplication;
+    QString m_flatpakUpdateIdentifier;
+    int m_flatpakUpdateProgress = -1;
     Operation m_operation = Operation::None;
     int m_currentSection = Flathub;
     int m_flathubCollection = TrendingCollection;
+    QString m_flatpakSortMode = QStringLiteral("name");
     QStringList m_appHubCategories;
     QString m_appHubCategory;
     bool m_appHubInstalledOnly = false;

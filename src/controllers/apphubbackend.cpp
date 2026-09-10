@@ -48,6 +48,86 @@ bool isSafeIdentifier(const QString &value)
     return pattern.match(value).hasMatch();
 }
 
+struct FlatpakExtensionPoint
+{
+    QString identifier;
+    QStringList branches;
+    bool subdirectories = false;
+};
+
+QList<FlatpakExtensionPoint> flatpakExtensionPoints(const QByteArray &metadata, const QString &defaultBranch)
+{
+    QList<FlatpakExtensionPoint> points;
+    int currentPoint = -1;
+
+    for (const QByteArray &rawLine : metadata.split(10)) {
+        const QString line = QString::fromUtf8(rawLine).trimmed();
+        if (line.startsWith(QLatin1String("[Extension ")) && line.endsWith(QLatin1String("]"))) {
+            QString identifier = line.mid(11, line.size() - 12).trimmed();
+            const qsizetype tagSeparator = identifier.indexOf(QLatin1String("@"));
+            if (tagSeparator > 0)
+                identifier.truncate(tagSeparator);
+
+            FlatpakExtensionPoint point;
+            point.identifier = identifier;
+            points.append(point);
+            currentPoint = points.size() - 1;
+            continue;
+        }
+
+        if (line.startsWith(QLatin1String("["))) {
+            currentPoint = -1;
+            continue;
+        }
+
+        if (currentPoint < 0 || line.isEmpty() || line.startsWith(QLatin1String("#")))
+            continue;
+
+        const qsizetype separator = line.indexOf(QLatin1String("="));
+        if (separator <= 0)
+            continue;
+
+        const QString key = line.left(separator).trimmed();
+        const QString value = line.mid(separator + 1).trimmed();
+        FlatpakExtensionPoint &point = points[currentPoint];
+        if (key == QLatin1String("version")) {
+            if (!value.isEmpty())
+                point.branches.append(value);
+        } else if (key == QLatin1String("versions")) {
+            point.branches.append(value.split(QLatin1String(";"), Qt::SkipEmptyParts));
+        } else if (key == QLatin1String("subdirectories")) {
+            point.subdirectories = value.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0;
+        }
+    }
+
+    QList<FlatpakExtensionPoint> result;
+    for (FlatpakExtensionPoint &point : points) {
+        if (!isSafeIdentifier(point.identifier))
+            continue;
+        if (point.branches.isEmpty() && !defaultBranch.isEmpty())
+            point.branches.append(defaultBranch);
+        point.branches.removeDuplicates();
+        result.append(point);
+    }
+    return result;
+}
+
+bool splitFlatpakRuntimeRef(const QString &ref, QString *identifier = nullptr, QString *architecture = nullptr, QString *branch = nullptr)
+{
+    const QStringList parts = ref.split(QLatin1String("/"));
+    if (parts.size() != 4 || parts.at(0) != QLatin1String("runtime")
+        || !isSafeIdentifier(parts.at(1)) || !isSafeIdentifier(parts.at(2)) || !isSafeIdentifier(parts.at(3)))
+        return false;
+
+    if (identifier)
+        *identifier = parts.at(1);
+    if (architecture)
+        *architecture = parts.at(2);
+    if (branch)
+        *branch = parts.at(3);
+    return true;
+}
+
 QString appHubDisplayName(const QString &identifier)
 {
     QStringList words = identifier.split(QRegularExpression(QStringLiteral("[-_]+")), Qt::SkipEmptyParts);
@@ -58,6 +138,26 @@ QString appHubDisplayName(const QString &identifier)
             word[0] = word.at(0).toUpper();
     }
     return words.join(QChar(u' '));
+}
+
+double flatpakSizeBytes(QString size)
+{
+    size.remove(QRegularExpression(QStringLiteral("[\\s\\x{00A0}]+")));
+    static const QRegularExpression pattern(
+        QStringLiteral("^([0-9]+(?:\\.[0-9]+)?)([KMGTPE]?)(?:I?B|BYTES?)$"),
+        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch match = pattern.match(size);
+    if (!match.hasMatch())
+        return -1.0;
+
+    bool ok = false;
+    const double value = match.captured(1).toDouble(&ok);
+    if (!ok)
+        return -1.0;
+
+    const QString prefix = match.captured(2).toUpper();
+    const int exponent = prefix.isEmpty() ? 0 : QStringLiteral("KMGTPE").indexOf(prefix) + 1;
+    return exponent > 0 ? value * std::pow(1000.0, exponent) : value;
 }
 
 QByteArray readBoundedFile(const QString &path, qint64 maximumBytes)
@@ -314,6 +414,8 @@ QList<AppModel::Item> appendFlathubHits(QList<AppModel::Item> items, const QJson
 AppHubBackend::AppHubBackend(QObject *parent)
     : QObject(parent)
     , m_flathubModel(new AppModel(this))
+    , m_flathubUpdatesModel(new AppModel(this))
+    , m_flatpakAddonsModel(new AppModel(this))
     , m_flathubFeaturedModel(new AppModel(this))
     , m_flathubCollectionModel(new AppModel(this))
     , m_appHubModel(new AppModel(this))
@@ -333,6 +435,16 @@ AppHubBackend::AppHubBackend(QObject *parent)
 AppModel *AppHubBackend::flathubModel()
 {
     return m_flathubModel;
+}
+
+AppModel *AppHubBackend::flathubUpdatesModel()
+{
+    return m_flathubUpdatesModel;
+}
+
+AppModel *AppHubBackend::flatpakAddonsModel()
+{
+    return m_flatpakAddonsModel;
 }
 
 AppModel *AppHubBackend::flathubFeaturedModel()
@@ -386,6 +498,35 @@ bool AppHubBackend::flathubCollectionHasMore() const
 int AppHubBackend::flathubCategoryRevision() const
 {
     return m_flathubCategoryRevision;
+}
+
+QString AppHubBackend::flatpakSortMode() const
+{
+    return m_flatpakSortMode;
+}
+
+void AppHubBackend::setFlatpakSortMode(const QString &mode)
+{
+    const QString normalizedMode = mode.trimmed().toLower();
+    if ((normalizedMode != QLatin1String("name") && normalizedMode != QLatin1String("size"))
+        || normalizedMode == m_flatpakSortMode)
+        return;
+
+    m_flatpakSortMode = normalizedMode;
+    emit flatpakSortModeChanged();
+
+    if (m_currentSection == Flathub && m_query.isEmpty())
+        m_flathubModel->setItems(sortedInstalledFlatpaks(m_flathubModel->items()));
+}
+
+QString AppHubBackend::flatpakUpdateIdentifier() const
+{
+    return m_flatpakUpdateIdentifier;
+}
+
+int AppHubBackend::flatpakUpdateProgress() const
+{
+    return m_flatpakUpdateProgress;
 }
 
 QStringList AppHubBackend::appHubCategories() const
@@ -554,6 +695,8 @@ bool AppHubBackend::startOperation(const QString &program,
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
     environment.insert(QStringLiteral("LANG"), QStringLiteral("C"));
+    if (operation == Operation::FlatpakUpdate)
+        environment.insert(QStringLiteral("FLATPAK_FANCY_OUTPUT"), QStringLiteral("0"));
     m_process->setProcessEnvironment(environment);
     m_process->setProcessChannelMode(QProcess::SeparateChannels);
     m_processOutput.clear();
@@ -561,6 +704,11 @@ bool AppHubBackend::startOperation(const QString &program,
     m_processOutputTooLarge = false;
     m_operation = operation;
     m_operationIdentifier = identifier;
+    if (operation == Operation::FlatpakUpdate) {
+        m_flatpakUpdateIdentifier = identifier;
+        m_flatpakUpdateProgress = -1;
+        emit flatpakUpdateStateChanged();
+    }
     m_operationLog = QStringLiteral("Starting %1…").arg(program);
     emit operationLogChanged();
     setBusy(true);
@@ -675,6 +823,20 @@ void AppHubBackend::installFlatpak(const QString &identifier)
     setStatusMessage(QStringLiteral("Installing %1 from Flathub…").arg(identifier));
 }
 
+void AppHubBackend::updateFlatpak(const QString &identifier)
+{
+    if (!isSafeIdentifier(identifier)) {
+        setStatusMessage(QStringLiteral("Invalid Flatpak identifier."));
+        return;
+    }
+    if (!startOperation(QStringLiteral("flatpak"),
+                        {QStringLiteral("update"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), identifier},
+                        Operation::FlatpakUpdate,
+                        identifier))
+        return;
+    setStatusMessage(QStringLiteral("Updating %1 from Flathub…").arg(identifier));
+}
+
 void AppHubBackend::removeFlatpak(const QString &identifier)
 {
     if (!isSafeIdentifier(identifier)) {
@@ -687,6 +849,49 @@ void AppHubBackend::removeFlatpak(const QString &identifier)
                        identifier))
         return;
     setStatusMessage(QStringLiteral("Removing %1 from Flathub…").arg(identifier));
+}
+
+void AppHubBackend::loadFlatpakAddons(const QString &identifier)
+{
+    if (!isSafeIdentifier(identifier) || !m_installedFlatpaks.contains(identifier)) {
+        m_flatpakAddonsApplication.clear();
+        m_flatpakAddonsModel->setItems({});
+        setStatusMessage(QStringLiteral("Invalid or uninstalled Flatpak identifier."));
+        return;
+    }
+
+    m_flatpakAddonsApplication = identifier;
+    refreshFlatpakAddons();
+}
+
+void AppHubBackend::installFlatpakAddon(const QString &ref)
+{
+    if (!splitFlatpakRuntimeRef(ref)) {
+        setStatusMessage(QStringLiteral("Invalid Flatpak add-on reference."));
+        return;
+    }
+
+    if (!startOperation(QStringLiteral("flatpak"),
+                        {QStringLiteral("install"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--runtime"), QStringLiteral("flathub"), ref},
+                        Operation::FlatpakAddonInstall,
+                        ref))
+        return;
+    setStatusMessage(QStringLiteral("Installing Flatpak add-on…"));
+}
+
+void AppHubBackend::removeFlatpakAddon(const QString &ref)
+{
+    if (!splitFlatpakRuntimeRef(ref)) {
+        setStatusMessage(QStringLiteral("Invalid Flatpak add-on reference."));
+        return;
+    }
+
+    if (!startOperation(QStringLiteral("flatpak"),
+                        {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--runtime"), ref},
+                        Operation::FlatpakAddonRemove,
+                        ref))
+        return;
+    setStatusMessage(QStringLiteral("Removing Flatpak add-on…"));
 }
 
 void AppHubBackend::appHubAction(const QString &identifier)
@@ -864,7 +1069,7 @@ void AppHubBackend::refreshFlatpakInstalled()
             QStringLiteral("Desktop Application"),
             QStringLiteral("Remove"),
             QStringLiteral("edit-delete"),
-            QStringLiteral("application-x-flatpak"),
+            identifier,
             QStringLiteral("Installed"),
             {},
             {},
@@ -879,7 +1084,193 @@ void AppHubBackend::refreshFlatpakInstalled()
         });
     }
 
-    m_flathubModel->setItems(filterItems(items));
+    m_flathubModel->setItems(filterItems(sortedInstalledFlatpaks(items)));
+    refreshFlatpakUpdates();
+}
+
+void AppHubBackend::refreshFlatpakUpdates()
+{
+    const QByteArray output = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("remote-ls"),
+         QStringLiteral("--user"),
+         QStringLiteral("--app"),
+         QStringLiteral("--updates"),
+         QStringLiteral("--arch=%1").arg(architecture()),
+         QStringLiteral("--columns=application,name,version,download-size"),
+         QStringLiteral("flathub")});
+    QList<AppModel::Item> items;
+
+    for (const QByteArray &line : output.split('\n')) {
+        const QStringList fields = QString::fromLocal8Bit(line).split('\t');
+        if (fields.size() < 4)
+            continue;
+
+        const QString identifier = fields.at(0).trimmed();
+        if (!isSafeIdentifier(identifier) || !m_installedFlatpaks.contains(identifier))
+            continue;
+
+        QString name = fields.value(1).trimmed();
+        if (name.isEmpty())
+            name = identifier;
+
+        items.append({
+            name,
+            QStringLiteral("Update available"),
+            fields.value(2).trimmed(),
+            architecture(),
+            identifier,
+            QStringLiteral("Desktop Application"),
+            {},
+            {},
+            identifier,
+            QStringLiteral("Update Available"),
+            {},
+            {},
+            {},
+            QStringLiteral("An updated version is available from Flathub."),
+            {},
+            QStringLiteral("GUI Application"),
+            fields.value(3).trimmed(),
+            {},
+            {},
+            {},
+            {}
+        });
+    }
+
+    std::stable_sort(items.begin(), items.end(), [](const AppModel::Item &left, const AppModel::Item &right) {
+        const int nameComparison = left.name.compare(right.name, Qt::CaseInsensitive);
+        if (nameComparison != 0)
+            return nameComparison < 0;
+        return left.identifier.compare(right.identifier, Qt::CaseInsensitive) < 0;
+    });
+    m_flathubUpdatesModel->setItems(items);
+}
+
+void AppHubBackend::refreshFlatpakAddons()
+{
+    QList<AppModel::Item> items;
+    if (m_flatpakAddonsApplication.isEmpty()) {
+        m_flatpakAddonsModel->setItems(items);
+        return;
+    }
+
+    const QString appRef = QString::fromLocal8Bit(
+        runCommand(QStringLiteral("flatpak"),
+                   {QStringLiteral("info"), QStringLiteral("--user"), QStringLiteral("--show-ref"), m_flatpakAddonsApplication}))
+                               .trimmed();
+    const QStringList appRefParts = appRef.split(QLatin1String("/"));
+    if (appRefParts.size() != 4 || appRefParts.at(0) != QLatin1String("app")
+        || appRefParts.at(1) != m_flatpakAddonsApplication || !isSafeIdentifier(appRefParts.at(2))
+        || !isSafeIdentifier(appRefParts.at(3))) {
+        m_flatpakAddonsModel->setItems(items);
+        return;
+    }
+
+    const QString appArchitecture = appRefParts.at(2);
+    const QString appBranch = appRefParts.at(3);
+    const QByteArray metadata = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("info"), QStringLiteral("--user"), QStringLiteral("--show-metadata"), m_flatpakAddonsApplication});
+    const QList<FlatpakExtensionPoint> extensionPoints = flatpakExtensionPoints(metadata, appBranch);
+    if (extensionPoints.isEmpty()) {
+        m_flatpakAddonsModel->setItems(items);
+        return;
+    }
+
+    QSet<QString> installedRefs;
+    const QByteArray installedOutput = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("list"),
+         QStringLiteral("--user"),
+         QStringLiteral("--runtime"),
+         QStringLiteral("--all"),
+         QStringLiteral("--columns=application,arch,branch")});
+    for (const QByteArray &rawLine : installedOutput.split(10)) {
+        const QStringList fields = QString::fromLocal8Bit(rawLine).split(QLatin1String("\t"));
+        if (fields.size() < 3)
+            continue;
+
+        const QString identifier = fields.at(0).trimmed();
+        const QString refArchitecture = fields.at(1).trimmed();
+        const QString branch = fields.at(2).trimmed();
+        if (!isSafeIdentifier(identifier) || !isSafeIdentifier(refArchitecture) || !isSafeIdentifier(branch))
+            continue;
+
+        installedRefs.insert(QStringLiteral("runtime/%1/%2/%3").arg(identifier, refArchitecture, branch));
+    }
+
+    const QByteArray remoteOutput = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("remote-ls"),
+         QStringLiteral("--user"),
+         QStringLiteral("--runtime"),
+         QStringLiteral("--arch=%1").arg(appArchitecture),
+         QStringLiteral("--columns=application,name,description,version,branch,arch,download-size"),
+         QStringLiteral("flathub")});
+    QSet<QString> seenRefs;
+
+    for (const QByteArray &rawLine : remoteOutput.split(10)) {
+        const QStringList fields = QString::fromLocal8Bit(rawLine).split(QLatin1String("\t"));
+        if (fields.size() < 7)
+            continue;
+
+        const QString identifier = fields.at(0).trimmed();
+        const QString branch = fields.at(4).trimmed();
+        const QString refArchitecture = fields.at(5).trimmed();
+        if (!isSafeIdentifier(identifier) || !isSafeIdentifier(branch) || refArchitecture != appArchitecture)
+            continue;
+
+        bool matchesExtensionPoint = false;
+        for (const FlatpakExtensionPoint &point : extensionPoints) {
+            if (!point.identifier.startsWith(m_flatpakAddonsApplication + QLatin1String(".")))
+                continue;
+
+            const bool identifierMatches = identifier == point.identifier
+                || (point.subdirectories && identifier.startsWith(point.identifier + QLatin1String(".")));
+            if (identifierMatches && point.branches.contains(branch)) {
+                matchesExtensionPoint = true;
+                break;
+            }
+        }
+        if (!matchesExtensionPoint)
+            continue;
+
+        const QString ref = QStringLiteral("runtime/%1/%2/%3").arg(identifier, refArchitecture, branch);
+        if (seenRefs.contains(ref))
+            continue;
+        seenRefs.insert(ref);
+
+        const bool installed = installedRefs.contains(ref);
+        AppModel::Item item;
+        item.name = fields.at(1).trimmed();
+        if (item.name.isEmpty())
+            item.name = appHubDisplayName(identifier.split(QLatin1String(".")).constLast());
+        item.summary = fields.at(2).trimmed();
+        if (item.summary.isEmpty())
+            item.summary = QStringLiteral("Optional Flatpak add-on");
+        item.version = fields.at(3).trimmed();
+        item.architecture = refArchitecture;
+        item.identifier = ref;
+        item.category = QStringLiteral("Add-on");
+        item.actionText = installed ? QStringLiteral("Remove") : QStringLiteral("Install");
+        item.actionIcon = installed ? QStringLiteral("edit-delete") : QStringLiteral("download");
+        item.icon = m_flatpakAddonsApplication;
+        item.status = installed ? QStringLiteral("Installed") : QStringLiteral("Available");
+        item.description = item.summary;
+        item.type = QStringLiteral("Runtime Extension");
+        item.size = fields.at(6).trimmed();
+        items.append(item);
+    }
+
+    std::stable_sort(items.begin(), items.end(), [](const AppModel::Item &left, const AppModel::Item &right) {
+        const int nameComparison = left.name.compare(right.name, Qt::CaseInsensitive);
+        if (nameComparison != 0)
+            return nameComparison < 0;
+        return left.identifier.compare(right.identifier, Qt::CaseInsensitive) < 0;
+    });
+    m_flatpakAddonsModel->setItems(items);
 }
 
 void AppHubBackend::cancelFlathubFeaturedRequests()
@@ -1305,6 +1696,28 @@ void AppHubBackend::parseFlatpakSearch(const QByteArray &output)
     m_flathubModel->setItems(items);
 }
 
+QList<AppModel::Item> AppHubBackend::sortedInstalledFlatpaks(const QList<AppModel::Item> &items) const
+{
+    QList<AppModel::Item> sorted = items;
+    const auto nameLessThan = [](const AppModel::Item &left, const AppModel::Item &right) {
+        const int nameComparison = left.name.compare(right.name, Qt::CaseInsensitive);
+        if (nameComparison != 0)
+            return nameComparison < 0;
+        return left.identifier.compare(right.identifier, Qt::CaseInsensitive) < 0;
+    };
+
+    std::stable_sort(sorted.begin(), sorted.end(), [this, nameLessThan](const AppModel::Item &left, const AppModel::Item &right) {
+        if (m_flatpakSortMode == QLatin1String("size")) {
+            const double leftSize = flatpakSizeBytes(left.size);
+            const double rightSize = flatpakSizeBytes(right.size);
+            if (leftSize != rightSize)
+                return leftSize > rightSize;
+        }
+        return nameLessThan(left, right);
+    });
+    return sorted;
+}
+
 QList<AppModel::Item> AppHubBackend::filterItems(const QList<AppModel::Item> &items) const
 {
     if (m_query.isEmpty())
@@ -1609,12 +2022,23 @@ void AppHubBackend::appendOperationLog(const QByteArray &output)
     emit operationLogChanged();
 }
 
+void AppHubBackend::clearFlatpakUpdateState()
+{
+    if (m_flatpakUpdateIdentifier.isEmpty() && m_flatpakUpdateProgress < 0)
+        return;
+
+    m_flatpakUpdateIdentifier.clear();
+    m_flatpakUpdateProgress = -1;
+    emit flatpakUpdateStateChanged();
+}
+
 void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
 {
     if (error != QProcess::FailedToStart)
         return;
 
     m_operation = Operation::None;
+    clearFlatpakUpdateState();
     setBusy(false);
     setStatusMessage(QStringLiteral("Could not start the requested operation."));
 }
@@ -1631,6 +2055,20 @@ void AppHubBackend::processOutputReady()
     const QByteArray standardError = m_process->readAllStandardError();
     m_processOutput += standardOutput;
     m_processErrorOutput += standardError;
+
+    if (m_operation == Operation::FlatpakUpdate) {
+        static const QRegularExpression progressPattern(QStringLiteral("(?:^|[^0-9])(100|[0-9]{1,2})%"));
+        QRegularExpressionMatchIterator matches = progressPattern.globalMatch(
+            QString::fromLocal8Bit(m_processOutput + m_processErrorOutput));
+        int progress = -1;
+        while (matches.hasNext())
+            progress = matches.next().captured(1).toInt();
+        if (progress >= 0 && progress != m_flatpakUpdateProgress) {
+            m_flatpakUpdateProgress = progress;
+            emit flatpakUpdateStateChanged();
+        }
+    }
+
     appendOperationLog(standardOutput);
     appendOperationLog(standardError);
     if (m_processOutput.size() + m_processErrorOutput.size() > MaxProcessOutputBytes) {
@@ -1645,7 +2083,15 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const QByteArray processOutput = m_processOutput;
     const QByteArray processErrorOutput = m_processErrorOutput;
     const Operation operation = m_operation;
+    if (operation == Operation::FlatpakUpdate
+        && exitStatus == QProcess::NormalExit
+        && exitCode == 0
+        && m_flatpakUpdateProgress != 100) {
+        m_flatpakUpdateProgress = 100;
+        emit flatpakUpdateStateChanged();
+    }
     m_operation = Operation::None;
+    clearFlatpakUpdateState();
     setBusy(false);
 
     if (m_processOutputTooLarge) {
@@ -1671,9 +2117,15 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         setStatusMessage(QStringLiteral("NX AppHub metadata refreshed."));
         break;
     case Operation::FlatpakInstall:
+    case Operation::FlatpakUpdate:
     case Operation::FlatpakRemove:
         refreshFlatpakInstalled();
         setStatusMessage(QStringLiteral("Flathub operation completed."));
+        break;
+    case Operation::FlatpakAddonInstall:
+    case Operation::FlatpakAddonRemove:
+        refreshFlatpakAddons();
+        setStatusMessage(QStringLiteral("Flatpak add-ons updated."));
         break;
     case Operation::AppHubInstall:
     case Operation::AppHubRemove:

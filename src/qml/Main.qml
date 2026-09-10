@@ -27,6 +27,7 @@ Maui.ApplicationWindow {
         property bool sidebarVisible: true
         property bool refreshOnStartup: true
         property bool startInInstalledView: false
+        property string flatpakSortMode: "name"
     }
 
     readonly property string currentTitle: currentSection === 0 ? qsTr("Flathub")
@@ -62,6 +63,7 @@ Maui.ApplicationWindow {
     }
 
     Component.onCompleted: {
+        appHub.flatpakSortMode = settings.flatpakSortMode
         if (settings.refreshOnStartup)
             appHub.refresh()
     }
@@ -316,19 +318,52 @@ Maui.ApplicationWindow {
                 },
 
                 Maui.ToolButtonMenu {
-                icon.name: "overflow-menu"
+                    icon.name: "overflow-menu"
 
-                MenuItem {
-                    text: qsTr("Preferences")
-                    icon.name: "settings-configure"
-                    onTriggered: root.selectSection(4)
-                }
+                    Menu {
+                        title: qsTr("Sort Installed Flatpaks")
+                        icon.name: "view-sort"
+                        enabled: root.currentSection === 0 && contentLoader.item !== null && contentLoader.item.installedView
+                        Maui.Controls.component: Component {
+                            Item {
+                                visible: false
+                            }
+                        }
 
-                MenuItem {
-                    text: qsTr("About")
-                    icon.name: "documentinfo"
-                    onTriggered: Maui.App.aboutDialog()
-                }
+                        MenuItem {
+                            text: qsTr("Name")
+                            checkable: true
+                            autoExclusive: true
+                            checked: appHub.flatpakSortMode === "name"
+                            onTriggered: {
+                                settings.flatpakSortMode = "name"
+                                appHub.flatpakSortMode = "name"
+                            }
+                        }
+
+                        MenuItem {
+                            text: qsTr("Size")
+                            checkable: true
+                            autoExclusive: true
+                            checked: appHub.flatpakSortMode === "size"
+                            onTriggered: {
+                                settings.flatpakSortMode = "size"
+                                appHub.flatpakSortMode = "size"
+                            }
+                        }
+                    }
+
+                    MenuItem {
+                        text: qsTr("Preferences")
+                        icon.name: "settings-configure"
+                        onTriggered: root.selectSection(4)
+                    }
+
+                    MenuItem {
+                        text: qsTr("About")
+                        icon.name: "documentinfo"
+                        onTriggered: Maui.App.aboutDialog()
+                    }
                 }
             ]
 

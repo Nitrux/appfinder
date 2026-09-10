@@ -65,6 +65,64 @@ Maui.Page {
         }
     }
 
+    Maui.SettingsDialog {
+        id: flatpakAddonsDialog
+
+        property string applicationName: ""
+
+        Maui.Controls.title: qsTr("Manage Add-ons")
+        persistent: true
+
+        Maui.SectionGroup {
+            title: flatpakAddonsDialog.applicationName
+            description: qsTr("Install or remove optional components for this Flatpak.")
+
+            Repeater {
+                model: appHub.flatpakAddonsModel
+
+                delegate: Maui.FlexSectionItem {
+                    id: addonDelegate
+
+                    readonly property bool addonInstalled: model.status === "Installed"
+
+                    flat: false
+                    iconSource: model.icon
+                    iconSizeHint: Maui.Style.iconSizes.big
+                    label1.text: model.name
+                    label1.font.weight: Font.DemiBold
+                    label1.elide: Text.ElideRight
+                    label2.text: model.size.length > 0
+                                 ? qsTr("%1 • %2").arg(model.summary).arg(control.sizeText(model.size))
+                                 : model.summary
+                    label2.elide: Text.ElideRight
+
+                    ToolButton {
+                        text: addonDelegate.addonInstalled ? qsTr("Remove") : qsTr("Install")
+                        icon.name: addonDelegate.addonInstalled ? "edit-delete" : "download"
+                        display: ToolButton.IconOnly
+                        enabled: !appHub.busy
+                        ToolTip.visible: hovered
+                        ToolTip.text: text
+                        onClicked: {
+                            if (addonDelegate.addonInstalled)
+                                appHub.removeFlatpakAddon(model.identifier)
+                            else
+                                appHub.installFlatpakAddon(model.identifier)
+                        }
+                    }
+                }
+            }
+
+            Maui.FlexSectionItem {
+                visible: appHub.flatpakAddonsModel.count === 0
+                flat: true
+                label1.text: qsTr("No Add-ons Available")
+                label2.text: qsTr("This Flatpak does not publish optional components.")
+                label2.wrapMode: Text.Wrap
+            }
+        }
+    }
+
     Loader {
         id: viewLoader
         anchors.top: parent.top
@@ -552,14 +610,80 @@ Maui.Page {
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
-                text1: qsTr("Flathub")
-                text2: qsTr("Explore and manage applications from Flathub.")
+                text1: qsTr("Manage Flatpaks")
+                text2: qsTr("Browse and manage applications installed from Flathub.")
                 label2.wrapMode: Text.Wrap
             }
 
             Rectangle {
                 Layout.fillWidth: true
+                visible: appHub.flathubUpdatesModel.count > 0
+                color: Maui.Theme.alternateBackgroundColor
+                radius: Maui.Style.radiusV
+                border.color: Maui.Theme.backgroundColor
+                border.width: 1
+                implicitHeight: updatesLayout.implicitHeight + Maui.Style.contentMargins * 2
+
+                ColumnLayout {
+                    id: updatesLayout
+                    anchors.fill: parent
+                    anchors.margins: Maui.Style.contentMargins
+                    spacing: Maui.Style.space.small
+
+                    Maui.SectionHeader {
+                        Layout.fillWidth: true
+                        text1: qsTr("Available Updates (%1)").arg(appHub.flathubUpdatesModel.count)
+                        text2: qsTr("New Flatpak versions available from Flathub.")
+                        label2.wrapMode: Text.Wrap
+                    }
+
+                    Repeater {
+                        model: appHub.flathubUpdatesModel
+
+                        delegate: Maui.ListBrowserDelegate {
+                            id: updateDelegate
+
+                            readonly property bool updating: appHub.flatpakUpdateIdentifier === model.identifier
+
+                            Layout.fillWidth: true
+                            iconSource: model.icon
+                            iconSizeHint: Maui.Style.iconSizes.big
+                            template.leftLabels.spacing: Maui.Style.space.small
+                            label1.text: model.name
+                            label1.font.weight: Font.DemiBold
+                            label1.elide: Text.ElideRight
+                            label2.text: updateDelegate.updating
+                                         ? (appHub.flatpakUpdateProgress >= 0
+                                            ? qsTr("Updating… %1%").arg(appHub.flatpakUpdateProgress)
+                                            : qsTr("Preparing update…"))
+                                         : (model.version.length > 0
+                                            ? qsTr("Version %1 • %2 download").arg(model.version).arg(control.sizeText(model.size))
+                                            : qsTr("A new version is available"))
+                            label2.elide: Text.ElideRight
+
+                            ProgressBar {
+                                visible: updateDelegate.updating
+                                Layout.preferredWidth: Maui.Style.units.gridUnit * 8
+                                from: 0
+                                to: 100
+                                indeterminate: appHub.flatpakUpdateProgress < 0
+                                value: Math.max(0, appHub.flatpakUpdateProgress)
+                            }
+
+                            Button {
+                                text: updateDelegate.updating ? qsTr("Updating…") : qsTr("Update")
+                                enabled: !appHub.busy
+                                onClicked: appHub.updateFlatpak(model.identifier)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.topMargin: appHub.flathubUpdatesModel.count > 0 ? Math.max(0, 16 - installedScroll.spacing) : 0
                 Layout.preferredHeight: installedBrowser.holder.visible ? Math.max(implicitHeight, installedScroll.availableHeight - y) : implicitHeight
                 color: Maui.Theme.alternateBackgroundColor
                 radius: Maui.Style.radiusV
@@ -575,83 +699,61 @@ Maui.Page {
 
                     Maui.SectionHeader {
                         Layout.fillWidth: true
-                        text1: qsTr("Installed Flathub Applications (%1)").arg(appHub.flathubModel.count)
-                        text2: qsTr("Maintain the Flatpak applications installed for this user.")
+                        text1: qsTr("Installed Applications (%1)").arg(appHub.flathubModel.count)
+                        text2: qsTr("Flatpaks available to the current user.")
                         label2.wrapMode: Text.Wrap
                     }
 
                     Maui.ListBrowser {
-                id: installedBrowser
-                padding: 0
+                        id: installedBrowser
                         Layout.fillWidth: true
-                Layout.fillHeight: true
-                model: appHub.flathubModel
-                spacing: Maui.Style.space.small
-                holder.visible: count === 0
-                holder.title: qsTr("No installed Flathub applications")
-                holder.body: qsTr("Applications installed from Flathub will appear here.")
+                        Layout.fillHeight: true
+                        padding: 0
+                        clip: true
+                        model: appHub.flathubModel
 
-                delegate: Item {
-                    id: installedCard
-                    width: ListView.view.width
-                    height: 96
+                        holder.visible: count === 0
+                        holder.title: qsTr("No Flatpaks Installed")
+                        holder.body: qsTr("Applications installed from Flathub will appear here.")
 
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Maui.Style.radiusV
-                        color: Maui.Theme.alternateBackgroundColor
-                        border.color: Maui.Theme.positiveBackgroundColor
+                        delegate: Maui.ListBrowserDelegate {
+                            width: ListView.view.width
+                            iconSource: model.icon
+                            iconSizeHint: Maui.Style.iconSizes.big
+                            template.leftLabels.spacing: Maui.Style.space.small
+                            label1.text: model.name
+                            label1.font.weight: Font.DemiBold
+                            label1.elide: Text.ElideRight
+                            label2.text: qsTr("%1 • %2").arg(model.version.length > 0 ? model.version : qsTr("Version unavailable")).arg(control.sizeText(model.size))
+                            label2.elide: Text.ElideRight
 
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: Maui.Style.space.medium
-                            spacing: Maui.Style.space.medium
-
-                            Maui.IconItem {
-                                Layout.preferredWidth: 48
-                                Layout.preferredHeight: 48
-                                iconSizeHint: 48
-                                iconSource: model.icon
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: Maui.Style.space.small
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: model.name
-                                    font: Maui.Style.h2Font
-                                    elide: Text.ElideRight
+                            ToolButton {
+                                text: qsTr("Manage Add-ons")
+                                icon.name: "plugins"
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: {
+                                    flatpakAddonsDialog.applicationName = model.name
+                                    appHub.loadFlatpakAddons(model.identifier)
+                                    flatpakAddonsDialog.open()
                                 }
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: qsTr("%1 • %2").arg(model.category.length > 0 ? model.category : qsTr("Desktop Application")).arg(control.sizeText(model.size))
-                                    color: Maui.Theme.disabledTextColor
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Maui.Chip {
-                                text: qsTr("Installed")
-                                color: Maui.Theme.positiveBackgroundColor
-                                enabled: false
                             }
 
                             ToolButton {
                                 text: qsTr("Remove")
                                 icon.name: "edit-delete"
-                                display: ToolButton.TextBesideIcon
+                                display: ToolButton.IconOnly
                                 enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
                                 onClicked: control.flatpakAction(model.identifier)
                             }
                         }
                     }
                 }
             }
-            }
-        }
         }
     }
 
