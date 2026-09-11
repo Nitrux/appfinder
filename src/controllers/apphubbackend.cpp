@@ -19,6 +19,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QSaveFile>
 #include <QProcessEnvironment>
 #include <QRandomGenerator>
 #include <QRegularExpression>
@@ -454,6 +455,7 @@ AppHubBackend::AppHubBackend(QObject *parent)
     , m_flathubCollectionModel(new AppModel(this))
     , m_appHubModel(new AppModel(this))
     , m_appHubFeaturedModel(new AppModel(this))
+    , m_userBundleModel(new AppModel(this))
     , m_appHubBackupsModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
     , m_process(new QProcess(this))
@@ -637,6 +639,26 @@ AppModel *AppHubBackend::appHubFeaturedModel()
     return m_appHubFeaturedModel;
 }
 
+AppModel *AppHubBackend::userBundleModel()
+{
+    return m_userBundleModel;
+}
+
+QUrl AppHubBackend::userBundleRoot() const
+{
+    return QUrl::fromLocalFile(m_userBundleStore.rootPath());
+}
+
+QUrl AppHubBackend::userBundleOutputUrl() const
+{
+    return m_userBundleOutputUrl;
+}
+
+QString AppHubBackend::userBundleArchitecture() const
+{
+    return m_userBundleStore.hostPackageArchitecture();
+}
+
 AppModel *AppHubBackend::appHubBackupsModel()
 {
     return m_appHubBackupsModel;
@@ -752,7 +774,8 @@ QByteArray AppHubBackend::runCommand(const QString &program, const QStringList &
 bool AppHubBackend::startOperation(const QString &program,
                                    const QStringList &arguments,
                                    Operation operation,
-                                   const QString &identifier)
+                                   const QString &identifier,
+                                   const QString &workingDirectory)
 {
     if (m_process->state() != QProcess::NotRunning) {
         setStatusMessage(QStringLiteral("Another operation is still running."));
@@ -772,6 +795,7 @@ bool AppHubBackend::startOperation(const QString &program,
         environment.insert(QStringLiteral("FLATPAK_FANCY_OUTPUT"), QStringLiteral("0"));
     m_process->setProcessEnvironment(environment);
     m_process->setProcessChannelMode(QProcess::SeparateChannels);
+    m_process->setWorkingDirectory(workingDirectory);
     m_processOutput.clear();
     m_processErrorOutput.clear();
     m_processOutputTooLarge = false;
@@ -789,6 +813,52 @@ bool AppHubBackend::startOperation(const QString &program,
     return true;
 }
 
+void AppHubBackend::emitFlatpakOperationResult(Operation operation,
+                                               const QString &identifier,
+                                               bool success,
+                                               const QString &error)
+{
+    QString action;
+    switch (operation) {
+    case Operation::FlatpakInstall:
+        action = QStringLiteral("install");
+        break;
+    case Operation::FlatpakUpdate:
+        action = QStringLiteral("update");
+        break;
+    case Operation::FlatpakRemove:
+        action = QStringLiteral("remove");
+        break;
+    default:
+        return;
+    }
+
+    emit flatpakOperationFinished(identifier, action, success, error);
+}
+
+void AppHubBackend::emitAppHubOperationResult(Operation operation,
+                                             const QString &identifier,
+                                             bool success,
+                                             const QString &error)
+{
+    QString action;
+    switch (operation) {
+    case Operation::AppHubInstall:
+        action = QStringLiteral("install");
+        break;
+    case Operation::AppHubRemove:
+        action = QStringLiteral("remove");
+        break;
+    case Operation::AppHubRestore:
+        action = QStringLiteral("restore");
+        break;
+    default:
+        return;
+    }
+
+    emit appHubOperationFinished(identifier, action, success, error);
+}
+
 void AppHubBackend::refresh()
 {
     refreshFlatpakInstalled();
@@ -799,6 +869,7 @@ void AppHubBackend::refresh()
     refreshFlathubCollection();
     refreshFlathubCategories();
     refreshAppHubCatalog();
+    refreshUserBundles();
     refreshDistrobox();
     setStatusMessage(QStringLiteral("Sources refreshed."));
 }
@@ -929,28 +1000,36 @@ void AppHubBackend::search(const QString &query)
 void AppHubBackend::installFlatpak(const QString &identifier)
 {
     if (!isSafeIdentifier(identifier)) {
-        setStatusMessage(QStringLiteral("Invalid Flatpak identifier."));
+        const QString error = QStringLiteral("Invalid Flatpak identifier.");
+        setStatusMessage(error);
+        emitFlatpakOperationResult(Operation::FlatpakInstall, identifier, false, error);
         return;
     }
     if (!startOperation(QStringLiteral("flatpak"),
                        {QStringLiteral("install"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), QStringLiteral("flathub"), identifier},
                        Operation::FlatpakInstall,
-                       identifier))
+                       identifier)) {
+        emitFlatpakOperationResult(Operation::FlatpakInstall, identifier, false, statusMessage());
         return;
+    }
     setStatusMessage(QStringLiteral("Installing %1 from Flathub…").arg(identifier));
 }
 
 void AppHubBackend::updateFlatpak(const QString &identifier)
 {
     if (!isSafeIdentifier(identifier)) {
-        setStatusMessage(QStringLiteral("Invalid Flatpak identifier."));
+        const QString error = QStringLiteral("Invalid Flatpak identifier.");
+        setStatusMessage(error);
+        emitFlatpakOperationResult(Operation::FlatpakUpdate, identifier, false, error);
         return;
     }
     if (!startOperation(QStringLiteral("flatpak"),
                         {QStringLiteral("update"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), identifier},
                         Operation::FlatpakUpdate,
-                        identifier))
+                        identifier)) {
+        emitFlatpakOperationResult(Operation::FlatpakUpdate, identifier, false, statusMessage());
         return;
+    }
     setStatusMessage(QStringLiteral("Updating %1 from Flathub…").arg(identifier));
 }
 
@@ -963,15 +1042,19 @@ void AppHubBackend::removeInstalledFlatpak(const QString &identifier, bool syste
 {
     const QSet<QString> &installed = systemWide ? m_systemInstalledFlatpaks : m_userInstalledFlatpaks;
     if (!isSafeIdentifier(identifier) || !installed.contains(identifier)) {
-        setStatusMessage(QStringLiteral("Invalid or uninstalled Flatpak identifier."));
+        const QString error = QStringLiteral("Invalid or uninstalled Flatpak identifier.");
+        setStatusMessage(error);
+        emitFlatpakOperationResult(Operation::FlatpakRemove, identifier, false, error);
         return;
     }
 
     if (!startOperation(QStringLiteral("flatpak"),
                         {QStringLiteral("uninstall"), systemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), identifier},
                         Operation::FlatpakRemove,
-                        identifier))
+                        identifier)) {
+        emitFlatpakOperationResult(Operation::FlatpakRemove, identifier, false, statusMessage());
         return;
+    }
     setStatusMessage(QStringLiteral("Removing %1…").arg(identifier));
 }
 
@@ -1022,17 +1105,226 @@ void AppHubBackend::removeFlatpakAddon(const QString &ref)
 
 void AppHubBackend::appHubAction(const QString &identifier)
 {
+    const bool installed = appHubItemInstalled(identifier);
+    const Operation operation = installed ? Operation::AppHubRemove : Operation::AppHubInstall;
     if (!isSafeIdentifier(identifier)) {
-        setStatusMessage(QStringLiteral("Invalid NX AppHub identifier."));
+        const QString error = QStringLiteral("Invalid NX AppHub identifier.");
+        setStatusMessage(error);
+        emitAppHubOperationResult(operation, identifier, false, error);
         return;
     }
-    const bool installed = appHubItemInstalled(identifier);
     const QString action = installed ? QStringLiteral("remove") : QStringLiteral("install");
     if (!startOperation(QStringLiteral("nx-apphub-cli"), {action, identifier},
-                       installed ? Operation::AppHubRemove : Operation::AppHubInstall,
-                       identifier))
+                       operation, identifier)) {
+        emitAppHubOperationResult(operation, identifier, false, statusMessage());
         return;
+    }
     setStatusMessage(QStringLiteral("%1 %2 through NX AppHub…").arg(installed ? QStringLiteral("Removing") : QStringLiteral("Building"), identifier));
+}
+
+void AppHubBackend::refreshUserBundles()
+{
+    QString error;
+    if (!m_userBundleStore.ensureRoot(&error)) {
+        m_userBundleModel->setItems({});
+        setStatusMessage(error);
+        return;
+    }
+    m_userBundleModel->setItems(m_userBundleStore.projects());
+}
+
+void AppHubBackend::generateUserBundle(const QString &projectId, const QVariantMap &options)
+{
+    QString error;
+    if (!m_userBundleStore.ensureRoot(&error)) {
+        setStatusMessage(error);
+        emit userBundleGenerated(projectId, false, error);
+        return;
+    }
+    if (!m_userBundleStore.isValidProjectId(projectId) || m_userBundleStore.projectExists(projectId)) {
+        error = QStringLiteral("Choose a valid, unused project ID.");
+        setStatusMessage(error);
+        emit userBundleGenerated(projectId, false, error);
+        return;
+    }
+
+    const QString package = options.value(QStringLiteral("package")).toString().trimmed();
+    const QString distro = options.value(QStringLiteral("distro")).toString().trimmed().toLower();
+    const QString release = options.value(QStringLiteral("release")).toString().trimmed();
+    const QString integration = options.value(QStringLiteral("integration")).toString().trimmed().toLower();
+    const QVariant componentsOption = options.value(QStringLiteral("components"));
+    QStringList components = componentsOption.toStringList();
+    if (components.isEmpty()) {
+        for (const QVariant &component : componentsOption.toList())
+            components.append(component.toString());
+    }
+    components.removeAll(QString());
+    if (components.isEmpty())
+        components.append(QStringLiteral("main"));
+
+    const QStringList distributions = {QStringLiteral("debian"), QStringLiteral("ubuntu"),
+                                       QStringLiteral("devuan"), QStringLiteral("kde-neon"),
+                                       QStringLiteral("nitrux")};
+    const QStringList integrations = {QStringLiteral("cli"), QStringLiteral("gui"), QStringLiteral("wm")};
+    if (!isSafeIdentifier(package) || !distributions.contains(distro) || !isSafeIdentifier(release)
+        || !integrations.contains(integration)
+        || std::any_of(components.cbegin(), components.cend(), [](const QString &component) {
+               return !isSafeIdentifier(component);
+           })) {
+        error = QStringLiteral("The template-generation details are invalid.");
+        setStatusMessage(error);
+        emit userBundleGenerated(projectId, false, error);
+        return;
+    }
+
+    m_userBundleGenerationDirectory = std::make_unique<QTemporaryDir>(
+        QDir(m_userBundleStore.rootPath()).filePath(QStringLiteral(".appfinder-XXXXXX")));
+    if (!m_userBundleGenerationDirectory->isValid()) {
+        error = QStringLiteral("Could not create a temporary project directory.");
+        m_userBundleGenerationDirectory.reset();
+        setStatusMessage(error);
+        emit userBundleGenerated(projectId, false, error);
+        return;
+    }
+
+    const QString staging = m_userBundleGenerationDirectory->path();
+    if (!QDir(staging).mkpath(QStringLiteral("metadata"))
+        || !QDir(staging).mkpath(QStringLiteral("scripts"))
+        || !QDir(staging).mkpath(QStringLiteral("dist"))) {
+        error = QStringLiteral("Could not prepare the project directories.");
+        m_userBundleGenerationDirectory.reset();
+        setStatusMessage(error);
+        emit userBundleGenerated(projectId, false, error);
+        return;
+    }
+
+    QStringList arguments{
+        QStringLiteral("generate"),
+        QStringLiteral("--package"), package,
+        QStringLiteral("--distro"), distro,
+        QStringLiteral("--release"), release,
+        QStringLiteral("--arch"), m_userBundleStore.hostPackageArchitecture(),
+        QStringLiteral("--components")
+    };
+    arguments.append(components);
+    arguments << QStringLiteral("--output") << QDir(staging).filePath(QStringLiteral("app.yml"))
+              << QStringLiteral("--description-output") << QDir(staging).filePath(QStringLiteral("metadata/app_description.md"))
+              << QStringLiteral("--integration-type") << integration;
+
+    if (!startOperation(QStringLiteral("nx-apphub-cli"), arguments,
+                        Operation::UserBundleGenerate, projectId, staging)) {
+        error = statusMessage();
+        m_userBundleGenerationDirectory.reset();
+        emit userBundleGenerated(projectId, false, error);
+        return;
+    }
+    setStatusMessage(QStringLiteral("Generating the %1 personal-bundle project…").arg(projectId));
+}
+
+QVariantMap AppHubBackend::loadUserBundle(const QString &projectId) const
+{
+    return m_userBundleStore.load(projectId);
+}
+
+bool AppHubBackend::createUserBundle(const QString &projectId,
+                                     const QVariantMap &recipe,
+                                     const QVariantMap &metadata)
+{
+    QString error;
+    const bool created = m_userBundleStore.create(projectId, recipe, metadata, &error);
+    if (created) {
+        refreshUserBundles();
+        setStatusMessage(QStringLiteral("Created the %1 personal-bundle project.").arg(projectId));
+    } else {
+        setStatusMessage(error);
+    }
+    emit userBundleSaved(projectId, created, error);
+    return created;
+}
+
+bool AppHubBackend::saveUserBundle(const QString &projectId,
+                                   const QVariantMap &recipe,
+                                   const QVariantMap &metadata)
+{
+    QString error;
+    const bool saved = m_userBundleStore.save(projectId, recipe, metadata, &error);
+    if (saved) {
+        refreshUserBundles();
+        setStatusMessage(QStringLiteral("Saved the %1 personal-bundle project.").arg(projectId));
+    } else {
+        setStatusMessage(error);
+    }
+    emit userBundleSaved(projectId, saved, error);
+    return saved;
+}
+
+void AppHubBackend::buildUserBundle(const QString &projectId)
+{
+    const QVariantMap document = m_userBundleStore.load(projectId);
+    if (!document.value(QStringLiteral("valid")).toBool()) {
+        const QString error = document.value(QStringLiteral("error")).toString();
+        setStatusMessage(error);
+        emit userBundleBuilt(projectId, false, {}, error);
+        return;
+    }
+
+    const QVariantMap recipe = document.value(QStringLiteral("recipe")).toMap();
+    const QString preflightError = m_userBundleStore.preflight(recipe);
+    if (!preflightError.isEmpty()) {
+        setStatusMessage(preflightError);
+        emit userBundleBuilt(projectId, false, {}, preflightError);
+        return;
+    }
+
+    const QString project = m_userBundleStore.projectPath(projectId);
+    const QString dist = QDir(project).filePath(QStringLiteral("dist"));
+    if (!QDir().mkpath(dist) || QFileInfo(dist).isSymbolicLink()) {
+        const QString error = QStringLiteral("Could not prepare a safe build-output directory.");
+        setStatusMessage(error);
+        emit userBundleBuilt(projectId, false, {}, error);
+        return;
+    }
+
+    m_userBundleOutputPath = m_userBundleStore.outputPath(projectId, recipe);
+    const QFileInfo previousOutput(m_userBundleOutputPath);
+    if (previousOutput.exists() && (!previousOutput.isFile() || previousOutput.isSymbolicLink())) {
+        const QString error = QStringLiteral("The expected build output is not a safe regular file.");
+        m_userBundleOutputPath.clear();
+        setStatusMessage(error);
+        emit userBundleBuilt(projectId, false, {}, error);
+        return;
+    }
+    m_userBundleOutputPreviouslyExisted = previousOutput.isFile();
+    m_userBundlePreviousOutputModified = previousOutput.lastModified();
+    m_userBundlePreviousOutputSize = previousOutput.size();
+    m_userBundleArtifactBackupDirectory.reset();
+    if (m_userBundleOutputPreviouslyExisted) {
+        m_userBundleArtifactBackupDirectory = std::make_unique<QTemporaryDir>();
+        const QString backupPath = QDir(m_userBundleArtifactBackupDirectory->path()).filePath(QStringLiteral("previous.AppImage"));
+        if (!m_userBundleArtifactBackupDirectory->isValid() || !QFile::copy(m_userBundleOutputPath, backupPath)) {
+            const QString error = QStringLiteral("The existing personal bundle could not be preserved before building.");
+            m_userBundleArtifactBackupDirectory.reset();
+            m_userBundleOutputPath.clear();
+            setStatusMessage(error);
+            emit userBundleBuilt(projectId, false, {}, error);
+            return;
+        }
+    }
+    if (!m_userBundleOutputUrl.isEmpty()) {
+        m_userBundleOutputUrl.clear();
+        emit userBundleOutputUrlChanged();
+    }
+
+    if (!startOperation(QStringLiteral("nx-apphub-cli"),
+                        {QStringLiteral("build"), QDir(project).filePath(QStringLiteral("app.yml"))},
+                        Operation::UserBundleBuild, projectId, dist)) {
+        const QString error = statusMessage();
+        m_userBundleArtifactBackupDirectory.reset();
+        m_userBundleOutputPath.clear();
+        emit userBundleBuilt(projectId, false, {}, error);
+        return;
+    }
+    setStatusMessage(QStringLiteral("Building the %1 personal bundle…").arg(projectId));
 }
 
 bool AppHubBackend::appHubHasBackups(const QString &identifier) const
@@ -1052,15 +1344,19 @@ void AppHubBackend::restoreAppHubBackup(const QString &identifier, const QString
         return item.identifier == backup;
     });
     if (selectedBackup == backups.cend()) {
-        setStatusMessage(QStringLiteral("Invalid or unavailable NX AppHub backup."));
+        const QString error = QStringLiteral("Invalid or unavailable NX AppHub backup.");
+        setStatusMessage(error);
+        emitAppHubOperationResult(Operation::AppHubRestore, identifier, false, error);
         return;
     }
 
     if (!startOperation(QStringLiteral("nx-apphub-cli"),
                         {QStringLiteral("downgrade"), identifier, QStringLiteral("--backup"), backup},
                         Operation::AppHubRestore,
-                        identifier))
+                        identifier)) {
+        emitAppHubOperationResult(Operation::AppHubRestore, identifier, false, statusMessage());
         return;
+    }
     setStatusMessage(QStringLiteral("Restoring a backup for %1…").arg(identifier));
 }
 
@@ -2165,20 +2461,16 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
 
         const QString category = markdownSection(markdown, QStringLiteral("Category"));
         const QString integration = integrationType(yaml);
+        const QString runtime = appHubValue(yaml, QStringLiteral("runtime"));
+        const QRegularExpression distroExpression(QStringLiteral("^\\s+distro\\s*:\\s*(.+)$"), QRegularExpression::MultilineOption);
+        const QString distro = cleanValue(distroExpression.match(yaml).captured(1));
         const QString summary = markdownSection(markdown, QStringLiteral("Summary"));
         const QString version = appHubValue(yaml, QStringLiteral("version"));
-        QString details = summary;
-        if (!integration.isEmpty())
-            details += QStringLiteral(" · ") + integration;
-        if (!category.isEmpty())
-            details += QStringLiteral(" · ") + category.section(QChar(u'.'), -1);
-        if (!version.isEmpty())
-            details += QStringLiteral(" · ") + version;
 
         const bool installed = appHubItemInstalled(application);
         items.append({
             name,
-            details,
+            summary,
             version,
             architecture(),
             application,
@@ -2187,12 +2479,12 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
             installed ? QStringLiteral("edit-delete") : QStringLiteral("run-build"),
             QStringLiteral("application-x-iso9660-appimage"),
             installed ? QStringLiteral("Active Extension") : QStringLiteral("Not Built"),
-            {},
+            distro,
             {},
             {},
             summary,
             integration,
-            category.section(QChar(u'.'), -1),
+            runtime,
             {},
             {},
             {},
@@ -2414,15 +2706,66 @@ void AppHubBackend::clearFlatpakUpdateState()
     emit flatpakUpdateStateChanged();
 }
 
+void AppHubBackend::restoreUserBundleArtifact()
+{
+    if (!m_userBundleArtifactBackupDirectory) {
+        if (!m_userBundleOutputPreviouslyExisted)
+            QFile::remove(m_userBundleOutputPath);
+        return;
+    }
+
+    QFile input(QDir(m_userBundleArtifactBackupDirectory->path()).filePath(QStringLiteral("previous.AppImage")));
+    QSaveFile output(m_userBundleOutputPath);
+    bool restored = input.open(QIODevice::ReadOnly) && output.open(QIODevice::WriteOnly);
+    while (restored && !input.atEnd()) {
+        const QByteArray chunk = input.read(1024 * 1024);
+        if ((chunk.isEmpty() && input.error() != QFileDevice::NoError) || output.write(chunk) != chunk.size())
+            restored = false;
+    }
+    if (restored) {
+        restored = output.commit();
+        if (restored)
+            restored = QFile::setPermissions(m_userBundleOutputPath, input.permissions());
+    } else if (output.isOpen()) {
+        output.cancelWriting();
+    }
+
+    if (restored) {
+        const QUrl restoredUrl = QUrl::fromLocalFile(m_userBundleOutputPath);
+        if (m_userBundleOutputUrl != restoredUrl) {
+            m_userBundleOutputUrl = restoredUrl;
+            emit userBundleOutputUrlChanged();
+        }
+    }
+    m_userBundleArtifactBackupDirectory.reset();
+    if (!restored)
+        appendOperationLog(QByteArray("\nWarning: the previous personal bundle could not be restored.\n"));
+}
+
 void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
 {
     if (error != QProcess::FailedToStart)
         return;
 
+    const Operation operation = m_operation;
+    const QString identifier = m_operationIdentifier;
+    const QString message = QStringLiteral("Could not start the requested operation.");
+    if (operation == Operation::UserBundleGenerate) {
+        m_userBundleGenerationDirectory.reset();
+        emit userBundleGenerated(identifier, false, message);
+    } else if (operation == Operation::UserBundleBuild) {
+        restoreUserBundleArtifact();
+        m_userBundleOutputPath.clear();
+        emit userBundleBuilt(identifier, false, {}, message);
+    }
+
+    emitFlatpakOperationResult(operation, identifier, false, message);
+    emitAppHubOperationResult(operation, identifier, false, message);
+
     m_operation = Operation::None;
     clearFlatpakUpdateState();
     setBusy(false);
-    setStatusMessage(QStringLiteral("Could not start the requested operation."));
+    setStatusMessage(message);
 }
 
 void AppHubBackend::processOutputReady()
@@ -2465,6 +2808,7 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const QByteArray processOutput = m_processOutput;
     const QByteArray processErrorOutput = m_processErrorOutput;
     const Operation operation = m_operation;
+    const QString identifier = m_operationIdentifier;
     if (operation == Operation::FlatpakUpdate
         && exitStatus == QProcess::NormalExit
         && exitCode == 0
@@ -2476,16 +2820,26 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     clearFlatpakUpdateState();
     setBusy(false);
 
+    QString failure;
     if (m_processOutputTooLarge) {
-        setStatusMessage(QStringLiteral("The operation produced too much output."));
-        return;
+        failure = QStringLiteral("The operation produced too much output.");
+    } else if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+        failure = QString::fromLocal8Bit(processErrorOutput).trimmed();
+        if (failure.isEmpty())
+            failure = QStringLiteral("The operation failed.");
     }
-
-    if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-        QString error = QString::fromLocal8Bit(processErrorOutput).trimmed();
-        if (error.isEmpty())
-            error = QStringLiteral("The operation failed.");
-        setStatusMessage(error);
+    if (!failure.isEmpty()) {
+        if (operation == Operation::UserBundleGenerate) {
+            m_userBundleGenerationDirectory.reset();
+            emit userBundleGenerated(identifier, false, failure);
+        } else if (operation == Operation::UserBundleBuild) {
+            restoreUserBundleArtifact();
+            m_userBundleOutputPath.clear();
+            emit userBundleBuilt(identifier, false, {}, failure);
+        }
+        emitFlatpakOperationResult(operation, identifier, false, failure);
+        emitAppHubOperationResult(operation, identifier, false, failure);
+        setStatusMessage(failure);
         return;
     }
 
@@ -2503,6 +2857,7 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     case Operation::FlatpakRemove:
         refreshFlatpakInstalled();
         setStatusMessage(QStringLiteral("Flathub operation completed."));
+        emitFlatpakOperationResult(operation, identifier, true);
         break;
     case Operation::FlatpakAddonInstall:
     case Operation::FlatpakAddonRemove:
@@ -2514,7 +2869,57 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     case Operation::AppHubRestore:
         refreshAppHubCatalog();
         setStatusMessage(QStringLiteral("NX AppHub operation completed."));
+        emitAppHubOperationResult(operation, identifier, true);
         break;
+    case Operation::UserBundleGenerate: {
+        const QString staging = m_userBundleGenerationDirectory ? m_userBundleGenerationDirectory->path() : QString();
+        const QFileInfo generatedRecipe(QDir(staging).filePath(QStringLiteral("app.yml")));
+        const QFileInfo generatedMetadata(QDir(staging).filePath(QStringLiteral("metadata/app_description.md")));
+        if (!m_userBundleGenerationDirectory || !generatedRecipe.isFile() || generatedRecipe.isSymbolicLink()
+            || !generatedMetadata.isFile() || generatedMetadata.isSymbolicLink()) {
+            const QString error = QStringLiteral("The CLI did not produce a complete project.");
+            m_userBundleGenerationDirectory.reset();
+            setStatusMessage(error);
+            emit userBundleGenerated(identifier, false, error);
+            break;
+        }
+        const QString target = QDir(m_userBundleStore.rootPath()).filePath(identifier);
+        if (QFileInfo::exists(target) || !QDir().rename(staging, target)) {
+            const QString error = QStringLiteral("The generated project could not be moved into its final directory.");
+            m_userBundleGenerationDirectory.reset();
+            setStatusMessage(error);
+            emit userBundleGenerated(identifier, false, error);
+            break;
+        }
+        m_userBundleGenerationDirectory.reset();
+        refreshUserBundles();
+        setStatusMessage(QStringLiteral("Generated the %1 personal-bundle project.").arg(identifier));
+        emit userBundleGenerated(identifier, true, {});
+        break;
+    }
+    case Operation::UserBundleBuild: {
+        const QFileInfo outputInfo(m_userBundleOutputPath);
+        const bool currentOutput = outputInfo.isFile() && !outputInfo.isSymbolicLink();
+        const bool changedOutput = currentOutput
+            && (!m_userBundleOutputPreviouslyExisted
+                || outputInfo.size() != m_userBundlePreviousOutputSize
+                || outputInfo.lastModified() != m_userBundlePreviousOutputModified);
+        if (!changedOutput) {
+            const QString error = QStringLiteral("The CLI completed but the expected bundle was not created or updated.");
+            restoreUserBundleArtifact();
+            m_userBundleOutputPath.clear();
+            setStatusMessage(error);
+            emit userBundleBuilt(identifier, false, {}, error);
+            break;
+        }
+        m_userBundleArtifactBackupDirectory.reset();
+        m_userBundleOutputUrl = QUrl::fromLocalFile(m_userBundleOutputPath);
+        emit userBundleOutputUrlChanged();
+        refreshUserBundles();
+        setStatusMessage(QStringLiteral("Built the %1 personal bundle.").arg(identifier));
+        emit userBundleBuilt(identifier, true, m_userBundleOutputUrl, {});
+        break;
+    }
     case Operation::DistroboxCreate:
     case Operation::DistroboxStart:
     case Operation::DistroboxStop:

@@ -7,14 +7,21 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QDateTime>
+#include <QUrl>
+#include <QVariantMap>
+
+#include <memory>
 #include <QHash>
 #include <QList>
 #include <QProcess>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QString>
 #include <QStringList>
 
 #include "../models/appmodel.h"
+#include "userbundlestore.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -38,6 +45,10 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(AppModel *appHubModel READ appHubModel CONSTANT)
     Q_PROPERTY(AppModel *appHubFeaturedModel READ appHubFeaturedModel CONSTANT)
     Q_PROPERTY(AppModel *appHubBackupsModel READ appHubBackupsModel CONSTANT)
+    Q_PROPERTY(AppModel *userBundleModel READ userBundleModel CONSTANT)
+    Q_PROPERTY(QUrl userBundleRoot READ userBundleRoot CONSTANT)
+    Q_PROPERTY(QUrl userBundleOutputUrl READ userBundleOutputUrl NOTIFY userBundleOutputUrlChanged)
+    Q_PROPERTY(QString userBundleArchitecture READ userBundleArchitecture CONSTANT)
     Q_PROPERTY(QStringList appHubCategories READ appHubCategories NOTIFY appHubCategoriesChanged)
     Q_PROPERTY(QString appHubCategory READ appHubCategory WRITE setAppHubCategory NOTIFY appHubCategoryChanged)
     Q_PROPERTY(bool appHubInstalledOnly READ appHubInstalledOnly WRITE setAppHubInstalledOnly NOTIFY appHubInstalledOnlyChanged)
@@ -81,6 +92,10 @@ public:
     AppModel *flathubCollectionModel();
     AppModel *appHubModel();
     AppModel *appHubFeaturedModel();
+    AppModel *userBundleModel();
+    QUrl userBundleRoot() const;
+    QUrl userBundleOutputUrl() const;
+    QString userBundleArchitecture() const;
     AppModel *appHubBackupsModel();
     AppModel *distroboxModel();
 
@@ -127,6 +142,12 @@ public:
     Q_INVOKABLE void installFlatpakAddon(const QString &ref);
     Q_INVOKABLE void removeFlatpakAddon(const QString &ref);
     Q_INVOKABLE void appHubAction(const QString &identifier);
+    Q_INVOKABLE void refreshUserBundles();
+    Q_INVOKABLE void generateUserBundle(const QString &projectId, const QVariantMap &options);
+    Q_INVOKABLE QVariantMap loadUserBundle(const QString &projectId) const;
+    Q_INVOKABLE bool createUserBundle(const QString &projectId, const QVariantMap &recipe, const QVariantMap &metadata);
+    Q_INVOKABLE bool saveUserBundle(const QString &projectId, const QVariantMap &recipe, const QVariantMap &metadata);
+    Q_INVOKABLE void buildUserBundle(const QString &projectId);
     Q_INVOKABLE bool appHubHasBackups(const QString &identifier) const;
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
     Q_INVOKABLE void restoreAppHubBackup(const QString &identifier, const QString &backup);
@@ -147,6 +168,12 @@ signals:
     void flathubBrowseStateChanged();
     void flatpakSortModeChanged();
     void flatpakUpdateStateChanged();
+    void flatpakOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
+    void appHubOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
+    void userBundleOutputUrlChanged();
+    void userBundleGenerated(const QString &projectId, bool success, const QString &error);
+    void userBundleSaved(const QString &projectId, bool success, const QString &error);
+    void userBundleBuilt(const QString &projectId, bool success, const QUrl &artifactUrl, const QString &error);
     void appHubCategoriesChanged();
     void appHubCategoryChanged();
     void appHubInstalledOnlyChanged();
@@ -173,6 +200,8 @@ private:
         AppHubInstall,
         AppHubRemove,
         AppHubRestore,
+        UserBundleGenerate,
+        UserBundleBuild,
         DistroboxCreate,
         DistroboxStart,
         DistroboxStop,
@@ -184,7 +213,16 @@ private:
     bool startOperation(const QString &program,
                         const QStringList &arguments,
                         Operation operation,
-                        const QString &identifier = {});
+                        const QString &identifier = {},
+                        const QString &workingDirectory = {});
+    void emitFlatpakOperationResult(Operation operation,
+                                    const QString &identifier,
+                                    bool success,
+                                    const QString &error = {});
+    void emitAppHubOperationResult(Operation operation,
+                                  const QString &identifier,
+                                  bool success,
+                                  const QString &error = {});
 
     void refreshFlatpakInstalled();
     void refreshFlatpakUpdates();
@@ -232,6 +270,7 @@ private:
     QString containerEngine() const;
     void appendOperationLog(const QByteArray &output);
     void clearFlatpakUpdateState();
+    void restoreUserBundleArtifact();
 
     void setBusy(bool busy);
     void setStatusMessage(const QString &message);
@@ -246,6 +285,7 @@ private:
     AppModel *m_flathubCollectionModel;
     AppModel *m_appHubModel;
     AppModel *m_appHubFeaturedModel;
+    AppModel *m_userBundleModel;
     AppModel *m_appHubBackupsModel;
     AppModel *m_distroboxModel;
     QProcess *m_process;
@@ -284,7 +324,7 @@ private:
     QString m_flatpakUpdateIdentifier;
     int m_flatpakUpdateProgress = -1;
     Operation m_operation = Operation::None;
-    int m_currentSection = Flathub;
+    int m_currentSection = AppHub;
     int m_flathubCollection = TrendingCollection;
     QString m_flatpakSortMode = QStringLiteral("name");
     AppModel::Item m_flathubBrowseFeaturedItem;
@@ -294,6 +334,14 @@ private:
     int m_flathubBrowseNextPage = 1;
     int m_flathubBrowseTotalPages = 0;
     bool m_flathubBrowseLoading = false;
+    UserBundleStore m_userBundleStore;
+    std::unique_ptr<QTemporaryDir> m_userBundleGenerationDirectory;
+    QString m_userBundleOutputPath;
+    QUrl m_userBundleOutputUrl;
+    std::unique_ptr<QTemporaryDir> m_userBundleArtifactBackupDirectory;
+    QDateTime m_userBundlePreviousOutputModified;
+    qint64 m_userBundlePreviousOutputSize = -1;
+    bool m_userBundleOutputPreviouslyExisted = false;
     QStringList m_appHubCategories;
     QString m_appHubCategory;
     bool m_appHubInstalledOnly = false;

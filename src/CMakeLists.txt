@@ -4,6 +4,8 @@ set(APPFINDER_SOURCES
     models/appmodel.h
     controllers/apphubbackend.cpp
     controllers/apphubbackend.h
+    controllers/userbundlestore.cpp
+    controllers/userbundlestore.h
 )
 
 qt_add_executable(${PROJECT_NAME}
@@ -25,6 +27,7 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/SourcePage.qml
         qml/NavigationSidebar.qml
         qml/SettingsDialog.qml
+        qml/AppFinderActionBar.qml
         qml/FlathubPage.qml
         qml/AppHubPage.qml
         qml/DistroboxPage.qml
@@ -41,6 +44,7 @@ target_link_libraries(${PROJECT_NAME}
         Qt6::Qml
         Qt6::Quick
         Qt6::Widgets
+        ${APPFINDER_YAML_TARGET}
 )
 
 install(TARGETS ${PROJECT_NAME} ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})

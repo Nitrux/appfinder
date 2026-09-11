@@ -6,7 +6,7 @@
   <name>AppFinder</name>
   <summary>Software management for Nitrux</summary>
   <description>
-    <p>AppFinder brings together the three software-management roles in Nitrux: Flatpak applications from Flathub, specialized AppBoxes built by NX AppHub, and Distrobox development containers.</p>
+    <p>AppFinder brings together complementary software-management roles in Nitrux: Flatpak applications from Flathub, curated recipes for host-integrated AppBoxes, locally built personal AppImages, and Distrobox development containers.</p>
   </description>
   <categories>
     <category>System</category>

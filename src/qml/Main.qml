@@ -16,9 +16,11 @@ Maui.ApplicationWindow {
     color: "transparent"
     background: null
 
-    property int currentSection: 0
+    property int currentSection: 1
     property string searchText: ""
     property bool compactSearchOpen: false
+    property bool closeApproved: false
+    readonly property bool searchAvailable: currentSection <= 2 && !(currentSection === 1 && contentLoader.item && contentLoader.item.viewMode === AppHubPage.Builder)
     readonly property alias appSettings: settings
 
     Settings {
@@ -34,22 +36,203 @@ Maui.ApplicationWindow {
                                            : currentSection === 1 ? qsTr("NX AppHub")
                                                                   : qsTr("Distrobox")
 
-    function selectSection(section) {
-        if (section === 4) {
-            openSettingsDialog()
-            return
-        }
+    readonly property var actionBarActions: [
+        flathubExploreAction,
+        flathubCategoriesAction,
+        flathubInstalledAction,
+        appHubExploreAction,
+        appHubBuilderAction,
+        appHubInstalledAction,
+        appHubWikiAction,
+        appHubRefreshAction,
+        appHubBackAction,
+        appHubRevealAction
+    ]
 
-        if (section === 1 && currentSection === section && contentLoader.item) {
+    Action {
+        id: flathubExploreAction
+        property bool actionVisible: root.currentSection === 0 && contentLoader.item !== null && typeof contentLoader.item.installedView !== "undefined"
+
+        text: qsTr("Explore Flathub")
+        icon.name: "go-home"
+        checkable: true
+        checked: root.currentSection === 0 && contentLoader.item !== null && contentLoader.item.installedView === false && contentLoader.item.categoriesView === false
+        onTriggered: {
             root.searchText = ""
-            contentLoader.item.installedView = false
+            if (contentLoader.item) {
+                contentLoader.item.installedView = false
+                contentLoader.item.categoriesView = false
+                settings.startInInstalledView = false
+            }
         }
+    }
 
+    Action {
+        id: flathubCategoriesAction
+        property bool actionVisible: root.currentSection === 0 && contentLoader.item !== null && typeof contentLoader.item.categoriesView !== "undefined"
+
+        text: qsTr("Browse Categories")
+        icon.name: "appfinder-flathub-store"
+        checkable: true
+        checked: root.currentSection === 0 && contentLoader.item !== null && contentLoader.item.categoriesView === true
+        onTriggered: {
+            root.searchText = ""
+            if (contentLoader.item) {
+                contentLoader.item.installedView = false
+                contentLoader.item.categoriesView = true
+                contentLoader.item.selectedCategory = ""
+                settings.startInInstalledView = false
+            }
+        }
+    }
+
+    Action {
+        id: flathubInstalledAction
+        property bool actionVisible: root.currentSection === 0 && contentLoader.item !== null && typeof contentLoader.item.installedView !== "undefined"
+
+        text: qsTr("Installed Flatpaks")
+        icon.name: "appfinder-library"
+        checkable: true
+        checked: root.currentSection === 0 && contentLoader.item !== null && contentLoader.item.installedView === true
+        onTriggered: {
+            root.searchText = ""
+            if (contentLoader.item) {
+                contentLoader.item.installedView = true
+                contentLoader.item.categoriesView = false
+                settings.startInInstalledView = true
+            }
+        }
+    }
+
+    Action {
+        id: appHubExploreAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined"
+
+        text: qsTr("Explore NX AppHub")
+        icon.name: "go-home"
+        checkable: true
+        checked: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Recipes
+        onTriggered: {
+            root.searchText = ""
+            if (contentLoader.item)
+                contentLoader.item.requestViewMode(AppHubPage.Recipes)
+        }
+    }
+
+    Action {
+        id: appHubBuilderAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined"
+
+        text: qsTr("Personal Bundle Builder")
+        icon.name: "run-build"
+        checkable: true
+        checked: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Builder
+        onTriggered: {
+            root.searchText = ""
+            root.compactSearchOpen = false
+            appHub.search("")
+            if (contentLoader.item)
+                contentLoader.item.requestViewMode(AppHubPage.Builder)
+        }
+    }
+
+    Action {
+        id: appHubInstalledAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined"
+
+        text: qsTr("Installed AppBoxes")
+        icon.name: "appfinder-appboxes"
+        checkable: true
+        checked: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Installed
+        onTriggered: {
+            root.searchText = ""
+            if (contentLoader.item)
+                contentLoader.item.requestViewMode(AppHubPage.Installed)
+        }
+    }
+
+    Action {
+        id: appHubWikiAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode === AppHubPage.Builder
+
+        text: qsTr("NX AppHub Wiki")
+        icon.name: "help-contents"
+        onTriggered: Qt.openUrlExternally("https://github.com/Nitrux/nx-apphub/wiki")
+    }
+
+    Action {
+        id: appHubRefreshAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode === AppHubPage.Recipes
+
+        text: qsTr("Refresh Apps Repo")
+        icon.name: "appfinder-repo-apphub"
+        enabled: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Recipes && !appHub.busy
+        onTriggered: appHub.refreshAppHubRepository()
+    }
+
+    Action {
+        id: appHubBackAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0
+
+        text: qsTr("Back to Projects")
+        icon.name: "go-previous"
+        enabled: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0 && !appHub.busy
+        onTriggered: contentLoader.item.closeEditor()
+    }
+
+    Action {
+        id: appHubSaveAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0
+
+        text: qsTr("Save Bundle")
+        icon.name: "document-save"
+        enabled: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.projectIdValid && (contentLoader.item.editingProject.length === 0 || contentLoader.item.editorDirty) && !appHub.busy
+        onTriggered: contentLoader.item.saveEditor()
+    }
+
+    Action {
+        id: appHubBuildAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0
+
+        text: qsTr("Build Bundle")
+        icon.name: "run-build"
+        enabled: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.projectIdValid && !appHub.busy
+        onTriggered: contentLoader.item.buildEditor()
+    }
+
+    Action {
+        id: appHubRevealAction
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0 && contentLoader.item.artifactUrl.length > 0
+
+        text: qsTr("Reveal Output")
+        icon.name: "folder-open"
+        enabled: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0 && contentLoader.item.artifactUrl.length > 0 && !appHub.busy
+        onTriggered: contentLoader.item.revealEditorOutput()
+    }
+
+    function applySection(section) {
         currentSection = section
         if (section <= 2)
             appHub.currentSection = section
         if (sidebar.sideBar.collapsed)
             sidebar.sideBar.close()
+    }
+
+    function selectSection(section) {
+        if (section === 4) {
+            openSettingsDialog()
+            return
+        }
+        if (section === 1 && currentSection === section && contentLoader.item) {
+            root.searchText = ""
+            contentLoader.item.requestViewMode(AppHubPage.Recipes)
+            return
+        }
+        if (currentSection === 1 && section !== 1 && contentLoader.item) {
+            contentLoader.item.requestSectionLeave(section)
+            return
+        }
+        applySection(section)
     }
 
     function openSettingsDialog() {
@@ -58,8 +241,15 @@ Maui.ApplicationWindow {
     }
 
     function submitSearch() {
-        if (root.currentSection <= 2)
+        if (root.searchAvailable)
             appHub.search(root.searchText)
+    }
+
+    onClosing: function(close) {
+        if (!root.closeApproved && root.currentSection === 1 && contentLoader.item && contentLoader.item.hasUnsavedChanges) {
+            close.accepted = false
+            contentLoader.item.requestClose()
+        }
     }
 
     Component.onCompleted: {
@@ -120,7 +310,7 @@ Maui.ApplicationWindow {
 
             readonly property bool compactSearch: width < Maui.Style.units.gridUnit * 42
 
-            split: compactSearch && root.compactSearchOpen && root.currentSection <= 2
+            split: compactSearch && root.compactSearchOpen && root.searchAvailable
             splitSection: Maui.PageLayout.Section.Middle
             splitIn: ToolBar.Header
             altHeader: Maui.Handy.isMobile
@@ -132,7 +322,7 @@ Maui.ApplicationWindow {
             }
 
             headBar.visible: true
-            headBar.forceCenterMiddleContent: false
+            headBar.forceCenterMiddleContent: !page.compactSearch
             headerMargins: Maui.Handy.isMobile ? 0 : Maui.Style.contentMargins
             footerMargins: headerMargins
 
@@ -151,159 +341,68 @@ Maui.ApplicationWindow {
                 },
 
                 ToolSeparator {
+                    visible: (root.currentSection === 0
+                              && contentLoader.item !== null
+                              && typeof contentLoader.item.categoriesView !== "undefined"
+                              && contentLoader.item.categoriesView
+                              && !contentLoader.item.searchActive
+                              && contentLoader.item.selectedCategory.length > 0)
+                             || (root.currentSection === 1
+                                 && contentLoader.item !== null
+                                 && typeof contentLoader.item.viewMode !== "undefined"
+                                 && contentLoader.item.viewMode === AppHubPage.Builder)
                     bottomPadding: 10
                     topPadding: 10
                 },
 
                 ToolButton {
-                    visible: root.currentSection === 0 && contentLoader.item !== null
-                    text: qsTr("Explore Flathub")
+                    visible: root.currentSection === 0
+                             && contentLoader.item !== null
+                             && typeof contentLoader.item.categoriesView !== "undefined"
+                             && contentLoader.item.categoriesView
+                             && !contentLoader.item.searchActive
+                             && contentLoader.item.selectedCategory.length > 0
+                    text: qsTr("All Categories")
                     display: AbstractButton.IconOnly
-                    checkable: true
-                    autoExclusive: true
-                    checked: root.currentSection === 0 && contentLoader.item && !contentLoader.item.installedView && !contentLoader.item.categoriesView
-                    icon.name: "go-home"
+                    icon.name: "go-previous"
                     ToolTip.visible: hovered
                     ToolTip.text: text
                     onClicked: {
-                        root.searchText = ""
-                        if (contentLoader.item) {
-                            contentLoader.item.installedView = false
-                            contentLoader.item.categoriesView = false
-                            settings.startInInstalledView = false
-                        }
+                        contentLoader.item.selectedCategory = ""
+                        contentLoader.item.selectedSubcategory = ""
                     }
-                },
-
-                ToolButton {
-                    visible: root.currentSection === 0 && contentLoader.item !== null
-                    text: qsTr("Browse Categories")
-                    display: AbstractButton.IconOnly
-                    checkable: true
-                    autoExclusive: true
-                    checked: root.currentSection === 0 && contentLoader.item && contentLoader.item.categoriesView
-                    icon.name: "appfinder-flathub-store"
-                    ToolTip.visible: hovered
-                    ToolTip.text: text
-                    onClicked: {
-                        root.searchText = ""
-                        if (contentLoader.item) {
-                            contentLoader.item.installedView = false
-                            contentLoader.item.categoriesView = true
-                            contentLoader.item.selectedCategory = ""
-                            settings.startInInstalledView = false
-                        }
-                    }
-                },
-
-                ToolButton {
-                    visible: root.currentSection === 0 && contentLoader.item !== null
-                    text: qsTr("Installed Flatpaks")
-                    display: AbstractButton.IconOnly
-                    checkable: true
-                    autoExclusive: true
-                    checked: root.currentSection === 0 && contentLoader.item && contentLoader.item.installedView
-                    icon.name: "appfinder-library"
-                    ToolTip.visible: hovered
-                    ToolTip.text: text
-                    onClicked: {
-                        root.searchText = ""
-                        if (contentLoader.item) {
-                            contentLoader.item.installedView = true
-                            contentLoader.item.categoriesView = false
-                            settings.startInInstalledView = true
-                        }
-                    }
-                },
-
-                ToolButton {
-                    visible: root.currentSection === 1 && contentLoader.item !== null
-                    text: qsTr("Explore NX AppHub")
-                    display: AbstractButton.IconOnly
-                    checkable: true
-                    autoExclusive: true
-                    checked: root.currentSection === 1 && contentLoader.item && !contentLoader.item.installedView
-                    icon.name: "go-home"
-                    ToolTip.visible: hovered
-                    ToolTip.text: text
-                    onClicked: {
-                        root.searchText = ""
-                        if (contentLoader.item)
-                            contentLoader.item.installedView = false
-                    }
-                },
-
-                ToolButton {
-                    visible: root.currentSection === 1 && contentLoader.item !== null
-                    text: qsTr("Installed AppBoxes")
-                    display: AbstractButton.IconOnly
-                    checkable: true
-                    autoExclusive: true
-                    checked: root.currentSection === 1 && contentLoader.item && contentLoader.item.installedView
-                    icon.name: "appfinder-appboxes"
-                    ToolTip.visible: hovered
-                    ToolTip.text: text
-                    onClicked: {
-                        root.searchText = ""
-                        if (contentLoader.item)
-                            contentLoader.item.installedView = true
-                    }
-                },
-
-                ToolSeparator {
-                    bottomPadding: 10
-                    topPadding: 10
                 },
 
                 ToolButton {
                     visible: root.currentSection === 1
-                    text: qsTr("Refresh Apps Repo")
+                             && contentLoader.item !== null
+                             && typeof contentLoader.item.viewMode !== "undefined"
+                             && contentLoader.item.viewMode === AppHubPage.Builder
+                    action: appHubSaveAction
                     display: AbstractButton.IconOnly
-                    icon.name: "appfinder-repo-apphub"
-                    enabled: !appHub.busy
                     ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Refresh NX AppHub Apps")
-                    onClicked: appHub.refreshAppHubRepository()
+                    ToolTip.text: text
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 1
+                             && contentLoader.item !== null
+                             && typeof contentLoader.item.viewMode !== "undefined"
+                             && contentLoader.item.viewMode === AppHubPage.Builder
+                    action: appHubBuildAction
+                    display: AbstractButton.IconOnly
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
                 }
             ]
 
-            middleContent: Maui.SearchField {
-                id: compactGlobalSearch
-                Layout.fillWidth: true
-                Layout.maximumWidth: Maui.Style.units.gridUnit * 26
-                Layout.alignment: Qt.AlignCenter
-                visible: page.compactSearch && root.compactSearchOpen && root.currentSection <= 2
-                enabled: visible
-                placeholderText: qsTr("Search %1...").arg(root.currentTitle)
-                text: root.searchText
-
-                onVisibleChanged: {
-                    if (visible)
-                        forceActiveFocus()
-                }
-
-                onTextChanged: {
-                    root.searchText = text
-                    searchTimer.restart()
-                }
-                onAccepted: {
-                    searchTimer.stop()
-                    root.submitSearch()
-                }
-                onCleared: {
-                    root.searchText = ""
-                    searchTimer.stop()
-                    root.submitSearch()
-                }
-            }
-
-            headBar.rightContent: [
+            middleContent: [
                 Maui.SearchField {
                     id: globalSearch
                     Layout.preferredWidth: Maui.Style.units.gridUnit * 18
                     Layout.maximumWidth: Maui.Style.units.gridUnit * 26
-                    Layout.alignment: Qt.AlignRight
-                    visible: root.currentSection <= 2 && !page.compactSearch
+                    Layout.alignment: Qt.AlignCenter
+                    visible: root.searchAvailable && !page.compactSearch
                     enabled: visible
                     placeholderText: qsTr("Search %1...").arg(root.currentTitle)
                     text: root.searchText
@@ -323,8 +422,40 @@ Maui.ApplicationWindow {
                     }
                 },
 
+                Maui.SearchField {
+                    id: compactGlobalSearch
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: Maui.Style.units.gridUnit * 26
+                    Layout.alignment: Qt.AlignCenter
+                    visible: page.compactSearch && root.compactSearchOpen && root.searchAvailable
+                    enabled: visible
+                    placeholderText: qsTr("Search %1...").arg(root.currentTitle)
+                    text: root.searchText
+
+                    onVisibleChanged: {
+                        if (visible)
+                            forceActiveFocus()
+                    }
+
+                    onTextChanged: {
+                        root.searchText = text
+                        searchTimer.restart()
+                    }
+                    onAccepted: {
+                        searchTimer.stop()
+                        root.submitSearch()
+                    }
+                    onCleared: {
+                        root.searchText = ""
+                        searchTimer.stop()
+                        root.submitSearch()
+                    }
+                }
+            ]
+
+            headBar.rightContent: [
                 ToolButton {
-                    visible: root.currentSection <= 2 && page.compactSearch
+                    visible: root.searchAvailable && page.compactSearch
                     text: qsTr("Search %1...").arg(root.currentTitle)
                     display: AbstractButton.IconOnly
                     checkable: true
@@ -397,6 +528,13 @@ Maui.ApplicationWindow {
                                  : root.currentSection === 1 ? appHubPage
                                                               : distroboxPage
             }
+            AppFinderActionBar {
+                id: actionBar
+                z: 1
+                anchors.fill: parent
+                dragTarget: actionBar
+                actions: root.actionBarActions
+            }
         }
     }
 
@@ -426,7 +564,13 @@ Maui.ApplicationWindow {
 
     Component {
         id: appHubPage
-        AppHubPage {}
+        AppHubPage {
+            onSectionLeaveApproved: function(section) { root.applySection(section) }
+            onCloseApproved: {
+                root.closeApproved = true
+                root.close()
+            }
+        }
     }
 
     Component {

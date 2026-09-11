@@ -125,6 +125,30 @@ Maui.Page {
         appHub.browseFlathubCategory(selectedCategory, selectedSubcategory)
     }
 
+    Connections {
+        target: appHub
+
+        function onFlatpakOperationFinished(identifier, action, success, error) {
+            if (success) {
+                const title = action === "install" ? qsTr("App installed")
+                            : action === "remove" ? qsTr("App removed")
+                                                  : qsTr("App updated")
+                const body = action === "install" ? qsTr("%1 was installed successfully.").arg(identifier)
+                           : action === "remove" ? qsTr("%1 was removed successfully.").arg(identifier)
+                                                 : qsTr("%1 was updated successfully.").arg(identifier)
+                Maui.App.rootComponent.notify("dialog-ok", title, body)
+                return
+            }
+
+            const title = action === "install" ? qsTr("Installation failed")
+                        : action === "remove" ? qsTr("Removal failed")
+                                              : qsTr("Update failed")
+            const body = String(error || "").trim()
+            Maui.App.rootComponent.notify("dialog-error", title,
+                                          body.length > 0 ? body : qsTr("The Flatpak operation failed."))
+        }
+    }
+
     Maui.SettingsDialog {
         id: flatpakAddonsDialog
 
@@ -546,7 +570,7 @@ Maui.Page {
                     anchors.fill: parent
                     acceptedButtons: Qt.NoButton
                     propagateComposedEvents: true
-                    scrollGestureEnabled: false
+                    scrollGestureEnabled: true
                     z: 100
                     onWheel: (wheel) => exploreScroll.forwardGridWheel(wheel)
                 }
@@ -639,7 +663,7 @@ Maui.Page {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.NoButton
                                 propagateComposedEvents: true
-                                scrollGestureEnabled: false
+                                scrollGestureEnabled: true
                                 z: 100
                                 onWheel: (wheel) => exploreScroll.forwardGridWheel(wheel)
                             }
@@ -728,7 +752,7 @@ Maui.Page {
                     anchors.fill: parent
                     acceptedButtons: Qt.NoButton
                     propagateComposedEvents: true
-                    scrollGestureEnabled: false
+                    scrollGestureEnabled: true
                     z: 100
                     onWheel: (wheel) => {
                         const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
@@ -751,28 +775,11 @@ Maui.Page {
             padding: Maui.Style.contentMargins
             spacing: Maui.Style.space.small
 
-            RowLayout {
+            Maui.SectionHeader {
                 Layout.fillWidth: true
-                spacing: Maui.Style.space.small
-
-                ToolButton {
-                    text: qsTr("All Categories")
-                    display: AbstractButton.IconOnly
-                    icon.name: "go-previous"
-                    ToolTip.visible: hovered
-                    ToolTip.text: text
-                    onClicked: {
-                        control.selectedCategory = ""
-                        control.selectedSubcategory = ""
-                    }
-                }
-
-                Maui.SectionHeader {
-                    Layout.fillWidth: true
-                    text1: control.selectedCategoryInfo ? control.selectedCategoryInfo.title : ""
-                    text2: qsTr("Showing %1 applications from Flathub.").arg(appHub.flathubBrowseModel.count)
-                    label2.wrapMode: Text.Wrap
-                }
+                text1: control.selectedCategoryInfo ? control.selectedCategoryInfo.title : ""
+                text2: qsTr("Showing %1 applications from Flathub.").arg(appHub.flathubBrowseModel.count)
+                label2.wrapMode: Text.Wrap
             }
 
             Rectangle {
@@ -985,7 +992,7 @@ Maui.Page {
                     anchors.fill: parent
                     acceptedButtons: Qt.NoButton
                     propagateComposedEvents: true
-                    scrollGestureEnabled: false
+                    scrollGestureEnabled: true
                     z: 100
                     onWheel: (wheel) => {
                         const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
@@ -1136,6 +1143,7 @@ Maui.Page {
                         padding: 0
                         clip: true
                         model: appHub.flathubModel
+                        flickable.interactive: false
 
                         holder.visible: count === 0
                         holder.title: qsTr("No User Flatpaks Installed")
@@ -1198,7 +1206,7 @@ Maui.Page {
                             anchors.fill: parent
                             acceptedButtons: Qt.NoButton
                             propagateComposedEvents: true
-                            scrollGestureEnabled: false
+                            scrollGestureEnabled: true
                             z: 100
                             onWheel: (wheel) => installedScroll.forwardListWheel(wheel)
                         }
@@ -1237,6 +1245,7 @@ Maui.Page {
                         padding: 0
                         clip: true
                         model: appHub.systemFlatpakModel
+                        flickable.interactive: false
 
                         delegate: Maui.ListBrowserDelegate {
                             id: systemInstalledDelegate
@@ -1295,7 +1304,7 @@ Maui.Page {
                             anchors.fill: parent
                             acceptedButtons: Qt.NoButton
                             propagateComposedEvents: true
-                            scrollGestureEnabled: false
+                            scrollGestureEnabled: true
                             z: 100
                             onWheel: (wheel) => installedScroll.forwardListWheel(wheel)
                         }

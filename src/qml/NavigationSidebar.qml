@@ -20,8 +20,8 @@ Loader {
         {
             title: qsTr("Explore"),
             items: [
-                { label: qsTr("Flathub"), icon: "appfinder-flathub", section: 0 },
-                { label: qsTr("NX AppHub"), icon: "appfinder-nx-apphub", section: 1 }
+                { label: qsTr("NX AppHub"), icon: "appfinder-nx-apphub", section: 1 },
+                { label: qsTr("Flathub"), icon: "appfinder-flathub", section: 0 }
             ]
         },
         {
