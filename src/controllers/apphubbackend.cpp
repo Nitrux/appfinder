@@ -529,6 +529,33 @@ void populateFlathubAppstreamItem(const QJsonObject &object, AppModel::Item &ite
     item.description = object.value(QStringLiteral("description")).toString().trimmed();
     item.type = object.value(QStringLiteral("type")).toString().trimmed();
     item.iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
+    item.developer = object.value(QStringLiteral("developer_name")).toString().trimmed();
+    item.license = object.value(QStringLiteral("project_license")).toString().trimmed();
+    item.homepage = object.value(QStringLiteral("urls")).toObject().value(QStringLiteral("homepage")).toString().trimmed();
+
+    const QJsonObject bundle = object.value(QStringLiteral("bundle")).toObject();
+    item.runtime = bundle.value(QStringLiteral("runtime")).toString().trimmed();
+    const QStringList bundleParts = bundle.value(QStringLiteral("value")).toString().trimmed().split(QLatin1Char(47), Qt::SkipEmptyParts);
+    if (item.architecture.isEmpty() && bundleParts.size() >= 3)
+        item.architecture = bundleParts.at(2);
+
+    const QJsonArray releases = object.value(QStringLiteral("releases")).toArray();
+    item.releases.clear();
+    for (const QJsonValue &releaseValue : releases) {
+        if (!releaseValue.isObject())
+            continue;
+
+        const QJsonObject releaseObject = releaseValue.toObject();
+        QVariantMap release;
+        release.insert(QStringLiteral("version"), releaseObject.value(QStringLiteral("version")).toString().trimmed());
+        release.insert(QStringLiteral("description"), releaseObject.value(QStringLiteral("description")).toString().trimmed());
+        release.insert(QStringLiteral("timestamp"), releaseObject.value(QStringLiteral("timestamp")).toVariant());
+        release.insert(QStringLiteral("url"), releaseObject.value(QStringLiteral("url")).toString().trimmed());
+        if (!release.value(QStringLiteral("version")).toString().isEmpty())
+            item.releases.append(release);
+    }
+    if (item.version.isEmpty() && !item.releases.isEmpty())
+        item.version = item.releases.first().toMap().value(QStringLiteral("version")).toString();
 
     const QJsonArray categories = object.value(QStringLiteral("categories")).toArray();
     for (const QJsonValue &category : categories) {
@@ -543,6 +570,7 @@ void populateFlathubAppstreamItem(const QJsonObject &object, AppModel::Item &ite
 
     QString screenshotUrl;
     QString screenshotCaption;
+    QStringList screenshotUrls;
     qint64 largestArea = -1;
     const QJsonArray screenshots = object.value(QStringLiteral("screenshots")).toArray();
     for (const QJsonValue &screenshotValue : screenshots) {
@@ -552,6 +580,8 @@ void populateFlathubAppstreamItem(const QJsonObject &object, AppModel::Item &ite
         const QJsonObject screenshot = screenshotValue.toObject();
         const QString caption = screenshot.value(QStringLiteral("caption")).toString().trimmed();
         const QJsonArray sizes = screenshot.value(QStringLiteral("sizes")).toArray();
+        QString bestSource;
+        qint64 bestArea = -1;
         for (const QJsonValue &sizeValue : sizes) {
             if (!sizeValue.isObject())
                 continue;
@@ -561,16 +591,58 @@ void populateFlathubAppstreamItem(const QJsonObject &object, AppModel::Item &ite
             const qint64 width = size.value(QStringLiteral("width")).toVariant().toLongLong();
             const qint64 height = size.value(QStringLiteral("height")).toVariant().toLongLong();
             const qint64 area = width > 0 && height > 0 ? width * height : 0;
-            if (!source.isEmpty() && area > largestArea) {
-                screenshotUrl = source;
+            if (!source.isEmpty() && area > bestArea) {
+                bestSource = source;
+                bestArea = area;
+            }
+        }
+
+        if (!bestSource.isEmpty()) {
+            screenshotUrls.append(bestSource);
+            if (bestArea > largestArea) {
+                screenshotUrl = bestSource;
                 screenshotCaption = caption;
-                largestArea = area;
+                largestArea = bestArea;
             }
         }
     }
 
     item.screenshot = screenshotUrl;
     item.screenshotCaption = screenshotCaption;
+    item.screenshots = screenshotUrls;
+}
+
+QVariantMap appItemVariantMap(const AppModel::Item &item)
+{
+    QVariantMap values;
+    values.insert(QStringLiteral("name"), item.name);
+    values.insert(QStringLiteral("summary"), item.summary);
+    values.insert(QStringLiteral("version"), item.version);
+    values.insert(QStringLiteral("architecture"), item.architecture);
+    values.insert(QStringLiteral("identifier"), item.identifier);
+    values.insert(QStringLiteral("category"), item.category);
+    values.insert(QStringLiteral("actionText"), item.actionText);
+    values.insert(QStringLiteral("actionIcon"), item.actionIcon);
+    values.insert(QStringLiteral("icon"), item.icon);
+    values.insert(QStringLiteral("status"), item.status);
+    values.insert(QStringLiteral("baseImage"), item.baseImage);
+    values.insert(QStringLiteral("created"), item.created);
+    values.insert(QStringLiteral("integratedApps"), item.integratedApps);
+    values.insert(QStringLiteral("description"), item.description);
+    values.insert(QStringLiteral("integration"), item.integration);
+    values.insert(QStringLiteral("type"), item.type);
+    values.insert(QStringLiteral("size"), item.size);
+    values.insert(QStringLiteral("iconUrl"), item.iconUrl);
+    values.insert(QStringLiteral("screenshot"), item.screenshot);
+    values.insert(QStringLiteral("screenshotCaption"), item.screenshotCaption);
+    values.insert(QStringLiteral("accentColor"), item.accentColor);
+    values.insert(QStringLiteral("developer"), item.developer);
+    values.insert(QStringLiteral("license"), item.license);
+    values.insert(QStringLiteral("homepage"), item.homepage);
+    values.insert(QStringLiteral("runtime"), item.runtime);
+    values.insert(QStringLiteral("screenshots"), item.screenshots);
+    values.insert(QStringLiteral("releases"), item.releases);
+    return values;
 }
 
 } // namespace
@@ -1148,6 +1220,150 @@ void AppHubBackend::search(const QString &query)
         m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
         break;
     }
+}
+
+void AppHubBackend::loadFlathubAppDetails(const QString &identifier)
+{
+    if (!isSafeIdentifier(identifier))
+        return;
+
+    AppModel::Item detailItem;
+    detailItem.identifier = identifier;
+    detailItem.icon = QStringLiteral("application-x-flatpak");
+    bool found = false;
+    const AppModel *sourceModel = nullptr;
+    QString detailCategory;
+    const QList<AppModel *> models = {
+        m_flathubModel,
+        m_flathubUpdatesModel,
+        m_systemFlatpakModel,
+        m_flathubFeaturedModel,
+        m_flathubBrowseModel,
+        m_flathubBrowseFeaturedModel,
+        m_flathubCollectionModel
+    };
+    for (const AppModel *model : models) {
+        if (!model)
+            continue;
+        for (const AppModel::Item &item : model->items()) {
+            if (item.identifier == identifier) {
+                detailItem = item;
+                found = true;
+                sourceModel = model;
+                break;
+            }
+        }
+        if (found)
+            break;
+    }
+
+    for (auto iterator = m_flathubCategoryModels.cbegin(); iterator != m_flathubCategoryModels.cend(); ++iterator) {
+        const AppModel *model = iterator.value();
+        if (!model)
+            continue;
+        for (const AppModel::Item &item : model->items()) {
+            if (item.identifier == identifier) {
+                detailCategory = iterator.key();
+                if (!found) {
+                    detailItem = item;
+                    found = true;
+                    sourceModel = model;
+                }
+                break;
+            }
+        }
+        if (!detailCategory.isEmpty())
+            break;
+    }
+
+    detailItem.actionText = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Remove") : QStringLiteral("Install");
+    detailItem.actionIcon = m_installedFlatpaks.contains(identifier) ? QStringLiteral("edit-delete") : QStringLiteral("list-add");
+    detailItem.status = m_installedFlatpaks.contains(identifier) ? QStringLiteral("Installed") : QStringLiteral("Available");
+
+    const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(identifier));
+    QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+    getWithRetry(m_network, this, request, 0,
+                 [] { return true; },
+                 [this, detailItem, detailCategory, sourceModel](const QByteArray &response, bool valid) mutable {
+                     if (!valid || response.size() > MaxFeaturedResponseBytes)
+                         return;
+
+                     QJsonParseError parseError;
+                     const QJsonDocument document = QJsonDocument::fromJson(response, &parseError);
+                     if (parseError.error != QJsonParseError::NoError || !document.isObject())
+                         return;
+
+                     populateFlathubAppstreamItem(document.object(), detailItem);
+                     QString category = detailCategory;
+                     if (category.isEmpty()) {
+                         category = detailItem.category.toLower();
+                         if (category == QLatin1String("game"))
+                             category = QStringLiteral("game-only");
+                     }
+
+                     const AppModel *similarModel = m_flathubCategoryModels.value(category, nullptr);
+                     if (!similarModel || similarModel->items().size() < 2)
+                         similarModel = sourceModel;
+
+                     const auto similarItems = std::make_shared<QList<AppModel::Item>>();
+                     QSet<QString> similarIdentifiers;
+                     if (similarModel) {
+                         for (AppModel::Item item : similarModel->items()) {
+                             if (item.identifier == detailItem.identifier || similarIdentifiers.contains(item.identifier))
+                                 continue;
+
+                             const bool installed = m_installedFlatpaks.contains(item.identifier);
+                             item.actionText = installed ? QStringLiteral("Remove") : QStringLiteral("Install");
+                             item.actionIcon = installed ? QStringLiteral("edit-delete") : QStringLiteral("list-add");
+                             item.status = installed ? QStringLiteral("Installed") : QStringLiteral("Available");
+                             similarItems->append(item);
+                             similarIdentifiers.insert(item.identifier);
+                             if (similarItems->size() >= MaxFeaturedItems)
+                                 break;
+                         }
+                     }
+
+                     const auto emitDetails = [this, detailItem, similarItems] {
+                         QVariantList similarApps;
+                         for (const AppModel::Item &item : *similarItems)
+                             similarApps.append(appItemVariantMap(item));
+
+                         QVariantMap details = appItemVariantMap(detailItem);
+                         details.insert(QStringLiteral("similarApps"), similarApps);
+                         emit flathubAppDetailsReady(details);
+                     };
+                     emitDetails();
+
+                     const auto pendingPreviews = std::make_shared<int>(0);
+                     for (const AppModel::Item &item : *similarItems) {
+                         if (item.screenshot.isEmpty() && isSafeIdentifier(item.identifier))
+                             ++*pendingPreviews;
+                     }
+
+                     for (qsizetype index = 0; index < similarItems->size(); ++index) {
+                         const AppModel::Item &item = similarItems->at(index);
+                         if (!item.screenshot.isEmpty() || !isSafeIdentifier(item.identifier))
+                             continue;
+
+                         const QString encodedSimilarIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(item.identifier));
+                         QNetworkRequest similarRequest(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedSimilarIdentifier)));
+                         similarRequest.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+                         getWithRetry(m_network, this, similarRequest, 0,
+                                      [] { return true; },
+                                      [this, index, similarItems, pendingPreviews, emitDetails](const QByteArray &similarResponse, bool similarValid) {
+                                          if (similarValid && similarResponse.size() <= MaxFeaturedResponseBytes) {
+                                              QJsonParseError similarParseError;
+                                              const QJsonDocument similarDocument = QJsonDocument::fromJson(similarResponse, &similarParseError);
+                                              if (similarParseError.error == QJsonParseError::NoError && similarDocument.isObject())
+                                                  populateFlathubAppstreamItem(similarDocument.object(), (*similarItems)[index]);
+                                          }
+
+                                          if (--*pendingPreviews == 0)
+                                              emitDetails();
+                                      });
+                     }
+                 });
 }
 
 void AppHubBackend::installFlatpak(const QString &identifier)

@@ -40,6 +40,12 @@ public:
         QString screenshot;
         QString screenshotCaption;
         QString accentColor {};
+        QString developer {};
+        QString license {};
+        QString homepage {};
+        QString runtime {};
+        QStringList screenshots {};
+        QVariantList releases {};
     };
 
     enum Role
@@ -64,7 +70,13 @@ public:
         IconUrlRole,
         ScreenshotRole,
         ScreenshotCaptionRole,
-        AccentColorRole
+        AccentColorRole,
+        DeveloperRole,
+        LicenseRole,
+        HomepageRole,
+        RuntimeRole,
+        ScreenshotsRole,
+        ReleasesRole
     };
     Q_ENUM(Role)
 

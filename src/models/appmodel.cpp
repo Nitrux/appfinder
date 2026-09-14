@@ -73,6 +73,18 @@ QVariant AppModel::data(const QModelIndex &index, int role) const
         return item.screenshotCaption;
     case AccentColorRole:
         return item.accentColor;
+    case DeveloperRole:
+        return item.developer;
+    case LicenseRole:
+        return item.license;
+    case HomepageRole:
+        return item.homepage;
+    case RuntimeRole:
+        return item.runtime;
+    case ScreenshotsRole:
+        return item.screenshots;
+    case ReleasesRole:
+        return item.releases;
     default:
         return {};
     }
@@ -102,6 +114,12 @@ QHash<int, QByteArray> AppModel::roleNames() const
         {ScreenshotRole, "screenshot"},
         {ScreenshotCaptionRole, "screenshotCaption"},
         {AccentColorRole, "accentColor"},
+        {DeveloperRole, "developer"},
+        {LicenseRole, "license"},
+        {HomepageRole, "homepage"},
+        {RuntimeRole, "runtime"},
+        {ScreenshotsRole, "screenshots"},
+        {ReleasesRole, "releases"},
     };
 }
 

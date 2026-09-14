@@ -13,6 +13,21 @@ Maui.Page {
     id: control
 
     property string query: ""
+    property bool detailVisible: false
+    property var detailItem: null
+
+    function openDetails(item) {
+        control.detailItem = item
+        control.detailVisible = true
+        const identifier = item && item.identifier ? String(item.identifier) : ""
+        if (identifier.length > 0)
+            appHub.loadFlathubAppDetails(identifier)
+    }
+
+    function closeDetails() {
+        control.detailVisible = false
+        control.detailItem = null
+    }
     property bool installedView: false
     property bool initialInstalledView: false
     signal viewModeChanged(bool installed)
@@ -214,7 +229,35 @@ Maui.Page {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.topMargin: 0
+        visible: !control.detailVisible
         sourceComponent: control.searchActive ? searchView : control.installedView ? installedViewComponent : control.categoriesView ? categoryBrowserView : exploreView
+    }
+
+    AppDetailsView {
+        anchors.fill: parent
+        visible: control.detailVisible
+        z: 2
+        itemData: control.detailItem
+        sourceTitle: qsTr("Flathub")
+        showFlathubLinks: true
+        busy: appHub.busy
+        actionHandler: function(identifier) { control.flatpakAction(identifier) }
+        onBackRequested: control.closeDetails()
+        onSimilarRequested: function(item) { control.openDetails(item) }
+    }
+
+    Connections {
+        target: appHub
+
+        function onFlathubAppDetailsReady(details) {
+            if (!control.detailVisible || !control.detailItem || !details)
+                return
+
+            const currentIdentifier = control.detailItem.identifier ? String(control.detailItem.identifier) : ""
+            const receivedIdentifier = details.identifier ? String(details.identifier) : ""
+            if (currentIdentifier === receivedIdentifier)
+                control.detailItem = details
+        }
     }
 
     Component {
@@ -322,6 +365,7 @@ Maui.Page {
 
                                 delegate: Item {
                                     id: featuredSlide
+                                    TapHandler { onTapped: control.openDetails(model) }
                                     anchors.fill: parent
                                     property bool currentSlide: index === featuredCarousel.currentIndex
                                     opacity: currentSlide ? 1 : 0
@@ -563,6 +607,7 @@ Maui.Page {
                         label2.wrapMode: Text.WordWrap
                         label2.maximumLineCount: 2
                         label2.elide: Text.ElideRight
+                        onClicked: control.openDetails(model)
                     }
                 }
 
@@ -656,6 +701,7 @@ Maui.Page {
                                     label2.wrapMode: Text.WordWrap
                                     label2.maximumLineCount: 2
                                     label2.elide: Text.ElideRight
+                                    onClicked: control.openDetails(model)
                                 }
                             }
 
@@ -800,6 +846,7 @@ Maui.Page {
 
                         delegate: Rectangle {
                             id: categoryFeaturedSlide
+                            TapHandler { onTapped: control.openDetails(model) }
                             anchors.fill: parent
                             radius: Maui.Style.radiusV
                             color: control.selectedCategoryInfo
@@ -985,6 +1032,7 @@ Maui.Page {
                         label2.wrapMode: Text.WordWrap
                         label2.maximumLineCount: 2
                         label2.elide: Text.ElideRight
+                        onClicked: control.openDetails(model)
                     }
                 }
 
@@ -1327,6 +1375,7 @@ Maui.Page {
             previewEnabled: true
             busy: appHub.busy
             actionHandler: function(identifier) { control.flatpakAction(identifier) }
+            detailHandler: function(identifier, item) { control.openDetails(item) }
         }
     }
 

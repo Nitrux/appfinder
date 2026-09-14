@@ -23,6 +23,7 @@ Maui.ScrollColumn {
     readonly property real minimumItemSize: Maui.Style.units.gridUnit * 14
     readonly property real maximumItemSize: Maui.Style.units.gridUnit * 24
     property var actionHandler: null
+    property var detailHandler: null
     property var secondaryActionHandler: null
     property var actionTextResolver: function(item) { return item && item.actionText ? String(item.actionText) : "" }
     property var actionIconResolver: function(item) { return item && item.actionIcon ? String(item.actionIcon) : "" }
@@ -96,6 +97,10 @@ Maui.ScrollColumn {
                         selectedBackgroundColor: Maui.Theme.alternateBackgroundColor
                         selectedForegroundColor: Maui.Theme.textColor
                         isCurrentItem: parent.GridView.isCurrentItem
+                        onClicked: {
+                            if (control.detailHandler)
+                                control.detailHandler(resultDelegate.itemIdentifier, model)
+                        }
                         template.labelsVisible: false
                         template.iconComponent: Component {
                             Item {

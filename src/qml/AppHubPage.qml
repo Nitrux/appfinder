@@ -25,6 +25,18 @@ Maui.Page {
     property int viewMode: AppHubPage.Recipes
     property string query: ""
     readonly property bool searchActive: query.trim().length > 0
+    property bool detailVisible: false
+    property var detailItem: null
+
+    function openDetails(item) {
+        control.detailItem = item
+        control.detailVisible = true
+    }
+
+    function closeDetails() {
+        control.detailVisible = false
+        control.detailItem = null
+    }
     property string selectedInstalledAppBox: ""
     property string editingProject: ""
     property string bundleProjectId: ""
@@ -1004,6 +1016,7 @@ Maui.Page {
 
     Loader {
         anchors.fill: parent
+        visible: !control.detailVisible
         sourceComponent: control.searchActive ? searchComponent
                          : control.viewMode === AppHubPage.Recipes ? recipesComponent
                          : control.viewMode === AppHubPage.Builder ? builderComponent
@@ -1022,7 +1035,19 @@ Maui.Page {
             emptyBody: qsTr("Try a different recipe name or category.")
             busy: appHub.busy
             actionHandler: function(identifier) { appHub.appHubAction(identifier) }
+            detailHandler: function(identifier, item) { control.openDetails(item) }
         }
+    }
+
+    AppDetailsView {
+        anchors.fill: parent
+        visible: control.detailVisible
+        z: 2
+        itemData: control.detailItem
+        sourceTitle: qsTr("NX AppHub")
+        busy: appHub.busy
+        actionHandler: function(identifier) { appHub.appHubAction(identifier) }
+        onBackRequested: control.closeDetails()
     }
 
     Component {
@@ -1132,6 +1157,7 @@ Maui.Page {
 
                                 delegate: Item {
                                     id: appHubFeaturedSlide
+                                    TapHandler { onTapped: control.openDetails(model) }
                                     anchors.fill: parent
                                     readonly property bool currentSlide: index === appHubFeaturedCarousel.currentIndex
                                     readonly property color bannerBackground: Maui.ColorUtils.tintWithAlpha(Maui.Theme.alternateBackgroundColor,
@@ -1304,6 +1330,8 @@ Maui.Page {
                         label2.wrapMode: Text.WordWrap
                         label2.maximumLineCount: 2
                         label2.elide: Text.ElideRight
+
+                        onClicked: control.openDetails(model)
 
                     }
                 }

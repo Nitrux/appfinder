@@ -320,6 +320,9 @@ Maui.ApplicationWindow {
             background: null
 
             readonly property bool compactSearch: width < Maui.Style.units.gridUnit * 42
+            readonly property bool detailsVisible: contentLoader.item !== null
+                                                   && typeof contentLoader.item.detailVisible !== "undefined"
+                                                   && contentLoader.item.detailVisible
 
             split: compactSearch && root.compactSearchOpen && root.searchAvailable
             splitSection: Maui.PageLayout.Section.Middle
@@ -352,8 +355,25 @@ Maui.ApplicationWindow {
                 },
 
                 ToolSeparator {
+                    visible: page.detailsVisible
+                    topPadding: Maui.Style.space.small
+                    bottomPadding: Maui.Style.space.small
+                },
+
+                ToolButton {
+                    visible: page.detailsVisible
+                    text: qsTr("Back")
+                    display: AbstractButton.IconOnly
+                    icon.name: "go-previous"
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                    onClicked: contentLoader.item.closeDetails()
+                },
+
+                ToolSeparator {
                     visible: (root.currentSection === 0
                               && contentLoader.item !== null
+                              && !page.detailsVisible
                               && typeof contentLoader.item.categoriesView !== "undefined"
                               && contentLoader.item.categoriesView
                               && !contentLoader.item.searchActive
@@ -369,6 +389,7 @@ Maui.ApplicationWindow {
                 ToolButton {
                     visible: root.currentSection === 0
                              && contentLoader.item !== null
+                             && !page.detailsVisible
                              && typeof contentLoader.item.categoriesView !== "undefined"
                              && contentLoader.item.categoriesView
                              && !contentLoader.item.searchActive
@@ -413,7 +434,7 @@ Maui.ApplicationWindow {
                     Layout.preferredWidth: Maui.Style.units.gridUnit * 18
                     Layout.maximumWidth: Maui.Style.units.gridUnit * 26
                     Layout.alignment: Qt.AlignCenter
-                    visible: root.searchAvailable && !page.compactSearch
+                    visible: root.searchAvailable && !page.compactSearch && !page.detailsVisible
                     enabled: visible
                     placeholderText: qsTr("Search %1...").arg(root.currentTitle)
                     text: root.searchText
@@ -438,7 +459,7 @@ Maui.ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.maximumWidth: Maui.Style.units.gridUnit * 26
                     Layout.alignment: Qt.AlignCenter
-                    visible: page.compactSearch && root.compactSearchOpen && root.searchAvailable
+                    visible: page.compactSearch && root.compactSearchOpen && root.searchAvailable && !page.detailsVisible
                     enabled: visible
                     placeholderText: qsTr("Search %1...").arg(root.currentTitle)
                     text: root.searchText
@@ -466,7 +487,7 @@ Maui.ApplicationWindow {
 
             headBar.rightContent: [
                 ToolButton {
-                    visible: root.searchAvailable && page.compactSearch
+                    visible: root.searchAvailable && page.compactSearch && !page.detailsVisible
                     text: qsTr("Search %1...").arg(root.currentTitle)
                     display: AbstractButton.IconOnly
                     checkable: true
@@ -541,6 +562,7 @@ Maui.ApplicationWindow {
             }
             AppFinderActionBar {
                 id: actionBar
+                visible: !page.detailsVisible
                 z: 1
                 anchors.fill: parent
                 dragTarget: actionBar

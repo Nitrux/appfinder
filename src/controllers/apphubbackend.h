@@ -134,6 +134,7 @@ public:
     Q_INVOKABLE void loadMoreFlathubBrowseCategory();
     Q_INVOKABLE void refreshAppHubRepository();
     Q_INVOKABLE void search(const QString &query);
+    Q_INVOKABLE void loadFlathubAppDetails(const QString &identifier);
     Q_INVOKABLE void installFlatpak(const QString &identifier);
     Q_INVOKABLE void updateFlatpak(const QString &identifier);
     Q_INVOKABLE void removeFlatpak(const QString &identifier);
@@ -168,6 +169,7 @@ signals:
     void flathubBrowseStateChanged();
     void flatpakSortModeChanged();
     void flatpakUpdateStateChanged();
+    void flathubAppDetailsReady(const QVariantMap &details);
     void flatpakOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
     void appHubOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
     void userBundleOutputUrlChanged();

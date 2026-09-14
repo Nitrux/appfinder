@@ -16,13 +16,25 @@ Maui.Page {
 
     property string query: ""
     readonly property bool searchActive: query.trim().length > 0
+    property bool detailVisible: false
+    property var detailItem: null
+
+    function openDetails(item) {
+        control.detailItem = item
+        control.detailVisible = true
+    }
+
+    function closeDetails() {
+        control.detailVisible = false
+        control.detailItem = null
+    }
 
     background: null
     headBar.visible: false
 
     SearchResultsView {
         anchors.fill: parent
-        visible: control.searchActive
+        visible: control.searchActive && !control.detailVisible
         sourceModel: appHub.distroboxModel
         query: control.query
         sourceTitle: qsTr("Distrobox")
@@ -53,10 +65,11 @@ Maui.Page {
         secondaryActionTextResolver: function(item) { return qsTr("Delete") }
         secondaryActionIconResolver: function(item) { return "edit-delete" }
         secondaryActionHandler: function(identifier, item) { appHub.removeDistrobox(identifier) }
+        detailHandler: function(identifier, item) { control.openDetails(item) }
     }
 
     ColumnLayout {
-        visible: !control.searchActive
+        visible: !control.searchActive && !control.detailVisible
         anchors.fill: parent
         anchors.margins: Maui.Style.contentMargins
         spacing: Maui.Style.space.small
@@ -183,5 +196,28 @@ Maui.Page {
                 }
             }
         }
+    }
+
+    AppDetailsView {
+        anchors.fill: parent
+        visible: control.detailVisible
+        z: 2
+        itemData: control.detailItem
+        sourceTitle: qsTr("Distrobox")
+        busy: appHub.busy
+        actionTextResolver: function(item) {
+            const status = item && item.status ? String(item.status).toLowerCase() : ""
+            return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
+                   ? qsTr("Open Terminal")
+                   : qsTr("Start Container")
+        }
+        actionHandler: function(identifier, item) {
+            const status = item && item.status ? String(item.status).toLowerCase() : ""
+            if (status.indexOf("up") >= 0 || status.indexOf("running") >= 0)
+                appHub.enterDistrobox(identifier)
+            else
+                appHub.startDistrobox(identifier)
+        }
+        onBackRequested: control.closeDetails()
     }
 }

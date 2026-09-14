@@ -26,6 +26,7 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/Main.qml
         qml/SourcePage.qml
         qml/SearchResultsView.qml
+        qml/AppDetailsView.qml
         qml/NavigationSidebar.qml
         qml/SettingsDialog.qml
         qml/AppFinderActionBar.qml
