@@ -76,6 +76,7 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setItems(const QList<Item> &items);
+    void updateItem(const QString &identifier, const Item &item);
     const QList<Item> &items() const;
 
 signals:

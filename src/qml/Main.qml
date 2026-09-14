@@ -46,8 +46,19 @@ Maui.ApplicationWindow {
         appHubWikiAction,
         appHubRefreshAction,
         appHubBackAction,
-        appHubRevealAction
+        appHubRevealAction,
+        distroboxCreateAction
     ]
+
+    Action {
+        id: distroboxCreateAction
+        property bool actionVisible: root.currentSection === 2 && contentLoader.item !== null
+
+        text: qsTr("Add Container")
+        icon.name: "list-add"
+        enabled: root.currentSection === 2 && contentLoader.item !== null && !appHub.busy
+        onTriggered: contentLoader.item.createContainerRequested()
+    }
 
     Action {
         id: flathubExploreAction
@@ -565,6 +576,7 @@ Maui.ApplicationWindow {
     Component {
         id: appHubPage
         AppHubPage {
+            query: root.searchText
             onSectionLeaveApproved: function(section) { root.applySection(section) }
             onCloseApproved: {
                 root.closeApproved = true
@@ -576,6 +588,7 @@ Maui.ApplicationWindow {
     Component {
         id: distroboxPage
         DistroboxPage {
+            query: root.searchText
             onCreateContainerRequested: createDialog.open()
             onCloneRequested: function(source) {
                 cloneDialog.sourceName = source

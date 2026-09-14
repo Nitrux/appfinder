@@ -1317,115 +1317,17 @@ Maui.Page {
     Component {
         id: searchView
 
-        Maui.ScrollColumn {
-            id: searchScroll
-            padding: Maui.Style.contentMargins
-            spacing: Maui.Style.space.small
-
-            Maui.SectionHeader {
-                Layout.fillWidth: true
-                text1: qsTr("Flathub")
-                text2: qsTr("Search applications across Flathub.")
-                label2.wrapMode: Text.Wrap
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.preferredHeight: searchGrid.holder.visible ? Math.max(implicitHeight, searchScroll.availableHeight - y) : implicitHeight
-                color: Maui.Theme.alternateBackgroundColor
-                radius: Maui.Style.radiusV
-                border.color: Maui.Theme.backgroundColor
-                border.width: 1
-                implicitHeight: searchLayout.implicitHeight + Maui.Style.contentMargins * 2
-
-                ColumnLayout {
-                    id: searchLayout
-                    anchors.fill: parent
-                    anchors.margins: Maui.Style.contentMargins
-                    spacing: Maui.Style.space.small
-
-                    Maui.SectionHeader {
-                        Layout.fillWidth: true
-                        text1: qsTr("Search Results")
-                        text2: qsTr("Results for \"%1\".").arg(control.query)
-                        label2.wrapMode: Text.Wrap
-                    }
-
-                    Maui.GridBrowser {
-                id: searchGrid
-                padding: 0
-                        Layout.fillWidth: true
-                Layout.fillHeight: true
-                itemSize: 360
-                itemHeight: 112
-                adaptContent: true
-                model: appHub.flathubModel
-                holder.visible: appHub.flathubModel.count === 0
-                holder.title: qsTr("No Flathub results")
-                holder.body: qsTr("Try a different application name or category.")
-
-                delegate: Item {
-                    width: GridView.view.cellWidth
-                    height: GridView.view.cellHeight
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Maui.Style.radiusV
-                        color: Maui.Theme.alternateBackgroundColor
-                        border.color: model.status === "Installed" ? Maui.Theme.positiveBackgroundColor : Maui.Theme.backgroundColor
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: Maui.Style.space.medium
-                            spacing: Maui.Style.space.medium
-
-                            Maui.IconItem {
-                                Layout.preferredWidth: 48
-                                Layout.preferredHeight: 48
-                                iconSizeHint: 48
-                                iconSource: model.icon
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: Maui.Style.space.small
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: model.name
-                                    font: Maui.Style.h2Font
-                                    elide: Text.ElideRight
-                                }
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: qsTr("%1 • %2").arg(model.category.length > 0 ? model.category : qsTr("Flathub Application")).arg(control.sizeText(model.size))
-                                    color: Maui.Theme.disabledTextColor
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Maui.Chip {
-                                text: model.status.length > 0 ? model.status : qsTr("Available")
-                                color: model.status === "Installed" ? Maui.Theme.positiveBackgroundColor : Maui.Theme.neutralBackgroundColor
-                                enabled: false
-                            }
-
-                            ToolButton {
-                                text: model.actionText
-                                icon.name: model.actionIcon
-                                display: ToolButton.TextBesideIcon
-                                enabled: !appHub.busy
-                                onClicked: control.flatpakAction(model.identifier)
-                            }
-                        }
-                    }
-                }
-            }
-                }
-            }
+        SearchResultsView {
+            sourceModel: appHub.flathubModel
+            query: control.query
+            sourceTitle: qsTr("Flathub")
+            sourceDescription: qsTr("Search applications across Flathub.")
+            emptyTitle: qsTr("No Flathub results")
+            emptyBody: qsTr("Try a different application name or category.")
+            previewEnabled: true
+            busy: appHub.busy
+            actionHandler: function(identifier) { control.flatpakAction(identifier) }
         }
-        }
+    }
 
 }

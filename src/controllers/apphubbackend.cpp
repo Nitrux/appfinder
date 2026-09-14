@@ -25,12 +25,14 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QSysInfo>
+#include <QTimer>
 #include <QUrl>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <utility>
+#include <functional>
 
 namespace {
 
@@ -40,9 +42,88 @@ constexpr qint64 MaxMetadataBytes = 2 * 1024 * 1024;
 constexpr qsizetype MaxQueryLength = 256;
 constexpr int MaxCatalogItems = 10000;
 constexpr int MaxFeaturedItems = 8;
+constexpr int MaxSearchDetailRequests = 12;
 constexpr int FlathubCollectionPageSize = 12;
 constexpr qsizetype MaxFeaturedResponseBytes = 8 * 1024 * 1024;
 constexpr qsizetype MaxFeaturedIconBytes = 2 * 1024 * 1024;
+constexpr int MaxNetworkRetries = 3;
+constexpr int NetworkRetryBaseDelayMs = 1000;
+constexpr int NetworkRequestTimeoutMs = 15000;
+
+int networkRetryDelay(int attempt)
+{
+    return NetworkRetryBaseDelayMs * (1 << attempt);
+}
+
+bool isRetryableNetworkError(QNetworkReply::NetworkError error)
+{
+    switch (error) {
+    case QNetworkReply::ConnectionRefusedError:
+    case QNetworkReply::RemoteHostClosedError:
+    case QNetworkReply::HostNotFoundError:
+    case QNetworkReply::TimeoutError:
+    case QNetworkReply::SslHandshakeFailedError:
+    case QNetworkReply::TemporaryNetworkFailureError:
+    case QNetworkReply::NetworkSessionFailedError:
+    case QNetworkReply::UnknownNetworkError:
+    case QNetworkReply::ProtocolUnknownError:
+    case QNetworkReply::ProtocolFailure:
+    case QNetworkReply::ProxyConnectionRefusedError:
+    case QNetworkReply::ProxyConnectionClosedError:
+    case QNetworkReply::ProxyNotFoundError:
+    case QNetworkReply::ProxyTimeoutError:
+        return true;
+    default:
+        return false;
+    }
+}
+
+using RetryActivePredicate = std::function<bool()>;
+using RetryCompletion = std::function<void(const QByteArray &, bool)>;
+using RetryReplyObserver = std::function<void(QNetworkReply *, bool)>;
+
+void getWithRetry(QNetworkAccessManager *network,
+                  QObject *context,
+                  const QNetworkRequest &request,
+                  int attempt,
+                  const RetryActivePredicate &active,
+                  const RetryCompletion &completion,
+                  const RetryReplyObserver &observe = {})
+{
+    QNetworkRequest retryRequest = request;
+    if (attempt > 0)
+        retryRequest.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+
+    QNetworkReply *reply = network->get(retryRequest);
+    if (observe)
+        observe(reply, true);
+
+    QTimer::singleShot(NetworkRequestTimeoutMs, reply, [reply] {
+        if (!reply->isFinished())
+            reply->abort();
+    });
+    QObject::connect(reply, &QNetworkReply::finished, context, [=] {
+        const QNetworkReply::NetworkError error = reply->error();
+        const QByteArray response = reply->readAll();
+        const bool valid = error == QNetworkReply::NoError;
+        if (observe)
+            observe(reply, false);
+        reply->deleteLater();
+
+        if (!active())
+            return;
+
+        if (!valid && isRetryableNetworkError(error) && attempt < MaxNetworkRetries) {
+            QTimer::singleShot(networkRetryDelay(attempt), context, [=] {
+                if (active())
+                    getWithRetry(network, context, request, attempt + 1, active, completion, observe);
+            });
+            return;
+        }
+
+        completion(response, valid);
+    });
+}
 
 bool isSafeIdentifier(const QString &value)
 {
@@ -441,6 +522,57 @@ QList<AppModel::Item> appendFlathubHits(QList<AppModel::Item> items, const QJson
     return items;
 }
 
+void populateFlathubAppstreamItem(const QJsonObject &object, AppModel::Item &item)
+{
+    item.name = object.value(QStringLiteral("name")).toString(item.identifier).trimmed();
+    item.summary = object.value(QStringLiteral("summary")).toString().trimmed();
+    item.description = object.value(QStringLiteral("description")).toString().trimmed();
+    item.type = object.value(QStringLiteral("type")).toString().trimmed();
+    item.iconUrl = object.value(QStringLiteral("icon")).toString().trimmed();
+
+    const QJsonArray categories = object.value(QStringLiteral("categories")).toArray();
+    for (const QJsonValue &category : categories) {
+        const QString value = category.toString().trimmed();
+        if (!value.isEmpty()) {
+            item.category = displayCategory(value);
+            break;
+        }
+    }
+    if (item.category.isEmpty())
+        item.category = QStringLiteral("Application");
+
+    QString screenshotUrl;
+    QString screenshotCaption;
+    qint64 largestArea = -1;
+    const QJsonArray screenshots = object.value(QStringLiteral("screenshots")).toArray();
+    for (const QJsonValue &screenshotValue : screenshots) {
+        if (!screenshotValue.isObject())
+            continue;
+
+        const QJsonObject screenshot = screenshotValue.toObject();
+        const QString caption = screenshot.value(QStringLiteral("caption")).toString().trimmed();
+        const QJsonArray sizes = screenshot.value(QStringLiteral("sizes")).toArray();
+        for (const QJsonValue &sizeValue : sizes) {
+            if (!sizeValue.isObject())
+                continue;
+
+            const QJsonObject size = sizeValue.toObject();
+            const QString source = size.value(QStringLiteral("src")).toString().trimmed();
+            const qint64 width = size.value(QStringLiteral("width")).toVariant().toLongLong();
+            const qint64 height = size.value(QStringLiteral("height")).toVariant().toLongLong();
+            const qint64 area = width > 0 && height > 0 ? width * height : 0;
+            if (!source.isEmpty() && area > largestArea) {
+                screenshotUrl = source;
+                screenshotCaption = caption;
+                largestArea = area;
+            }
+        }
+    }
+
+    item.screenshot = screenshotUrl;
+    item.screenshotCaption = screenshotCaption;
+}
+
 } // namespace
 
 AppHubBackend::AppHubBackend(QObject *parent)
@@ -679,6 +811,12 @@ void AppHubBackend::setCurrentSection(int section)
     if (section < Flathub || section > Distrobox || section == m_currentSection)
         return;
 
+    if (m_currentSection == Flathub) {
+        cancelFlathubSearchRequests();
+        if (m_operation == Operation::FlatpakSearch && m_process->state() != QProcess::NotRunning)
+            m_process->kill();
+    }
+
     m_currentSection = section;
     emit currentSectionChanged();
     search(m_query);
@@ -801,6 +939,8 @@ bool AppHubBackend::startOperation(const QString &program,
     m_processOutputTooLarge = false;
     m_operation = operation;
     m_operationIdentifier = identifier;
+    if (operation == Operation::FlatpakSearch)
+        m_flatpakSearchQuery = m_query;
     if (operation == Operation::FlatpakUpdate) {
         m_flatpakUpdateIdentifier = identifier;
         m_flatpakUpdateProgress = -1;
@@ -889,7 +1029,7 @@ AppModel *AppHubBackend::flathubCategoryModel(const QString &category) const
 
 bool AppHubBackend::flathubCategoryLoading(const QString &category) const
 {
-    return m_flathubCategoryReplies.contains(category);
+    return m_flathubCategoryRequests.contains(category);
 }
 
 bool AppHubBackend::flathubCategoryHasMore(const QString &category) const
@@ -974,13 +1114,26 @@ void AppHubBackend::search(const QString &query)
         setStatusMessage(QStringLiteral("Search text is too long."));
         return;
     }
+    m_flatpakSearchRetryAttempt = 0;
     m_query = normalizedQuery;
+    if (m_currentSection == Flathub) {
+        cancelFlathubSearchRequests();
+
+        if (m_operation == Operation::FlatpakSearch && m_process->state() != QProcess::NotRunning) {
+            if (m_flatpakSearchQuery != m_query) {
+                m_flathubModel->setItems({});
+                m_process->kill();
+            }
+            return;
+        }
+    }
 
     switch (m_currentSection) {
     case Flathub:
         if (m_query.isEmpty()) {
             refreshFlatpakInstalled();
         } else {
+            m_flathubModel->setItems({});
             startOperation(QStringLiteral("flatpak"),
                            {QStringLiteral("search"), QStringLiteral("--columns=application,name,description,version,remotes"), QStringLiteral("--arch=%1").arg(architecture()), QStringLiteral("--"), m_query},
                            Operation::FlatpakSearch);
@@ -1393,18 +1546,8 @@ void AppHubBackend::createDistrobox(const QString &name, const QString &image, c
 
 void AppHubBackend::startDistrobox(const QString &name)
 {
-    if (!isSafeIdentifier(name)) {
-        setStatusMessage(QStringLiteral("Invalid Distrobox name."));
-        return;
-    }
-    const QString executable = containerEngine();
-    if (executable.isEmpty()) {
-        setStatusMessage(QStringLiteral("Neither podman nor docker is installed."));
-        return;
-    }
-    if (!startOperation(executable, {QStringLiteral("start"), name}, Operation::DistroboxStart, name))
-        return;
-    setStatusMessage(QStringLiteral("Starting %1…").arg(name));
+    // Run through Station so startup diagnostics remain visible to the user.
+    enterDistrobox(name);
 }
 
 void AppHubBackend::stopDistrobox(const QString &name)
@@ -1413,12 +1556,12 @@ void AppHubBackend::stopDistrobox(const QString &name)
         setStatusMessage(QStringLiteral("Invalid Distrobox name."));
         return;
     }
-    const QString executable = containerEngine();
+    const QString executable = findExecutable(QStringLiteral("podman"));
     if (executable.isEmpty()) {
-        setStatusMessage(QStringLiteral("Neither podman nor docker is installed."));
+        setStatusMessage(QStringLiteral("podman is not installed."));
         return;
     }
-    if (!startOperation(executable, {QStringLiteral("stop"), name}, Operation::DistroboxStop, name))
+    if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("kill"), name}, Operation::DistroboxStop, name))
         return;
     setStatusMessage(QStringLiteral("Stopping %1…").arg(name));
 }
@@ -1445,12 +1588,12 @@ void AppHubBackend::removeDistrobox(const QString &name)
         setStatusMessage(QStringLiteral("Invalid Distrobox name."));
         return;
     }
-    const QString executable = containerEngine();
+    const QString executable = findExecutable(QStringLiteral("podman"));
     if (executable.isEmpty()) {
-        setStatusMessage(QStringLiteral("Neither podman nor docker is installed."));
+        setStatusMessage(QStringLiteral("podman is not installed."));
         return;
     }
-    if (!startOperation(executable, {QStringLiteral("rm"), QStringLiteral("--force"), name}, Operation::DistroboxRemove, name))
+    if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("rm"), name}, Operation::DistroboxRemove, name))
         return;
     setStatusMessage(QStringLiteral("Removing %1…").arg(name));
 }
@@ -1467,14 +1610,15 @@ void AppHubBackend::enterDistrobox(const QString &name)
         return;
     }
 
-    const QString terminal = findExecutable(QStringLiteral("xdg-terminal-exec"));
+    const QString terminal = findExecutable(QStringLiteral("station"));
     if (terminal.isEmpty()) {
-        setStatusMessage(QStringLiteral("xdg-terminal-exec is not installed."));
+        setStatusMessage(QStringLiteral("Station is not installed."));
         return;
     }
 
-    if (QProcess::startDetached(terminal, {executable, QStringLiteral("enter"), QStringLiteral("--name"), name}))
-        setStatusMessage(QStringLiteral("Opening a terminal in %1.").arg(name));
+    const QString command = QStringLiteral("%1 enter %2").arg(executable, name);
+    if (QProcess::startDetached(terminal, {QStringLiteral("--execute"), command}))
+        setStatusMessage(QStringLiteral("Opening a Station terminal in %1.").arg(name));
     else
         setStatusMessage(QStringLiteral("Could not enter %1.").arg(name));
 }
@@ -1727,6 +1871,8 @@ void AppHubBackend::refreshFlatpakAddons()
 
 void AppHubBackend::cancelFlathubFeaturedRequests()
 {
+    ++m_flathubFeaturedGeneration;
+    m_featuredDetailPending = 0;
     if (m_featuredCollectionReply) {
         m_featuredCollectionReply->abort();
         m_featuredCollectionReply->deleteLater();
@@ -1757,21 +1903,13 @@ void AppHubBackend::refreshFlathubFeatured()
     const QString date = QDate::currentDate().toString(Qt::ISODate);
     QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/app-picks/apps-of-the-week/%1").arg(date)));
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-    m_featuredCollectionReply = m_network->get(request);
-    QNetworkReply *reply = m_featuredCollectionReply;
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
-        if (m_featuredCollectionReply != reply) {
-            reply->deleteLater();
-            return;
-        }
-
-        m_featuredCollectionReply = nullptr;
-        const QByteArray response = reply->readAll();
-        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
-        reply->deleteLater();
-        if (valid)
-            parseFlathubFeaturedCollection(response);
-    });
+    const quint64 generation = m_flathubFeaturedGeneration;
+    getWithRetry(m_network, this, request, 0,
+                 [this, generation] { return generation == m_flathubFeaturedGeneration; },
+                 [this](const QByteArray &response, bool valid) {
+                     if (valid && response.size() <= MaxFeaturedResponseBytes)
+                         parseFlathubFeaturedCollection(response);
+                 });
 }
 
 void AppHubBackend::parseFlathubFeaturedCollection(const QByteArray &output)
@@ -1802,30 +1940,26 @@ void AppHubBackend::parseFlathubFeaturedCollection(const QByteArray &output)
         m_featuredItems.append(item);
     }
 
+    const quint64 generation = m_flathubFeaturedGeneration;
+    m_featuredDetailPending = 0;
     for (int index = 0; index < m_featuredItems.size(); ++index) {
         const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(m_featuredItems.at(index).identifier));
         QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
         request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-        QNetworkReply *reply = m_network->get(request);
-        m_featuredDetailReplies.insert(reply, index);
-        connect(reply, &QNetworkReply::finished, this, [this, reply] {
-            const auto iterator = m_featuredDetailReplies.find(reply);
-            if (iterator == m_featuredDetailReplies.end()) {
-                reply->deleteLater();
-                return;
-            }
-
-            const int index = iterator.value();
-            m_featuredDetailReplies.erase(iterator);
-            const QByteArray response = reply->readAll();
-            const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
-            reply->deleteLater();
-            if (valid)
-                parseFlathubFeaturedAppstream(response, index);
-            if (m_featuredDetailReplies.isEmpty())
-                finalizeFlathubFeatured();
-        });
+        ++m_featuredDetailPending;
+        getWithRetry(m_network, this, request, 0,
+                     [this, generation] { return generation == m_flathubFeaturedGeneration; },
+                     [this, index, generation](const QByteArray &response, bool valid) {
+                         if (valid && response.size() <= MaxFeaturedResponseBytes)
+                             parseFlathubFeaturedAppstream(response, index);
+                         if (generation != m_flathubFeaturedGeneration)
+                             return;
+                         if (--m_featuredDetailPending == 0)
+                             finalizeFlathubFeatured();
+                     });
     }
+    if (m_featuredDetailPending == 0)
+        finalizeFlathubFeatured();
 }
 
 void AppHubBackend::parseFlathubFeaturedAppstream(const QByteArray &output, int index)
@@ -1903,34 +2037,84 @@ void AppHubBackend::finalizeFlathubFeatured()
     m_featuredItems = readyItems;
     m_flathubFeaturedModel->setItems(m_featuredItems);
 
+    const quint64 generation = m_flathubFeaturedGeneration;
     for (int index = 0; index < m_featuredItems.size(); ++index) {
         QNetworkRequest iconRequest(QUrl(m_featuredItems.at(index).iconUrl));
         iconRequest.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-        QNetworkReply *iconReply = m_network->get(iconRequest);
-        m_featuredIconReplies.insert(iconReply, index);
-        connect(iconReply, &QNetworkReply::finished, this, [this, iconReply] {
-            const auto iterator = m_featuredIconReplies.find(iconReply);
-            if (iterator == m_featuredIconReplies.end()) {
-                iconReply->deleteLater();
-                return;
-            }
+        getWithRetry(m_network, this, iconRequest, 0,
+                     [this, generation] { return generation == m_flathubFeaturedGeneration; },
+                     [this, index](const QByteArray &response, bool valid) {
+                         if (!valid || response.size() > MaxFeaturedIconBytes || index < 0 || index >= m_featuredItems.size())
+                             return;
 
-            const int index = iterator.value();
-            m_featuredIconReplies.erase(iterator);
-            const QByteArray response = iconReply->readAll();
-            const bool valid = iconReply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedIconBytes;
-            iconReply->deleteLater();
-            if (valid && index >= 0 && index < m_featuredItems.size()) {
-                const QImage image = QImage::fromData(response);
-                if (!image.isNull()) {
-                    const QColor accentColor = accentFromArtwork(image);
-                    if (accentColor.isValid()) {
-                        m_featuredItems[index].accentColor = accentColor.name(QColor::HexRgb);
-                        m_flathubFeaturedModel->setItems(m_featuredItems);
-                    }
-                }
-            }
-        });
+                         const QImage image = QImage::fromData(response);
+                         if (image.isNull())
+                             return;
+
+                         const QColor accentColor = accentFromArtwork(image);
+                         if (accentColor.isValid()) {
+                             m_featuredItems[index].accentColor = accentColor.name(QColor::HexRgb);
+                             m_flathubFeaturedModel->setItems(m_featuredItems);
+                         }
+                     });
+    }
+}
+
+void AppHubBackend::cancelFlathubSearchRequests()
+{
+    ++m_flathubSearchGeneration;
+    const auto replies = m_flathubSearchDetailReplies.keys();
+    m_flathubSearchDetailReplies.clear();
+    for (QNetworkReply *reply : replies) {
+        reply->abort();
+        reply->deleteLater();
+    }
+}
+
+void AppHubBackend::requestFlathubSearchDetails()
+{
+    const QList<AppModel::Item> items = m_flathubModel->items();
+    const int requestCount = qMin(static_cast<int>(items.size()), MaxSearchDetailRequests);
+    const quint64 generation = m_flathubSearchGeneration;
+    for (int index = 0; index < requestCount; ++index) {
+        const QString identifier = items.at(index).identifier;
+        if (!isSafeIdentifier(identifier))
+            continue;
+
+        const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(identifier));
+        QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
+        request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
+        getWithRetry(m_network, this, request, 0,
+                     [this, generation] { return generation == m_flathubSearchGeneration; },
+                     [this, identifier](const QByteArray &response, bool valid) {
+                         if (valid && response.size() <= MaxFeaturedResponseBytes)
+                             parseFlathubSearchAppstream(response, identifier);
+                     },
+                     [this, identifier](QNetworkReply *reply, bool active) {
+                         if (active)
+                             m_flathubSearchDetailReplies.insert(reply, identifier);
+                         else
+                             m_flathubSearchDetailReplies.remove(reply);
+                     });
+    }
+}
+
+void AppHubBackend::parseFlathubSearchAppstream(const QByteArray &output, const QString &identifier)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+        return;
+
+    const QList<AppModel::Item> items = m_flathubModel->items();
+    for (const AppModel::Item &item : items) {
+        if (item.identifier != identifier)
+            continue;
+
+        AppModel::Item updatedItem = item;
+        populateFlathubAppstreamItem(document.object(), updatedItem);
+        m_flathubModel->updateItem(identifier, updatedItem);
+        return;
     }
 }
 
@@ -1945,12 +2129,12 @@ void AppHubBackend::setFlathubCollectionLoading(bool loading)
 
 void AppHubBackend::cancelFlathubCollectionRequest()
 {
-    if (!m_flathubCollectionReply)
-        return;
-
-    m_flathubCollectionReply->abort();
-    m_flathubCollectionReply->deleteLater();
-    m_flathubCollectionReply = nullptr;
+    ++m_flathubCollectionGeneration;
+    if (m_flathubCollectionReply) {
+        m_flathubCollectionReply->abort();
+        m_flathubCollectionReply->deleteLater();
+        m_flathubCollectionReply = nullptr;
+    }
     setFlathubCollectionLoading(false);
 }
 
@@ -1977,24 +2161,17 @@ void AppHubBackend::requestFlathubCollectionPage(int page)
                                      .arg(page)
                                      .arg(FlathubCollectionPageSize)));
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-    m_flathubCollectionReply = m_network->get(request);
-    QNetworkReply *reply = m_flathubCollectionReply;
+    const quint64 generation = m_flathubCollectionGeneration;
     setFlathubCollectionLoading(true);
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, requestedCollection, page] {
-        if (m_flathubCollectionReply != reply) {
-            reply->deleteLater();
-            return;
-        }
-
-        m_flathubCollectionReply = nullptr;
-        const QByteArray response = reply->readAll();
-        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
-        reply->deleteLater();
-        setFlathubCollectionLoading(false);
-        if (valid)
-            parseFlathubCollection(response, requestedCollection, page);
-    });
+    getWithRetry(m_network, this, request, 0,
+                 [this, generation, requestedCollection] {
+                     return generation == m_flathubCollectionGeneration && requestedCollection == m_flathubCollection;
+                 },
+                 [this, requestedCollection, page](const QByteArray &response, bool valid) {
+                     setFlathubCollectionLoading(false);
+                     if (valid && response.size() <= MaxFeaturedResponseBytes)
+                         parseFlathubCollection(response, requestedCollection, page);
+                 });
 }
 
 void AppHubBackend::parseFlathubCollection(const QByteArray &output, int collection, int page)
@@ -2020,13 +2197,16 @@ void AppHubBackend::parseFlathubCollection(const QByteArray &output, int collect
 
 void AppHubBackend::cancelFlathubCategoryRequests()
 {
+    ++m_flathubCategoryGeneration;
     const auto replies = m_flathubCategoryReplies;
+    const bool hadRequests = !replies.isEmpty() || !m_flathubCategoryRequests.isEmpty();
     m_flathubCategoryReplies.clear();
+    m_flathubCategoryRequests.clear();
     for (auto iterator = replies.cbegin(); iterator != replies.cend(); ++iterator) {
         iterator.value()->abort();
         iterator.value()->deleteLater();
     }
-    if (!replies.isEmpty()) {
+    if (hadRequests) {
         ++m_flathubCategoryRevision;
         emit flathubCategoryRevisionChanged();
     }
@@ -2046,7 +2226,7 @@ void AppHubBackend::refreshFlathubCategories()
 
 void AppHubBackend::requestFlathubCategoryPage(const QString &category, int page)
 {
-    if (!m_flathubCategoryModels.contains(category) || m_flathubCategoryReplies.contains(category) || page < 1)
+    if (!m_flathubCategoryModels.contains(category) || m_flathubCategoryRequests.contains(category) || page < 1)
         return;
 
     const QString endpoint = flathubCategoryEndpoint(category);
@@ -2055,26 +2235,21 @@ void AppHubBackend::requestFlathubCategoryPage(const QString &category, int page
                                      .arg(page)
                                      .arg(FlathubCollectionPageSize)));
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-    QNetworkReply *reply = m_network->get(request);
-    m_flathubCategoryReplies.insert(category, reply);
+    const quint64 generation = m_flathubCategoryGeneration;
+    m_flathubCategoryRequests.insert(category);
     ++m_flathubCategoryRevision;
     emit flathubCategoryRevisionChanged();
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, category, page] {
-        if (m_flathubCategoryReplies.value(category) != reply) {
-            reply->deleteLater();
-            return;
-        }
-
-        m_flathubCategoryReplies.remove(category);
-        const QByteArray response = reply->readAll();
-        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
-        reply->deleteLater();
-        if (valid)
-            parseFlathubCategory(response, category, page);
-        ++m_flathubCategoryRevision;
-        emit flathubCategoryRevisionChanged();
-    });
+    getWithRetry(m_network, this, request, 0,
+                 [this, generation, category] {
+                     return generation == m_flathubCategoryGeneration && m_flathubCategoryRequests.contains(category);
+                 },
+                 [this, category, page](const QByteArray &response, bool valid) {
+                     m_flathubCategoryRequests.remove(category);
+                     if (valid && response.size() <= MaxFeaturedResponseBytes)
+                         parseFlathubCategory(response, category, page);
+                     ++m_flathubCategoryRevision;
+                     emit flathubCategoryRevisionChanged();
+                 });
 }
 
 void AppHubBackend::parseFlathubCategory(const QByteArray &output, const QString &category, int page)
@@ -2097,6 +2272,7 @@ void AppHubBackend::parseFlathubCategory(const QByteArray &output, const QString
 
 void AppHubBackend::cancelFlathubBrowseRequests(bool cancelFeatured)
 {
+    ++m_flathubBrowseGeneration;
     if (m_flathubBrowseReply) {
         m_flathubBrowseReply->abort();
         m_flathubBrowseReply->deleteLater();
@@ -2124,32 +2300,24 @@ void AppHubBackend::requestFlathubBrowseCategoryPage(int page)
                                      .arg(page)
                                      .arg(FlathubCollectionPageSize)));
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-    m_flathubBrowseReply = m_network->get(request);
-    QNetworkReply *reply = m_flathubBrowseReply;
+    const quint64 generation = m_flathubBrowseGeneration;
     m_flathubBrowseLoading = true;
     emit flathubBrowseStateChanged();
+    getWithRetry(m_network, this, request, 0,
+                 [this, generation] { return generation == m_flathubBrowseGeneration; },
+                 [this, page](const QByteArray &response, bool valid) {
+                     const bool accepted = valid && response.size() <= MaxFeaturedResponseBytes;
+                     if (accepted)
+                         parseFlathubBrowseCategory(response, page);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, page] {
-        if (m_flathubBrowseReply != reply) {
-            reply->deleteLater();
-            return;
-        }
+                     if (accepted && !m_flathubBrowseSubcategory.isEmpty() && flathubBrowseHasMore()) {
+                         requestFlathubBrowseCategoryPage(m_flathubBrowseNextPage);
+                         return;
+                     }
 
-        m_flathubBrowseReply = nullptr;
-        const QByteArray response = reply->readAll();
-        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
-        reply->deleteLater();
-        if (valid)
-            parseFlathubBrowseCategory(response, page);
-
-        if (valid && !m_flathubBrowseSubcategory.isEmpty() && flathubBrowseHasMore()) {
-            requestFlathubBrowseCategoryPage(m_flathubBrowseNextPage);
-            return;
-        }
-
-        m_flathubBrowseLoading = false;
-        emit flathubBrowseStateChanged();
-    });
+                     m_flathubBrowseLoading = false;
+                     emit flathubBrowseStateChanged();
+                 });
 }
 
 void AppHubBackend::parseFlathubBrowseCategory(const QByteArray &output, int page)
@@ -2183,22 +2351,13 @@ void AppHubBackend::requestFlathubBrowseFeatured(const AppModel::Item &item)
     const QString encodedIdentifier = QString::fromUtf8(QUrl::toPercentEncoding(item.identifier));
     QNetworkRequest request(QUrl(QStringLiteral("https://flathub.org/api/v2/appstream/%1").arg(encodedIdentifier)));
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AppFinder"));
-    m_flathubBrowseFeaturedReply = m_network->get(request);
-    QNetworkReply *reply = m_flathubBrowseFeaturedReply;
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
-        if (m_flathubBrowseFeaturedReply != reply) {
-            reply->deleteLater();
-            return;
-        }
-
-        m_flathubBrowseFeaturedReply = nullptr;
-        const QByteArray response = reply->readAll();
-        const bool valid = reply->error() == QNetworkReply::NoError && response.size() <= MaxFeaturedResponseBytes;
-        reply->deleteLater();
-        if (valid)
-            parseFlathubBrowseFeatured(response);
-    });
+    const quint64 generation = m_flathubBrowseGeneration;
+    getWithRetry(m_network, this, request, 0,
+                 [this, generation] { return generation == m_flathubBrowseGeneration; },
+                 [this](const QByteArray &response, bool valid) {
+                     if (valid && response.size() <= MaxFeaturedResponseBytes)
+                         parseFlathubBrowseFeatured(response);
+                 });
 }
 
 void AppHubBackend::parseFlathubBrowseFeatured(const QByteArray &output)
@@ -2314,7 +2473,9 @@ void AppHubBackend::parseFlatpakSearch(const QByteArray &output)
         });
     }
 
+    cancelFlathubSearchRequests();
     m_flathubModel->setItems(items);
+    requestFlathubSearchDetails();
 }
 
 QList<AppModel::Item> AppHubBackend::sortedInstalledFlatpaks(const QList<AppModel::Item> &items) const
@@ -2750,6 +2911,17 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
     const Operation operation = m_operation;
     const QString identifier = m_operationIdentifier;
     const QString message = QStringLiteral("Could not start the requested operation.");
+    const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
+        && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
+
+    if (supersededFlatpakSearch) {
+        m_operation = Operation::None;
+        setBusy(false);
+        if (m_currentSection == Flathub)
+            search(m_query);
+        return;
+    }
+
     if (operation == Operation::UserBundleGenerate) {
         m_userBundleGenerationDirectory.reset();
         emit userBundleGenerated(identifier, false, message);
@@ -2809,6 +2981,8 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const QByteArray processErrorOutput = m_processErrorOutput;
     const Operation operation = m_operation;
     const QString identifier = m_operationIdentifier;
+    const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
+        && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
     if (operation == Operation::FlatpakUpdate
         && exitStatus == QProcess::NormalExit
         && exitCode == 0
@@ -2819,6 +2993,12 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     m_operation = Operation::None;
     clearFlatpakUpdateState();
     setBusy(false);
+
+    if (supersededFlatpakSearch) {
+        if (m_currentSection == Flathub)
+            search(m_query);
+        return;
+    }
 
     QString failure;
     if (m_processOutputTooLarge) {
@@ -2839,12 +3019,25 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         }
         emitFlatpakOperationResult(operation, identifier, false, failure);
         emitAppHubOperationResult(operation, identifier, false, failure);
+        if (operation == Operation::FlatpakSearch && !m_query.isEmpty() && m_flatpakSearchRetryAttempt < MaxNetworkRetries) {
+            const QString retryQuery = m_query;
+            const int retryAttempt = m_flatpakSearchRetryAttempt++;
+            QTimer::singleShot(networkRetryDelay(retryAttempt), this, [this, retryQuery] {
+                if (m_currentSection != Flathub || m_query != retryQuery || m_operation != Operation::None)
+                    return;
+
+                startOperation(QStringLiteral("flatpak"),
+                               {QStringLiteral("search"), QStringLiteral("--columns=application,name,description,version,remotes"), QStringLiteral("--arch=%1").arg(architecture()), QStringLiteral("--"), retryQuery},
+                               Operation::FlatpakSearch);
+            });
+        }
         setStatusMessage(failure);
         return;
     }
 
     switch (operation) {
     case Operation::FlatpakSearch:
+        m_flatpakSearchRetryAttempt = 0;
         parseFlatpakSearch(processOutput);
         setStatusMessage(QStringLiteral("Flathub search completed."));
         break;

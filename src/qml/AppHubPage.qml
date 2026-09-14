@@ -5,6 +5,7 @@
 
 import QtQuick
 import QtCore
+import QtQml
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
@@ -22,6 +23,8 @@ Maui.Page {
     headBar.visible: false
 
     property int viewMode: AppHubPage.Recipes
+    property string query: ""
+    readonly property bool searchActive: query.trim().length > 0
     property string selectedInstalledAppBox: ""
     property string editingProject: ""
     property string bundleProjectId: ""
@@ -1001,9 +1004,25 @@ Maui.Page {
 
     Loader {
         anchors.fill: parent
-        sourceComponent: control.viewMode === AppHubPage.Recipes ? recipesComponent
+        sourceComponent: control.searchActive ? searchComponent
+                         : control.viewMode === AppHubPage.Recipes ? recipesComponent
                          : control.viewMode === AppHubPage.Builder ? builderComponent
-                                                                  : installedComponent
+                                                                    : installedComponent
+    }
+
+    Component {
+        id: searchComponent
+
+        SearchResultsView {
+            sourceModel: appHub.appHubModel
+            query: control.query
+            sourceTitle: qsTr("NX AppHub")
+            sourceDescription: qsTr("Search AppBox recipes in NX AppHub.")
+            emptyTitle: qsTr("No NX AppHub results")
+            emptyBody: qsTr("Try a different recipe name or category.")
+            busy: appHub.busy
+            actionHandler: function(identifier) { appHub.appHubAction(identifier) }
+        }
     }
 
     Component {
@@ -1230,7 +1249,7 @@ Maui.Page {
                     radius: height / 2
                 }
 
-                Repeater {
+                Instantiator {
                     model: appHub.appHubCategories
 
                     delegate: Maui.TabButton {
@@ -1239,6 +1258,9 @@ Maui.Page {
                         text: modelData
                         closeButtonVisible: false
                     }
+
+                    onObjectAdded: (index, object) => appHubTabs.insertItem(index, object)
+                    onObjectRemoved: (index, object) => appHubTabs.removeItem(object)
                 }
             }
             Maui.GridBrowser {

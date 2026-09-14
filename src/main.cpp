@@ -10,6 +10,7 @@
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QSurfaceFormat>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QQmlContext>
 
@@ -20,8 +21,23 @@
 
 #include "controllers/apphubbackend.h"
 
+namespace {
+
+bool portalDesktopFileIsAvailable()
+{
+    return !QStandardPaths::locate(QStandardPaths::ApplicationsLocation,
+                                   QStringLiteral("org.nitrux.appfinder.desktop"))
+                .isEmpty();
+}
+
+} // namespace
+
 int main(int argc, char *argv[])
 {
+    // The host portal requires the matching installed desktop entry.
+    if (!portalDesktopFileIsAvailable())
+        qputenv("QT_NO_XDG_DESKTOP_PORTAL", "1");
+
     QSurfaceFormat format;
     format.setAlphaBufferSize(8);
     QSurfaceFormat::setDefaultFormat(format);

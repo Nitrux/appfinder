@@ -232,6 +232,9 @@ private:
     void parseFlathubFeaturedCollection(const QByteArray &output);
     void parseFlathubFeaturedAppstream(const QByteArray &output, int index);
     void finalizeFlathubFeatured();
+    void cancelFlathubSearchRequests();
+    void requestFlathubSearchDetails();
+    void parseFlathubSearchAppstream(const QByteArray &output, const QString &identifier);
     void refreshFlathubCollection();
     void requestFlathubCollectionPage(int page);
     void cancelFlathubCollectionRequest();
@@ -293,6 +296,7 @@ private:
     QNetworkReply *m_featuredCollectionReply = nullptr;
     QHash<QNetworkReply *, int> m_featuredDetailReplies;
     QHash<QNetworkReply *, int> m_featuredIconReplies;
+    QHash<QNetworkReply *, QString> m_flathubSearchDetailReplies;
     QNetworkReply *m_flathubCollectionReply = nullptr;
     QNetworkReply *m_flathubBrowseReply = nullptr;
     QNetworkReply *m_flathubBrowseFeaturedReply = nullptr;
@@ -307,6 +311,7 @@ private:
     QHash<int, int> m_flathubCollectionTotalPages;
     QHash<QString, AppModel *> m_flathubCategoryModels;
     QHash<QString, QNetworkReply *> m_flathubCategoryReplies;
+    QSet<QString> m_flathubCategoryRequests;
     QHash<QString, int> m_flathubCategoryNextPage;
     QHash<QString, int> m_flathubCategoryTotalPages;
     QHash<QString, QList<AppModel::Item>> m_flathubBrowseCache;
@@ -318,6 +323,7 @@ private:
     QSet<QString> m_userInstalledFlatpaks;
     QSet<QString> m_systemInstalledFlatpaks;
     QString m_query;
+    QString m_flatpakSearchQuery;
     QString m_operationIdentifier;
     QString m_flatpakAddonsApplication;
     bool m_flatpakAddonsSystemWide = false;
@@ -347,6 +353,13 @@ private:
     bool m_appHubInstalledOnly = false;
     int m_flathubCategoryRevision = 0;
     bool m_flathubCollectionLoading = false;
+    quint64 m_flathubFeaturedGeneration = 0;
+    int m_featuredDetailPending = 0;
+    quint64 m_flathubSearchGeneration = 0;
+    quint64 m_flathubCollectionGeneration = 0;
+    quint64 m_flathubBrowseGeneration = 0;
+    quint64 m_flathubCategoryGeneration = 0;
+    int m_flatpakSearchRetryAttempt = 0;
     bool m_busy = false;
     QString m_statusMessage;
     QString m_operationLog;

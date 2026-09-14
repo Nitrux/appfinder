@@ -113,6 +113,19 @@ void AppModel::setItems(const QList<Item> &items)
     emit countChanged();
 }
 
+void AppModel::updateItem(const QString &identifier, const Item &item)
+{
+    for (int row = 0; row < m_items.size(); ++row) {
+        if (m_items.at(row).identifier != identifier)
+            continue;
+
+        m_items[row] = item;
+        const QModelIndex itemIndex = index(row);
+        emit dataChanged(itemIndex, itemIndex, {});
+        return;
+    }
+}
+
 const QList<AppModel::Item> &AppModel::items() const
 {
     return m_items;
