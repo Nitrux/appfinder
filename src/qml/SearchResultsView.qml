@@ -191,7 +191,7 @@ Maui.ScrollColumn {
                                     spacing: Maui.Style.space.small
 
                                     Maui.Chip {
-                                        visible: resultDelegate.itemStatus.length > 0
+                                        visible: resultDelegate.itemStatus.length > 0 && resultDelegate.itemStatus.toLowerCase() !== "available"
                                         text: resultDelegate.itemStatus
                                         color: resultDelegate.statusPositive
                                                ? Maui.Theme.positiveBackgroundColor

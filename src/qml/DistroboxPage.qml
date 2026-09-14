@@ -79,7 +79,6 @@ Maui.Page {
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
-                padding: 0
                 text1: qsTr("Distrobox Containers")
                 text2: qsTr("Manage isolated development environments and their lifecycles.")
                 label2.wrapMode: Text.Wrap
@@ -153,11 +152,23 @@ Maui.Page {
                             }
                         }
 
-                        Label {
-                            Layout.fillWidth: true
-                            text: qsTr("Base image: %1").arg(model.baseImage.length > 0 ? model.baseImage : qsTr("Unavailable"))
-                            color: Maui.Theme.disabledTextColor
-                            elide: Text.ElideRight
+                        Maui.Chip {
+                            Layout.maximumWidth: parent.width
+                            enabled: false
+                            hoverEnabled: false
+                            color: Qt.rgba(0, 0, 0, 0.3)
+                            implicitWidth: baseImageValue.implicitWidth + Maui.Style.space.medium * 2
+                            implicitHeight: baseImageValue.implicitHeight + Maui.Style.space.small * 2
+
+                            contentItem: Maui.IconLabel {
+                                id: baseImageValue
+                                display: ToolButton.TextOnly
+                                text: model.baseImage.length > 0 ? model.baseImage : qsTr("Unavailable")
+                                alignment: Qt.AlignHCenter
+                                font.weight: Font.Medium
+                                color: Maui.Theme.textColor
+                                label.elide: Text.ElideRight
+                            }
                         }
 
                         RowLayout {

@@ -243,7 +243,8 @@ Maui.ScrollColumn {
                 { value: control.itemCategory, label: qsTr("Category"), positive: false },
                 { value: control.itemLicense, label: qsTr("License"), positive: false },
                 { value: control.itemArchitecture, label: qsTr("Architecture"), positive: false },
-                { value: control.itemRuntime, label: qsTr("Runtime"), positive: false }
+                { value: control.itemRuntime, label: qsTr("Runtime"), positive: false },
+                { value: control.itemIntegration, label: qsTr("Integration"), positive: false }
             ]
 
             delegate: Rectangle {
@@ -335,7 +336,6 @@ Maui.ScrollColumn {
                         anchors.fill: parent
                         anchors.margins: Maui.Style.space.small
                         source: modelData.source
-                        sourceSize.width: width
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
                         cache: true
@@ -564,7 +564,6 @@ Maui.ScrollColumn {
                                         id: similarPreviewImage
                                         anchors.fill: parent
                                         source: similarDelegate.itemScreenshot
-                                        sourceSize.width: width
                                         fillMode: Image.PreserveAspectCrop
                                         verticalAlignment: Image.AlignTop
                                         asynchronous: true
@@ -631,7 +630,7 @@ Maui.ScrollColumn {
                                         spacing: Maui.Style.space.small
 
                                         Maui.Chip {
-                                            visible: similarDelegate.itemStatus.length > 0
+                                            visible: similarDelegate.itemStatus.length > 0 && similarDelegate.itemStatus.toLowerCase() !== "available"
                                             text: similarDelegate.itemStatus
                                             color: similarDelegate.statusPositive
                                                    ? Maui.Theme.positiveBackgroundColor
@@ -677,7 +676,7 @@ Maui.ScrollColumn {
 
     Rectangle {
         Layout.fillWidth: true
-        visible: control.itemBaseImage.length > 0 || control.itemIntegration.length > 0
+        visible: control.itemBaseImage.length > 0
         implicitHeight: detailsColumn.implicitHeight + Maui.Style.contentMargins * 2
         radius: Maui.Style.radiusV
         color: Maui.Theme.alternateBackgroundColor
@@ -693,14 +692,6 @@ Maui.ScrollColumn {
                 Layout.minimumWidth: 0
                 visible: control.itemBaseImage.length > 0
                 text: qsTr("Base image: %1").arg(control.itemBaseImage)
-                wrapMode: Text.WrapAnywhere
-            }
-
-            Label {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 0
-                visible: control.itemIntegration.length > 0
-                text: qsTr("Integration: %1").arg(control.itemIntegration)
                 wrapMode: Text.WrapAnywhere
             }
 

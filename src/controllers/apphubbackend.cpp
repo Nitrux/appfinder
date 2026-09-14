@@ -891,7 +891,10 @@ void AppHubBackend::setCurrentSection(int section)
 
     m_currentSection = section;
     emit currentSectionChanged();
-    search(m_query);
+    if (m_currentSection == Distrobox)
+        refreshDistrobox();
+    else
+        search(m_query);
 }
 
 bool AppHubBackend::busy() const
@@ -2681,6 +2684,11 @@ void AppHubBackend::refreshAppHubCatalog()
 void AppHubBackend::refreshDistrobox()
 {
     m_allDistroboxItems = loadDistroboxItems(runCommand(QStringLiteral("distrobox"), {QStringLiteral("list"), QStringLiteral("--no-color")}));
+
+    if (m_allDistroboxItems.isEmpty() && !findExecutable(QStringLiteral("podman")).isEmpty()) {
+        const QString format = QStringLiteral("{{.ID}}|{{.Image}}|{{.Names}}|{{.Status}}|{{.Labels}}|{{.Mounts}}");
+        m_allDistroboxItems = loadDistroboxItems(runCommand(QStringLiteral("podman"), {QStringLiteral("container"), QStringLiteral("list"), QStringLiteral("--all"), QStringLiteral("--no-trunc"), QStringLiteral("--format"), format}));
+    }
     m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
 }
 
@@ -2987,12 +2995,24 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
         if (fields.size() < 4)
             continue;
 
-        const QString name = fields.at(1).trimmed();
+        QString name;
+        QString status;
+        QString baseImage;
+        if (fields.size() >= 5) {
+            if (!fields.mid(4).join(QLatin1Char('|')).contains(QLatin1String("distrobox"), Qt::CaseInsensitive))
+                continue;
+
+            baseImage = fields.at(1).trimmed();
+            name = fields.at(2).trimmed();
+            status = fields.at(3).trimmed();
+        } else {
+            name = fields.at(1).trimmed();
+            status = fields.at(2).trimmed();
+            baseImage = fields.at(3).trimmed();
+        }
+
         if (name.isEmpty() || name == QLatin1String("NAME") || !isSafeIdentifier(name))
             continue;
-
-        const QString status = fields.at(2).trimmed();
-        const QString baseImage = fields.at(3).trimmed();
         items.append({
             name,
             QStringLiteral("%1 · %2").arg(status, baseImage),
