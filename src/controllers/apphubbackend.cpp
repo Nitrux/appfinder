@@ -1222,6 +1222,38 @@ void AppHubBackend::search(const QString &query)
     }
 }
 
+QVariantMap AppHubBackend::appHubItemDetails(const QString &identifier) const
+{
+    if (!isSafeIdentifier(identifier))
+        return {};
+
+    const AppModel::Item *selectedItem = nullptr;
+    for (const AppModel::Item &item : m_allAppHubItems) {
+        if (item.identifier == identifier) {
+            selectedItem = &item;
+            break;
+        }
+    }
+    if (!selectedItem)
+        return {};
+
+    QVariantMap details = appItemVariantMap(*selectedItem);
+    QVariantList similarApps;
+    const QString category = normalizedAppHubCategory(*selectedItem);
+    if (!category.isEmpty()) {
+        for (const AppModel::Item &item : m_allAppHubItems) {
+            if (item.identifier == identifier || normalizedAppHubCategory(item) != category)
+                continue;
+
+            similarApps.append(appItemVariantMap(item));
+            if (similarApps.size() >= MaxFeaturedItems)
+                break;
+        }
+    }
+    details.insert(QStringLiteral("similarApps"), similarApps);
+    return details;
+}
+
 void AppHubBackend::loadFlathubAppDetails(const QString &identifier)
 {
     if (!isSafeIdentifier(identifier))
@@ -2829,11 +2861,23 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
         const QString name = appHubDisplayName(yamlName.isEmpty() ? application : yamlName.simplified());
 
         QString markdown;
+        QStringList screenshots;
         const QFileInfo metadataDirectoryInfo(applicationDirectory.filePath(QStringLiteral("metadata")));
         if (metadataDirectoryInfo.isDir() && !metadataDirectoryInfo.isSymbolicLink()) {
             const QByteArray metadataData = readBoundedFile(applicationDirectory.filePath(QStringLiteral("metadata/app_description.md")), MaxMetadataBytes);
             if (!metadataData.isEmpty())
                 markdown = QString::fromUtf8(metadataData);
+
+            const QFileInfo screenshotsDirectoryInfo(applicationDirectory.filePath(QStringLiteral("metadata/screenshots")));
+            if (screenshotsDirectoryInfo.isDir() && !screenshotsDirectoryInfo.isSymbolicLink()) {
+                const QDir screenshotsDirectory(screenshotsDirectoryInfo.filePath());
+                const QStringList screenshotFiles = screenshotsDirectory.entryList(
+                    {QStringLiteral("*.png"), QStringLiteral("*.jpg"), QStringLiteral("*.jpeg"), QStringLiteral("*.webp")},
+                    QDir::Files | QDir::NoSymLinks,
+                    QDir::Name);
+                for (const QString &screenshotFile : screenshotFiles)
+                    screenshots.append(QUrl::fromLocalFile(screenshotsDirectory.filePath(screenshotFile)).toString());
+            }
         }
 
         const QString category = markdownSection(markdown, QStringLiteral("Category"));
@@ -2842,31 +2886,33 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
         const QRegularExpression distroExpression(QStringLiteral("^\\s+distro\\s*:\\s*(.+)$"), QRegularExpression::MultilineOption);
         const QString distro = cleanValue(distroExpression.match(yaml).captured(1));
         const QString summary = markdownSection(markdown, QStringLiteral("Summary"));
+        const QString description = markdownSection(markdown, QStringLiteral("Description"));
+        const QString homepage = markdownSection(markdown, QStringLiteral("Homepage"));
+        const QString license = markdownSection(markdown, QStringLiteral("License"));
         const QString version = appHubValue(yaml, QStringLiteral("version"));
 
         const bool installed = appHubItemInstalled(application);
-        items.append({
-            name,
-            summary,
-            version,
-            architecture(),
-            application,
-            category,
-            installed ? QStringLiteral("Remove") : QStringLiteral("Build AppBox"),
-            installed ? QStringLiteral("edit-delete") : QStringLiteral("run-build"),
-            QStringLiteral("application-x-iso9660-appimage"),
-            installed ? QStringLiteral("Active Extension") : QStringLiteral("Not Built"),
-            distro,
-            {},
-            {},
-            summary,
-            integration,
-            runtime,
-            {},
-            {},
-            {},
-            {}
-        });
+        AppModel::Item item;
+        item.name = name;
+        item.summary = summary;
+        item.version = version;
+        item.architecture = architecture();
+        item.identifier = application;
+        item.category = category;
+        item.actionText = installed ? QStringLiteral("Remove") : QStringLiteral("Build AppBox");
+        item.actionIcon = installed ? QStringLiteral("edit-delete") : QStringLiteral("run-build");
+        item.icon = QStringLiteral("application-x-iso9660-appimage");
+        item.status = installed ? QStringLiteral("Active Extension") : QStringLiteral("Not Built");
+        item.baseImage = distro;
+        item.description = description.isEmpty() ? summary : description;
+        item.integration = integration;
+        item.type = runtime;
+        item.license = license;
+        item.homepage = homepage;
+        item.runtime = runtime;
+        item.screenshots = screenshots;
+        item.screenshot = screenshots.value(0);
+        items.append(item);
     }
 
     return items;

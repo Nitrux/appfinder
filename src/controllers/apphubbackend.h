@@ -134,6 +134,7 @@ public:
     Q_INVOKABLE void loadMoreFlathubBrowseCategory();
     Q_INVOKABLE void refreshAppHubRepository();
     Q_INVOKABLE void search(const QString &query);
+    Q_INVOKABLE QVariantMap appHubItemDetails(const QString &identifier) const;
     Q_INVOKABLE void loadFlathubAppDetails(const QString &identifier);
     Q_INVOKABLE void installFlatpak(const QString &identifier);
     Q_INVOKABLE void updateFlatpak(const QString &identifier);

@@ -25,7 +25,10 @@ Maui.ScrollColumn {
 
     readonly property string itemName: control.value("name") || control.value("identifier") || qsTr("Application")
     readonly property string itemSummary: control.value("summary")
-    readonly property string itemDeveloper: control.value("developer") || control.sourceTitle
+    readonly property string itemDeveloper: {
+        const developer = control.value("developer")
+        return developer.toLowerCase() === control.sourceTitle.toLowerCase() ? "" : developer
+    }
     readonly property string itemDescription: control.value("description") || control.itemSummary
     readonly property string itemIdentifier: control.value("identifier")
     readonly property string itemVersion: control.value("version")
@@ -48,9 +51,7 @@ Maui.ScrollColumn {
     readonly property var itemSimilarApps: control.objectListValue("similarApps")
     readonly property var itemLinks: {
         const links = []
-        if (!control.showFlathubLinks)
-            return links
-        if (control.itemIdentifier.length > 0)
+        if (control.showFlathubLinks && control.itemIdentifier.length > 0)
             links.push({ title: qsTr("Flathub Page"), url: "https://flathub.org/apps/" + control.itemIdentifier, icon: "applications-internet" })
         if (control.itemHomepage.length > 0)
             links.push({ title: qsTr("Project Website"), url: control.itemHomepage, icon: "globe" })
@@ -168,18 +169,47 @@ Maui.ScrollColumn {
                     Layout.minimumWidth: 0
                     spacing: Maui.Style.space.small
 
-                    Label {
+                    RowLayout {
+                        id: titleRow
                         Layout.fillWidth: true
-                        text: control.itemName
-                        font: Maui.Style.h1Font
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 3
-                        elide: Text.ElideRight
+                        spacing: Maui.Style.space.small
+
+                        Label {
+                            Layout.minimumWidth: 0
+                            text: control.itemName
+                            font: Maui.Style.h1Font
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 3
+                            elide: Text.ElideRight
+                        }
+
+                        Maui.Chip {
+                            id: headerVersionChip
+                            Layout.alignment: Qt.AlignVCenter
+                            visible: control.itemVersion.length > 0
+                            enabled: false
+                            hoverEnabled: false
+                            color: Qt.rgba(0, 0, 0, 0.3)
+                            implicitWidth: headerVersionValue.implicitWidth + Maui.Style.space.medium * 2
+                            implicitHeight: headerVersionValue.implicitHeight + Maui.Style.space.small * 2
+
+                            contentItem: Maui.IconLabel {
+                                id: headerVersionValue
+                                display: ToolButton.TextOnly
+                                text: control.itemVersion
+                                alignment: Qt.AlignHCenter
+                                font.weight: Font.Medium
+                                color: Maui.Theme.textColor
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
                     }
 
                     Label {
                         Layout.fillWidth: true
                         text: control.itemDeveloper
+                        visible: control.itemDeveloper.length > 0
                         color: Maui.Theme.disabledTextColor
                         elide: Text.ElideRight
                     }
@@ -200,11 +230,6 @@ Maui.ScrollColumn {
         }
     }
 
-    ToolSeparator {
-        orientation: Qt.Horizontal
-        Layout.fillWidth: true
-    }
-
     GridLayout {
         id: metadataGrid
         Layout.fillWidth: true
@@ -215,7 +240,6 @@ Maui.ScrollColumn {
         Repeater {
             model: [
                 { value: control.itemSize, label: qsTr("Download size"), positive: false },
-                { value: control.itemVersion, label: qsTr("Version"), positive: false },
                 { value: control.itemCategory, label: qsTr("Category"), positive: false },
                 { value: control.itemLicense, label: qsTr("License"), positive: false },
                 { value: control.itemArchitecture, label: qsTr("Architecture"), positive: false },
@@ -239,15 +263,25 @@ Maui.ScrollColumn {
                     spacing: Maui.Style.space.small
 
                     Maui.Chip {
-                        Layout.fillWidth: true
-                        text: modelData.value
-                        color: modelData.positive ? Maui.Theme.positiveBackgroundColor : Maui.Theme.backgroundColor
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.maximumWidth: statColumn.width
+                        enabled: false
                         hoverEnabled: false
-                        focusPolicy: Qt.NoFocus
-                        label.horizontalAlignment: Text.AlignHCenter
-                        label.wrapMode: Text.WrapAnywhere
-                        label.maximumLineCount: 2
-                        label.elide: Text.ElideRight
+                        color: modelData.positive ? Maui.Theme.positiveBackgroundColor : Qt.rgba(0, 0, 0, 0.3)
+                        implicitWidth: statValue.implicitWidth + Maui.Style.space.medium * 2
+                        implicitHeight: statValue.implicitHeight + Maui.Style.space.small * 2
+
+                        contentItem: Maui.IconLabel {
+                            id: statValue
+                            display: ToolButton.TextOnly
+                            text: modelData.value
+                            alignment: Qt.AlignHCenter
+                            font.weight: Font.Medium
+                            color: Maui.Theme.textColor
+                            label.wrapMode: Text.WrapAnywhere
+                            label.maximumLineCount: 2
+                            label.elide: Text.ElideRight
+                        }
                     }
 
                     Label {

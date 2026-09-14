@@ -29,7 +29,9 @@ Maui.Page {
     property var detailItem: null
 
     function openDetails(item) {
-        control.detailItem = item
+        const identifier = item && item.identifier ? String(item.identifier) : ""
+        const details = identifier.length > 0 ? appHub.appHubItemDetails(identifier) : ({})
+        control.detailItem = details && details.identifier ? details : item
         control.detailVisible = true
     }
 
@@ -1048,6 +1050,7 @@ Maui.Page {
         busy: appHub.busy
         actionHandler: function(identifier) { appHub.appHubAction(identifier) }
         onBackRequested: control.closeDetails()
+        onSimilarRequested: function(item) { control.openDetails(item) }
     }
 
     Component {
@@ -1215,7 +1218,7 @@ Maui.Page {
 
                                             Label {
                                                 Layout.fillWidth: true
-                                                text: model.description.length > 0 ? model.description : model.summary
+                                                text: model.summary.length > 0 ? model.summary : model.description
                                                 color: appHubFeaturedSlide.bannerSecondaryForeground
                                                 horizontalAlignment: Text.AlignHCenter
                                                 wrapMode: Text.WordWrap
