@@ -327,9 +327,7 @@ Maui.ScrollColumn {
 
     Rectangle {
         id: screenshotsCarousel
-        Layout.fillWidth: false
-        Layout.preferredWidth: Math.min(control.availableWidth, Maui.Style.units.gridUnit * 64)
-        Layout.alignment: Qt.AlignHCenter
+        Layout.fillWidth: true
         visible: control.itemScreenshots.length > 0
         implicitHeight: width * 9 / 16
         radius: Maui.Style.radiusV
@@ -700,7 +698,7 @@ Maui.ScrollColumn {
                                                            : Maui.Theme.backgroundColor
                 readonly property bool statusPositive: {
                     const status = itemStatus.toLowerCase()
-                    return status === "installed" || status === "active extension"
+                    return status === "installed" || status === "active"
                            || status.indexOf("up") >= 0 || status.indexOf("running") >= 0
                 }
 
@@ -725,8 +723,8 @@ Maui.ScrollColumn {
 
                                 Item {
                                     Layout.fillWidth: true
+                                    Layout.fillHeight: true
                                     Layout.preferredHeight: Math.min(width * 3 / 5, Maui.Style.units.gridUnit * 12)
-                                    Layout.maximumHeight: Maui.Style.units.gridUnit * 12
                                     clip: true
 
                                     Rectangle {
@@ -816,12 +814,18 @@ Maui.ScrollColumn {
 
                                         Item { Layout.fillWidth: true }
 
-                                        ToolButton {
+                                        Button {
                                             visible: similarDelegate.primaryActionText.length > 0
                                             Layout.minimumWidth: Maui.Style.units.gridUnit * 5
                                             text: similarDelegate.primaryActionText
-                                            display: ToolButton.TextOnly
+                                            display: Button.TextOnly
                                             flat: false
+                                            Maui.Controls.status: {
+                                                const action = similarDelegate.primaryActionText.toLowerCase()
+                                                return action === "install" || action === "build" ? Maui.Controls.Positive
+                                                       : action === "remove" ? Maui.Controls.Negative
+                                                                             : Maui.Controls.Normal
+                                            }
                                             enabled: !control.busy
                                             onClicked: {
                                                 if (control.actionHandler)

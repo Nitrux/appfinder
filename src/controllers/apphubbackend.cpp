@@ -2853,7 +2853,7 @@ QList<AppModel::Item> AppHubBackend::filterAppHubItems(const QList<AppModel::Ite
     for (const AppModel::Item &item : items) {
         if (!m_query.isEmpty() && !matches(item))
             continue;
-        if (m_appHubInstalledOnly && item.status != QLatin1String("Active Extension"))
+        if (m_appHubInstalledOnly && item.status != QLatin1String("Active"))
             continue;
         if (m_appHubInstalledOnly || m_appHubCategory.isEmpty() || normalizedAppHubCategory(item) == m_appHubCategory)
             filtered.append(item);
@@ -2989,7 +2989,7 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
         item.actionText = installed ? QStringLiteral("Remove") : QStringLiteral("Build");
         item.actionIcon = installed ? QStringLiteral("edit-delete") : QStringLiteral("run-build");
         item.icon = QStringLiteral("application-x-iso9660-appimage");
-        item.status = installed ? QStringLiteral("Active Extension") : QStringLiteral("Not Built");
+        item.status = installed ? QStringLiteral("Active") : QStringLiteral("Not Built");
         item.baseImage = distro;
         item.description = description.isEmpty() ? summary : description;
         item.integration = integration;

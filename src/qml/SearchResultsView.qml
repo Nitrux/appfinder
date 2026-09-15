@@ -84,7 +84,7 @@ Maui.ScrollColumn {
                         return actionText !== "install" && actionText !== "remove"
                     }
                     readonly property bool secondaryActionVisible: control.secondaryActionVisibleResolver(model)
-                    readonly property bool statusPositive: resultDelegate.itemStatus === "Installed" || resultDelegate.itemStatus === "Active Extension"
+                    readonly property bool statusPositive: resultDelegate.itemStatus === "Installed" || resultDelegate.itemStatus === "Active"
                                                        || resultDelegate.itemStatus.toLowerCase().indexOf("up") >= 0
                                                        || resultDelegate.itemStatus.toLowerCase().indexOf("running") >= 0
 
