@@ -644,32 +644,52 @@ Maui.ApplicationWindow {
 
     Maui.InfoDialog {
         id: createDialog
+        implicitWidth: Math.min(root.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 30)
         title: qsTr("New Container")
-        message: qsTr("Create a development sandbox with Distrobox.")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
-        Maui.TextField {
-            id: containerNameField
-            Layout.fillWidth: true
-            placeholderText: qsTr("Container name")
-        }
+        Maui.SectionGroup {
+            Maui.FlexSectionItem {
+                label1.text: qsTr("Container name")
+                label2.text: qsTr("Name used to identify the container.")
+                label2.wrapMode: Text.Wrap
 
-        Maui.TextField {
-            id: containerImageField
-            Layout.fillWidth: true
-            placeholderText: qsTr("Base image (for example, ubuntu:24.04)")
-            text: "ubuntu:24.04"
-        }
+                Maui.TextField {
+                    id: containerNameField
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("my-container")
+                }
+            }
 
-        Maui.TextField {
-            id: containerHomeField
-            Layout.fillWidth: true
-            placeholderText: qsTr("Custom home directory (optional)")
+            Maui.FlexSectionItem {
+                label1.text: qsTr("Base image")
+                label2.text: qsTr("Image used as the container's operating system and package base.")
+                label2.wrapMode: Text.Wrap
+
+                Maui.TextField {
+                    id: containerImageField
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("ubuntu:24.04")
+                }
+            }
+
+            Maui.FlexSectionItem {
+                label1.text: qsTr("Custom home directory")
+                label2.text: qsTr("Host directory used as the container home. Optional.")
+                label2.wrapMode: Text.Wrap
+
+                Maui.TextField {
+                    id: containerHomeField
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("/path/to/container-home")
+                }
+            }
         }
 
         onAccepted: {
             appHub.createDistrobox(containerNameField.text, containerImageField.text, containerHomeField.text)
             containerNameField.clear()
+            containerImageField.clear()
             containerHomeField.clear()
             close()
         }

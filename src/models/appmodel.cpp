@@ -81,6 +81,8 @@ QVariant AppModel::data(const QModelIndex &index, int role) const
         return item.homepage;
     case RuntimeRole:
         return item.runtime;
+    case OsTargetRole:
+        return item.osTarget;
     case ScreenshotsRole:
         return item.screenshots;
     case ReleasesRole:
@@ -118,6 +120,7 @@ QHash<int, QByteArray> AppModel::roleNames() const
         {LicenseRole, "license"},
         {HomepageRole, "homepage"},
         {RuntimeRole, "runtime"},
+        {OsTargetRole, "osTarget"},
         {ScreenshotsRole, "screenshots"},
         {ReleasesRole, "releases"},
     };

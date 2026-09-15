@@ -39,6 +39,28 @@ Maui.Page {
         control.detailVisible = false
         control.detailItem = null
     }
+
+    function distributionDisplayName(identifier) {
+        const normalized = String(identifier || "").trim().toLowerCase()
+        const knownNames = {
+            "debian": "Debian",
+            "debian-snapshot": qsTr("Debian (Snapshot)"),
+            "devuan": "Devuan",
+            "kde-neon": "KDE Neon",
+            "nitrux": "Nitrux",
+            "ubuntu": "Ubuntu",
+            "ubuntu-ports": "Ubuntu Ports",
+            "zbkit": "ZBKit"
+        }
+        if (knownNames[normalized])
+            return knownNames[normalized]
+
+        const words = normalized.split(/[-_]+/).filter(word => word.length > 0)
+        for (let index = 0; index < words.length; ++index)
+            words[index] = words[index].charAt(0).toUpperCase() + words[index].slice(1)
+        return words.join(" ")
+    }
+
     property string selectedInstalledAppBox: ""
     property string editingProject: ""
     property string bundleProjectId: ""
@@ -1047,8 +1069,24 @@ Maui.Page {
         z: 2
         itemData: control.detailItem
         sourceTitle: qsTr("NX AppHub")
+        developerFallback: {
+            const distribution = control.detailItem && control.detailItem.baseImage
+                                 ? control.distributionDisplayName(control.detailItem.baseImage)
+                                 : ""
+            return distribution.length > 0 ? qsTr("Source: %1").arg(distribution) : ""
+        }
         descriptionIsMarkdown: true
         busy: appHub.busy
+        actionTextResolver: function(item) {
+            const action = item && item.actionText ? String(item.actionText) : ""
+            return action.toLowerCase() === "build" && !appHub.appHubOsTargetMatches(item.osTarget)
+                   ? qsTr("Unavailable")
+                   : action
+        }
+        actionEnabledResolver: function(item) {
+            const action = item && item.actionText ? String(item.actionText).toLowerCase() : ""
+            return action !== "build" || appHub.appHubOsTargetMatches(item.osTarget)
+        }
         actionHandler: function(identifier) { appHub.appHubAction(identifier) }
         onBackRequested: control.closeDetails()
         onSimilarRequested: function(item) { control.openDetails(item) }

@@ -640,6 +640,7 @@ QVariantMap appItemVariantMap(const AppModel::Item &item)
     values.insert(QStringLiteral("license"), item.license);
     values.insert(QStringLiteral("homepage"), item.homepage);
     values.insert(QStringLiteral("runtime"), item.runtime);
+    values.insert(QStringLiteral("osTarget"), item.osTarget);
     values.insert(QStringLiteral("screenshots"), item.screenshots);
     values.insert(QStringLiteral("releases"), item.releases);
     return values;
@@ -1231,6 +1232,14 @@ void AppHubBackend::search(const QString &query)
         m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
         break;
     }
+}
+
+bool AppHubBackend::appHubOsTargetMatches(const QString &target) const
+{
+    const QString normalizedTarget = target.trimmed();
+    return !normalizedTarget.isEmpty()
+        && QSysInfo::productType().compare(QStringLiteral("nitrux"), Qt::CaseInsensitive) == 0
+        && QSysInfo::productVersion().trimmed() == normalizedTarget;
 }
 
 QVariantMap AppHubBackend::appHubItemDetails(const QString &identifier) const
@@ -2960,13 +2969,14 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
         const QString category = markdownSection(markdown, QStringLiteral("Category"));
         const QString integration = integrationType(yaml);
         const QString runtime = appHubValue(yaml, QStringLiteral("runtime"));
-        const QRegularExpression distroExpression(QStringLiteral("^\\s+distro\\s*:\\s*(.+)$"), QRegularExpression::MultilineOption);
+        const QRegularExpression distroExpression(QStringLiteral("^\\s*-?\\s*distro\\s*:\\s*(.+)$"), QRegularExpression::MultilineOption);
         const QString distro = cleanValue(distroExpression.match(yaml).captured(1));
         const QString summary = markdownSection(markdown, QStringLiteral("Summary"));
         const QString description = markdownSection(markdown, QStringLiteral("Description"));
         const QString homepage = markdownSection(markdown, QStringLiteral("Homepage"));
         const QString license = markdownSection(markdown, QStringLiteral("License"));
         const QString version = appHubValue(yaml, QStringLiteral("version"));
+        const QString osTarget = appHubValue(yaml, QStringLiteral("os-target"));
 
         const bool installed = appHubItemInstalled(application);
         AppModel::Item item;
@@ -2976,7 +2986,7 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
         item.architecture = architecture();
         item.identifier = application;
         item.category = category;
-        item.actionText = installed ? QStringLiteral("Remove") : QStringLiteral("Build AppBox");
+        item.actionText = installed ? QStringLiteral("Remove") : QStringLiteral("Build");
         item.actionIcon = installed ? QStringLiteral("edit-delete") : QStringLiteral("run-build");
         item.icon = QStringLiteral("application-x-iso9660-appimage");
         item.status = installed ? QStringLiteral("Active Extension") : QStringLiteral("Not Built");
@@ -2987,6 +2997,7 @@ QList<AppModel::Item> AppHubBackend::loadAppHubItems() const
         item.license = license;
         item.homepage = homepage;
         item.runtime = runtime;
+        item.osTarget = osTarget;
         item.screenshots = screenshots;
         item.screenshot = screenshots.value(0);
         items.append(item);

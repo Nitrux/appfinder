@@ -44,6 +44,7 @@ public:
         QString license {};
         QString homepage {};
         QString runtime {};
+        QString osTarget {};
         QStringList screenshots {};
         QVariantList releases {};
     };
@@ -75,6 +76,7 @@ public:
         LicenseRole,
         HomepageRole,
         RuntimeRole,
+        OsTargetRole,
         ScreenshotsRole,
         ReleasesRole
     };

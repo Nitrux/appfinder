@@ -13,10 +13,12 @@ Maui.ScrollColumn {
 
     property var itemData: null
     property string sourceTitle: ""
+    property string developerFallback: ""
     property var actionHandler: null
     property var actionTextResolver: function(item) {
         return item && item.actionText ? String(item.actionText) : ""
     }
+    property var actionEnabledResolver: function(item) { return true }
     property bool busy: false
     property bool showFlathubLinks: false
     property bool descriptionIsMarkdown: false
@@ -30,7 +32,8 @@ Maui.ScrollColumn {
     readonly property string itemSummary: control.value("summary")
     readonly property string itemDeveloper: {
         const developer = control.value("developer")
-        return developer.toLowerCase() === control.sourceTitle.toLowerCase() ? "" : developer
+        const filteredDeveloper = developer.toLowerCase() === control.sourceTitle.toLowerCase() ? "" : developer
+        return filteredDeveloper.length > 0 ? filteredDeveloper : control.developerFallback
     }
     readonly property string itemDescription: control.value("description") || control.itemSummary
     readonly property string itemIdentifier: control.value("identifier")
@@ -38,11 +41,11 @@ Maui.ScrollColumn {
     readonly property string itemArchitecture: control.value("architecture")
     readonly property string itemCategory: control.value("category")
     readonly property string itemSize: control.value("size")
-    readonly property string itemBaseImage: control.value("baseImage")
     readonly property string itemIntegration: control.value("integration")
     readonly property string itemLicense: control.value("license")
     readonly property string itemHomepage: control.value("homepage")
     readonly property string itemRuntime: control.value("runtime") || control.value("type")
+    readonly property string itemOsTarget: control.value("osTarget")
     readonly property string itemIconUrl: control.value("iconUrl")
     readonly property string itemIcon: control.value("icon")
     readonly property string itemScreenshot: control.value("screenshot")
@@ -61,9 +64,10 @@ Maui.ScrollColumn {
         return links
     }
     readonly property string actionText: control.actionTextResolver(control.itemData)
+    readonly property bool actionEnabled: control.actionEnabledResolver(control.itemData)
     readonly property int actionStatus: {
         const action = control.actionText.toLowerCase()
-        return action === "install" ? Maui.Controls.Positive
+        return action === "install" || action === "build" ? Maui.Controls.Positive
                : action === "remove" ? Maui.Controls.Negative
                                        : Maui.Controls.Normal
     }
@@ -244,7 +248,7 @@ Maui.ScrollColumn {
                     visible: control.actionText.length > 0 && control.actionHandler !== null
                     text: control.actionText
                     display: Button.TextOnly
-                    enabled: !control.busy
+                    enabled: control.actionEnabled && !control.busy
                     Maui.Controls.status: control.actionStatus
                     onClicked: control.actionHandler(control.itemIdentifier, control.itemData)
                 }
@@ -265,6 +269,7 @@ Maui.ScrollColumn {
                 { value: control.itemCategory, label: qsTr("Category"), positive: false },
                 { value: control.itemLicense, label: qsTr("License"), positive: false },
                 { value: control.itemArchitecture, label: qsTr("Architecture"), positive: false },
+                { value: control.itemOsTarget, label: qsTr("OS Target"), positive: false },
                 { value: control.itemRuntime, label: qsTr("Runtime"), positive: false },
                 { value: control.itemIntegration, label: qsTr("Integration"), positive: false }
             ]
@@ -666,7 +671,7 @@ Maui.ScrollColumn {
             Layout.preferredHeight: contentHeight
             padding: 0
             itemSize: fittedItemSize
-            itemHeight: itemSize * 19 / 20
+            itemHeight: itemSize + Maui.Style.rowHeight
             adaptContent: true
             wheelResizeEnabled: false
             pinchEnabled: false
@@ -843,27 +848,4 @@ Maui.ScrollColumn {
         }
     }
 
-    Rectangle {
-        Layout.fillWidth: true
-        visible: control.itemBaseImage.length > 0
-        implicitHeight: detailsColumn.implicitHeight + Maui.Style.contentMargins * 2
-        radius: Maui.Style.radiusV
-        color: Maui.Theme.alternateBackgroundColor
-
-        ColumnLayout {
-            id: detailsColumn
-            anchors.fill: parent
-            anchors.margins: Maui.Style.contentMargins
-            spacing: Maui.Style.space.small
-
-            Label {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 0
-                visible: control.itemBaseImage.length > 0
-                text: qsTr("Base image: %1").arg(control.itemBaseImage)
-                wrapMode: Text.WrapAnywhere
-            }
-
-        }
-    }
 }
