@@ -20,6 +20,7 @@ Maui.ScrollColumn {
     }
     property var actionEnabledResolver: function(item) { return true }
     property bool busy: false
+    property string operationPrefix: ""
     property bool showFlathubLinks: false
     property bool descriptionIsMarkdown: false
     property bool releasesExpanded: false
@@ -63,13 +64,58 @@ Maui.ScrollColumn {
             links.push({ title: qsTr("Project Website"), url: control.itemHomepage, icon: "globe" })
         return links
     }
-    readonly property string actionText: control.actionTextResolver(control.itemData)
+    readonly property string resolvedActionText: control.actionTextResolver(control.itemData)
+    readonly property bool itemOperationActive: control.resolvedActionText.length > 0
+                                                && appHub.operationAction.startsWith(control.operationPrefix)
+                                                && control.operationPrefix.length > 0
+                                                && appHub.operationIdentifier === control.itemIdentifier
+    readonly property string actionText: control.itemOperationActive ? appHub.operationLabel : control.resolvedActionText
     readonly property bool actionEnabled: control.actionEnabledResolver(control.itemData)
     readonly property int actionStatus: {
-        const action = control.actionText.toLowerCase()
-        return action === "install" || action === "build" ? Maui.Controls.Positive
+        const action = control.resolvedActionText.toLowerCase()
+        return action === "install" || action === "build" || action === "activate" ? Maui.Controls.Positive
                : action === "remove" ? Maui.Controls.Negative
                                        : Maui.Controls.Normal
+    }
+
+    function itemDataWithAction(identifier, actionText, actionIcon, status) {
+        if (!control.itemData)
+            return control.itemData
+
+        function copyItem(source) {
+            const copy = ({})
+            for (const key in source)
+                copy[key] = source[key]
+            return copy
+        }
+
+        const normalizedIdentifier = String(identifier || "")
+        const updatedData = copyItem(control.itemData)
+        let changed = false
+        if (String(updatedData.identifier || "") === normalizedIdentifier) {
+            updatedData.actionText = actionText
+            updatedData.actionIcon = actionIcon
+            updatedData.status = status
+            changed = true
+        }
+
+        const similarApps = control.itemData.similarApps
+        if (similarApps && typeof similarApps.length !== "undefined") {
+            const updatedSimilarApps = []
+            for (let index = 0; index < similarApps.length; ++index) {
+                const item = copyItem(similarApps[index])
+                if (String(item.identifier || "") === normalizedIdentifier) {
+                    item.actionText = actionText
+                    item.actionIcon = actionIcon
+                    item.status = status
+                    changed = true
+                }
+                updatedSimilarApps.push(item)
+            }
+            updatedData.similarApps = updatedSimilarApps
+        }
+
+        return changed ? updatedData : control.itemData
     }
 
     function value(name) {
@@ -610,6 +656,7 @@ Maui.ScrollColumn {
         Maui.SectionHeader {
             Layout.fillWidth: true
             text1: qsTr("Links")
+            text2: qsTr("External resources.")
         }
 
         GridLayout {
@@ -650,6 +697,7 @@ Maui.ScrollColumn {
         Maui.SectionHeader {
             Layout.fillWidth: true
             text1: qsTr("Similar Apps")
+            text2: qsTr("You may also like.")
         }
 
         Maui.GridBrowser {
@@ -691,6 +739,10 @@ Maui.ScrollColumn {
                 readonly property string itemIdentifier: modelData.identifier ? String(modelData.identifier) : ""
                 readonly property string itemStatus: modelData.status ? String(modelData.status) : ""
                 readonly property string primaryActionText: modelData.actionText ? String(modelData.actionText) : qsTr("Install")
+                readonly property string displayActionText: appHub.operationAction.startsWith(control.operationPrefix)
+                                                            && control.operationPrefix.length > 0
+                                                            && appHub.operationIdentifier === itemIdentifier
+                                                            ? appHub.operationLabel : primaryActionText
                 readonly property color previewBackground: itemAccentColor.length > 0
                                                            ? Maui.ColorUtils.tintWithAlpha(Maui.Theme.alternateBackgroundColor,
                                                                                             itemAccentColor,
@@ -817,12 +869,12 @@ Maui.ScrollColumn {
                                         Button {
                                             visible: similarDelegate.primaryActionText.length > 0
                                             Layout.minimumWidth: Maui.Style.units.gridUnit * 5
-                                            text: similarDelegate.primaryActionText
+                                            text: similarDelegate.displayActionText
                                             display: Button.TextOnly
                                             flat: false
                                             Maui.Controls.status: {
                                                 const action = similarDelegate.primaryActionText.toLowerCase()
-                                                return action === "install" || action === "build" ? Maui.Controls.Positive
+                                                return action === "install" || action === "build" || action === "activate" ? Maui.Controls.Positive
                                                        : action === "remove" ? Maui.Controls.Negative
                                                                              : Maui.Controls.Normal
                                             }

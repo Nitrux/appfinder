@@ -59,6 +59,9 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(int flathubCategoryRevision READ flathubCategoryRevision NOTIFY flathubCategoryRevisionChanged)
     Q_PROPERTY(int currentSection READ currentSection WRITE setCurrentSection NOTIFY currentSectionChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
+    Q_PROPERTY(QString operationAction READ operationAction NOTIFY operationStateChanged)
+    Q_PROPERTY(QString operationIdentifier READ operationIdentifier NOTIFY operationStateChanged)
+    Q_PROPERTY(QString operationLabel READ operationLabel NOTIFY operationStateChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
     Q_PROPERTY(QString operationLog READ operationLog NOTIFY operationLogChanged)
 
@@ -121,6 +124,9 @@ public:
     void setCurrentSection(int section);
 
     bool busy() const;
+    QString operationAction() const;
+    QString operationIdentifier() const;
+    QString operationLabel() const;
     QString statusMessage() const;
     QString operationLog() const;
 
@@ -176,8 +182,7 @@ signals:
     void flathubAppDetailsReady(const QVariantMap &details);
     void flatpakOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
     void appHubOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
-    void distroboxStartFinished(const QString &identifier, bool success, const QString &error);
-    void distroboxBulkOperationFinished(const QString &action, bool success, const QString &message);
+    void distroboxOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
     void userBundleOutputUrlChanged();
     void userBundleGenerated(const QString &projectId, bool success, const QString &error);
     void userBundleSaved(const QString &projectId, bool success, const QString &error);
@@ -186,6 +191,7 @@ signals:
     void appHubCategoryChanged();
     void appHubInstalledOnlyChanged();
     void busyChanged();
+    void operationStateChanged();
     void statusMessageChanged();
     void operationLogChanged();
 
@@ -233,7 +239,9 @@ private:
                                   const QString &identifier,
                                   bool success,
                                   const QString &error = {});
-    void emitDistroboxBulkResult(Operation operation, bool success, const QString &message);
+    void emitDistroboxOperationResult(Operation operation, const QString &identifier, bool success, const QString &error = {});
+    QString notificationName(const QString &identifier) const;
+    void showOperationNotification(Operation operation, const QString &identifier) const;
 
     void refreshFlatpakInstalled();
     void refreshFlatpakUpdates();
@@ -336,6 +344,7 @@ private:
     QString m_query;
     QString m_flatpakSearchQuery;
     QString m_operationIdentifier;
+    QString m_operationDisplayName;
     QString m_flatpakAddonsApplication;
     bool m_flatpakAddonsSystemWide = false;
     QString m_flatpakUpdateIdentifier;

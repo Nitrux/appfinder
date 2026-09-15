@@ -145,13 +145,13 @@ Maui.Page {
 
         function onFlatpakOperationFinished(identifier, action, success, error) {
             if (success) {
-                const title = action === "install" ? qsTr("App installed")
-                            : action === "remove" ? qsTr("App removed")
-                                                  : qsTr("App updated")
-                const body = action === "install" ? qsTr("%1 was installed successfully.").arg(identifier)
-                           : action === "remove" ? qsTr("%1 was removed successfully.").arg(identifier)
-                                                 : qsTr("%1 was updated successfully.").arg(identifier)
-                Maui.App.rootComponent.notify("dialog-ok", title, body)
+                if (control.detailVisible && (action === "install" || action === "remove")) {
+                    const installed = action === "install"
+                    control.detailItem = flathubDetailsView.itemDataWithAction(identifier,
+                                                                               installed ? qsTr("Remove") : qsTr("Install"),
+                                                                               installed ? "edit-delete" : "list-add",
+                                                                               installed ? qsTr("Installed") : qsTr("Available"))
+                }
                 return
             }
 
@@ -234,11 +234,13 @@ Maui.Page {
     }
 
     AppDetailsView {
+        id: flathubDetailsView
         anchors.fill: parent
         visible: control.detailVisible
         z: 2
         itemData: control.detailItem
         sourceTitle: qsTr("Flathub")
+        operationPrefix: "flatpak-"
         showFlathubLinks: true
         busy: appHub.busy
         actionHandler: function(identifier) { control.flatpakAction(identifier) }
@@ -1134,26 +1136,13 @@ Maui.Page {
                             label1.text: model.name
                             label1.font.weight: Font.DemiBold
                             label1.elide: Text.ElideRight
-                            label2.text: updateDelegate.updating
-                                         ? (appHub.flatpakUpdateProgress >= 0
-                                            ? qsTr("Updating… %1%").arg(appHub.flatpakUpdateProgress)
-                                            : qsTr("Preparing update…"))
-                                         : (model.version.length > 0
-                                            ? qsTr("Version %1 • %2 download").arg(model.version).arg(control.sizeText(model.size))
-                                            : qsTr("A new version is available"))
+                            label2.text: model.version.length > 0
+                                         ? qsTr("Version %1 • %2 download").arg(model.version).arg(control.sizeText(model.size))
+                                         : qsTr("A new version is available")
                             label2.elide: Text.ElideRight
 
-                            ProgressBar {
-                                visible: updateDelegate.updating
-                                Layout.preferredWidth: Maui.Style.units.gridUnit * 8
-                                from: 0
-                                to: 100
-                                indeterminate: appHub.flatpakUpdateProgress < 0
-                                value: Math.max(0, appHub.flatpakUpdateProgress)
-                            }
-
                             Button {
-                                text: updateDelegate.updating ? qsTr("Updating…") : qsTr("Update")
+                                text: updateDelegate.updating ? appHub.operationLabel : qsTr("Update")
                                 enabled: !appHub.busy
                                 onClicked: appHub.updateFlatpak(model.identifier)
                             }
@@ -1364,6 +1353,7 @@ Maui.Page {
 
         SearchResultsView {
             sourceModel: appHub.flathubModel
+            operationPrefix: "flatpak-"
             query: control.query
             sourceTitle: qsTr("Flathub")
             sourceDescription: qsTr("Search applications across Flathub.")

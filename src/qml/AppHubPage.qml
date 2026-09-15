@@ -694,13 +694,13 @@ Maui.Page {
 
         function onAppHubOperationFinished(identifier, action, success, error) {
             if (success) {
-                const title = action === "install" ? qsTr("AppBox installed")
-                            : action === "remove" ? qsTr("AppBox removed")
-                                                  : qsTr("AppBox restored")
-                const body = action === "install" ? qsTr("%1 was installed successfully.").arg(identifier)
-                           : action === "remove" ? qsTr("%1 was removed successfully.").arg(identifier)
-                                                 : qsTr("%1 was restored successfully.").arg(identifier)
-                Maui.App.rootComponent.notify("dialog-ok", title, body)
+                if (control.detailVisible && (action === "install" || action === "remove")) {
+                    const installed = action === "install"
+                    control.detailItem = appHubDetailsView.itemDataWithAction(identifier,
+                                                                              installed ? qsTr("Remove") : qsTr("Activate"),
+                                                                              installed ? "edit-delete" : "run-build",
+                                                                              installed ? qsTr("Active") : qsTr("Inactive"))
+                }
                 return
             }
 
@@ -713,8 +713,6 @@ Maui.Page {
         function onUserBundleGenerated(projectId, success, error) {
             if (success) {
                 control.openProject(projectId)
-                Maui.App.rootComponent.notify("dialog-ok", qsTr("Bundle project generated"),
-                                              qsTr("%1 is ready to edit.").arg(projectId))
             } else {
                 Maui.App.rootComponent.notify("dialog-error", qsTr("Project generation failed"), errorBody(error))
             }
@@ -738,8 +736,6 @@ Maui.Page {
             if (success) {
                 if (projectId === control.editingProject)
                     control.artifactUrl = String(artifact)
-                Maui.App.rootComponent.notify("dialog-ok", qsTr("Bundle built"),
-                                              qsTr("%1 was built successfully.").arg(projectId))
             } else {
                 Maui.App.rootComponent.notify("dialog-error", qsTr("Build failed"), errorBody(error))
             }
@@ -1052,6 +1048,7 @@ Maui.Page {
 
         SearchResultsView {
             sourceModel: appHub.appHubModel
+            operationPrefix: "apphub-"
             query: control.query
             sourceTitle: qsTr("NX AppHub")
             sourceDescription: qsTr("Search AppBox recipes in NX AppHub.")
@@ -1064,11 +1061,13 @@ Maui.Page {
     }
 
     AppDetailsView {
+        id: appHubDetailsView
         anchors.fill: parent
         visible: control.detailVisible
         z: 2
         itemData: control.detailItem
         sourceTitle: qsTr("NX AppHub")
+        operationPrefix: "apphub-"
         developerFallback: {
             const distribution = control.detailItem && control.detailItem.baseImage
                                  ? control.distributionDisplayName(control.detailItem.baseImage)
@@ -1079,13 +1078,13 @@ Maui.Page {
         busy: appHub.busy
         actionTextResolver: function(item) {
             const action = item && item.actionText ? String(item.actionText) : ""
-            return action.toLowerCase() === "build" && !appHub.appHubOsTargetMatches(item.osTarget)
+            return action.toLowerCase() === "activate" && !appHub.appHubOsTargetMatches(item.osTarget)
                    ? qsTr("Unavailable")
                    : action
         }
         actionEnabledResolver: function(item) {
             const action = item && item.actionText ? String(item.actionText).toLowerCase() : ""
-            return action !== "build" || appHub.appHubOsTargetMatches(item.osTarget)
+            return action !== "activate" || appHub.appHubOsTargetMatches(item.osTarget)
         }
         actionHandler: function(identifier) { appHub.appHubAction(identifier) }
         onBackRequested: control.closeDetails()
@@ -1548,7 +1547,7 @@ Maui.Page {
 
                         holder.visible: count === 0
                         holder.title: qsTr("No AppBoxes Installed")
-                        holder.body: qsTr("Build an AppBox to see it here.")
+                        holder.body: qsTr("Activate an AppBox to see it here.")
 
                         delegate: Maui.ListBrowserDelegate {
                             id: installedDelegate

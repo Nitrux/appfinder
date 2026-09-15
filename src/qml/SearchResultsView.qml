@@ -19,6 +19,7 @@ Maui.ScrollColumn {
     property string emptyBody: qsTr("Try a different search query.")
     property bool previewEnabled: false
     property bool busy: false
+    property string operationPrefix: ""
     readonly property real targetItemSize: Maui.Style.units.gridUnit * 18
     readonly property real minimumItemSize: Maui.Style.units.gridUnit * 14
     readonly property real maximumItemSize: Maui.Style.units.gridUnit * 24
@@ -78,6 +79,11 @@ Maui.ScrollColumn {
                                                                                                 0.45)
                                                                : Maui.Theme.backgroundColor
                     readonly property string primaryActionText: control.actionTextResolver(model)
+                    readonly property string displayActionText: primaryActionText.length > 0
+                                                                && appHub.operationAction.startsWith(control.operationPrefix)
+                                                                && control.operationPrefix.length > 0
+                                                                && appHub.operationIdentifier === itemIdentifier
+                                                                ? appHub.operationLabel : primaryActionText
                     readonly property string primaryActionIcon: control.actionIconResolver(model)
                     readonly property bool primaryActionIconVisible: {
                         const actionText = resultDelegate.primaryActionText.toLowerCase()
@@ -205,7 +211,7 @@ Maui.ScrollColumn {
 
                                     ToolButton {
                                         visible: resultDelegate.primaryActionText.length > 0
-                                        text: resultDelegate.primaryActionText
+                                        text: resultDelegate.displayActionText
                                         icon.name: resultDelegate.primaryActionIconVisible ? resultDelegate.primaryActionIcon : ""
                                         display: resultDelegate.primaryActionIconVisible ? ToolButton.TextBesideIcon : ToolButton.TextOnly
                                         flat: false

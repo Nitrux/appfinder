@@ -35,24 +35,19 @@ Maui.Page {
     Connections {
         target: appHub
 
-        function onDistroboxStartFinished(identifier, success, error) {
-            if (success) {
-                Maui.App.rootComponent.notify("dialog-ok", qsTr("Container started"),
-                                              qsTr("%1 started successfully.").arg(identifier))
+        function onDistroboxOperationFinished(identifier, action, success, error) {
+            if (success)
                 return
-            }
 
             const body = String(error || "").trim()
-            Maui.App.rootComponent.notify("dialog-error", qsTr("Container could not be started"),
-                                          body.length > 0 ? body : qsTr("The container failed to start."))
-        }
-
-        function onDistroboxBulkOperationFinished(action, success, message) {
-            const stopping = action === "stop"
-            const body = String(message || "").trim()
-            Maui.App.rootComponent.notify(success ? "dialog-ok" : "dialog-error",
-                                          success ? (stopping ? qsTr("Containers stopped") : qsTr("Containers deleted"))
-                                                  : (stopping ? qsTr("Could not stop containers") : qsTr("Could not delete containers")),
+            const title = action === "create" ? qsTr("Could not create container")
+                        : action === "start" ? qsTr("Could not start container")
+                        : action === "stop" ? qsTr("Could not stop container")
+                        : action === "stop-all" ? qsTr("Could not stop containers")
+                        : action === "clone" ? qsTr("Could not clone container")
+                        : action === "remove" ? qsTr("Could not delete container")
+                                              : qsTr("Could not delete containers")
+            Maui.App.rootComponent.notify("dialog-error", title,
                                           body.length > 0 ? body : qsTr("The container operation failed."))
         }
     }
@@ -61,6 +56,7 @@ Maui.Page {
         anchors.fill: parent
         visible: control.searchActive && !control.detailVisible
         sourceModel: appHub.distroboxModel
+        operationPrefix: "distrobox-"
         query: control.query
         sourceTitle: qsTr("Distrobox")
         sourceDescription: qsTr("Search development containers.")
@@ -197,14 +193,16 @@ Maui.Page {
 
                             Button {
                                 visible: !containerCard.running
-                                text: qsTr("Start Container")
+                                text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Start Container")
                                 enabled: !appHub.busy
                                 onClicked: appHub.startDistrobox(model.name)
                             }
 
                             Button {
                                 visible: containerCard.running
-                                text: qsTr("Stop Container")
+                                text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Stop Container")
                                 enabled: !appHub.busy
                                 onClicked: appHub.stopDistrobox(model.name)
                             }
@@ -218,7 +216,8 @@ Maui.Page {
                             }
 
                             Button {
-                                text: qsTr("Delete")
+                                text: appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Delete")
                                 enabled: !appHub.busy
                                 onClicked: appHub.removeDistrobox(model.name)
                             }
@@ -235,6 +234,7 @@ Maui.Page {
         z: 2
         itemData: control.detailItem
         sourceTitle: qsTr("Distrobox")
+        operationPrefix: "distrobox-"
         busy: appHub.busy
         actionTextResolver: function(item) {
             const status = item && item.status ? String(item.status).toLowerCase() : ""
