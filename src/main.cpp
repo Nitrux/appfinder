@@ -8,7 +8,11 @@
 #include <QCoreApplication>
 #include <QDate>
 #include <QIcon>
+#include <QNetworkAccessManager>
+#include <QNetworkDiskCache>
+#include <QNetworkRequest>
 #include <QQmlApplicationEngine>
+#include <QQmlNetworkAccessManagerFactory>
 #include <QSurfaceFormat>
 #include <QStandardPaths>
 #include <QUrl>
@@ -22,6 +26,46 @@
 #include "controllers/apphubbackend.h"
 
 namespace {
+
+class CachedNetworkAccessManager final : public QNetworkAccessManager
+{
+public:
+    explicit CachedNetworkAccessManager(QObject *parent = nullptr)
+        : QNetworkAccessManager(parent)
+    {
+        auto *diskCache = new QNetworkDiskCache(this);
+        diskCache->setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                                     + QStringLiteral("/qml-network"));
+        setCache(diskCache);
+    }
+
+protected:
+    QNetworkReply *createRequest(Operation operation,
+                                 const QNetworkRequest &request,
+                                 QIODevice *outgoingData = nullptr) override
+    {
+        QNetworkRequest cachedRequest(request);
+        const QUrl url = cachedRequest.url();
+        if (operation == GetOperation
+            && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https"))
+            && url.path().contains(QLatin1String("/screenshots/"))) {
+            cachedRequest.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
+                                       QNetworkRequest::PreferCache);
+            cachedRequest.setAttribute(QNetworkRequest::CacheSaveControlAttribute, true);
+        }
+
+        return QNetworkAccessManager::createRequest(operation, cachedRequest, outgoingData);
+    }
+};
+
+class CachedNetworkAccessManagerFactory final : public QQmlNetworkAccessManagerFactory
+{
+public:
+    QNetworkAccessManager *create(QObject *parent) override
+    {
+        return new CachedNetworkAccessManager(parent);
+    }
+};
 
 bool portalDesktopFileIsAvailable()
 {
@@ -68,7 +112,9 @@ int main(int argc, char *argv[])
     MauiApp::instance()->setIconName(QStringLiteral("application-x-iso9660-appimage"));
 
     AppHubBackend backend;
+    CachedNetworkAccessManagerFactory networkAccessManagerFactory;
     QQmlApplicationEngine engine;
+    engine.setNetworkAccessManagerFactory(&networkAccessManagerFactory);
     engine.rootContext()->setContextObject(new KLocalizedContext(&engine));
     engine.rootContext()->setContextProperty(QStringLiteral("appHub"), &backend);
     const QUrl url(QStringLiteral("qrc:/org/nitrux/appfinder/qml/Main.qml"));

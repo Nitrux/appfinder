@@ -1074,6 +1074,14 @@ void AppHubBackend::emitAppHubOperationResult(Operation operation,
     emit appHubOperationFinished(identifier, action, success, error);
 }
 
+void AppHubBackend::emitDistroboxBulkResult(Operation operation, bool success, const QString &message)
+{
+    if (operation == Operation::DistroboxStopAll)
+        emit distroboxBulkOperationFinished(QStringLiteral("stop"), success, message);
+    else if (operation == Operation::DistroboxRemoveAll)
+        emit distroboxBulkOperationFinished(QStringLiteral("remove"), success, message);
+}
+
 void AppHubBackend::refresh()
 {
     refreshFlatpakInstalled();
@@ -1797,8 +1805,27 @@ void AppHubBackend::createDistrobox(const QString &name, const QString &image, c
 
 void AppHubBackend::startDistrobox(const QString &name)
 {
-    // Run through Station so startup diagnostics remain visible to the user.
-    enterDistrobox(name);
+    if (!isSafeIdentifier(name)) {
+        const QString error = QStringLiteral("Invalid Distrobox name.");
+        setStatusMessage(error);
+        emit distroboxStartFinished(name, false, error);
+        return;
+    }
+    const QString executable = findExecutable(QStringLiteral("podman"));
+    if (executable.isEmpty()) {
+        const QString error = QStringLiteral("podman is not installed.");
+        setStatusMessage(error);
+        emit distroboxStartFinished(name, false, error);
+        return;
+    }
+    if (!startOperation(executable,
+                        {QStringLiteral("container"), QStringLiteral("start"), name},
+                        Operation::DistroboxStart,
+                        name)) {
+        emit distroboxStartFinished(name, false, statusMessage());
+        return;
+    }
+    setStatusMessage(QStringLiteral("Starting %1…").arg(name));
 }
 
 void AppHubBackend::stopDistrobox(const QString &name)
@@ -1815,6 +1842,28 @@ void AppHubBackend::stopDistrobox(const QString &name)
     if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("kill"), name}, Operation::DistroboxStop, name))
         return;
     setStatusMessage(QStringLiteral("Stopping %1…").arg(name));
+}
+
+void AppHubBackend::stopAllDistroboxes()
+{
+    refreshDistrobox();
+    QStringList names;
+    for (const AppModel::Item &item : m_allDistroboxItems) {
+        const QString status = item.status.toLower();
+        if (isSafeIdentifier(item.identifier)
+            && (status.contains(QLatin1String("up")) || status.contains(QLatin1String("running"))))
+            names.append(item.identifier);
+    }
+    if (names.isEmpty()) {
+        emit distroboxBulkOperationFinished(QStringLiteral("stop"), true,
+                                            QStringLiteral("No running Distrobox containers."));
+        return;
+    }
+
+    QStringList arguments {QStringLiteral("container"), QStringLiteral("stop")};
+    arguments.append(names);
+    if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxStopAll))
+        emitDistroboxBulkResult(Operation::DistroboxStopAll, false, statusMessage());
 }
 
 void AppHubBackend::cloneDistrobox(const QString &source, const QString &name)
@@ -1847,6 +1896,26 @@ void AppHubBackend::removeDistrobox(const QString &name)
     if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("rm"), name}, Operation::DistroboxRemove, name))
         return;
     setStatusMessage(QStringLiteral("Removing %1…").arg(name));
+}
+
+void AppHubBackend::removeAllDistroboxes()
+{
+    refreshDistrobox();
+    QStringList names;
+    for (const AppModel::Item &item : m_allDistroboxItems) {
+        if (isSafeIdentifier(item.identifier))
+            names.append(item.identifier);
+    }
+    if (names.isEmpty()) {
+        emit distroboxBulkOperationFinished(QStringLiteral("remove"), true,
+                                            QStringLiteral("No Distrobox containers to delete."));
+        return;
+    }
+
+    QStringList arguments {QStringLiteral("container"), QStringLiteral("rm"), QStringLiteral("--force")};
+    arguments.append(names);
+    if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxRemoveAll))
+        emitDistroboxBulkResult(Operation::DistroboxRemoveAll, false, statusMessage());
 }
 
 void AppHubBackend::enterDistrobox(const QString &name)
@@ -3215,6 +3284,9 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
 
     emitFlatpakOperationResult(operation, identifier, false, message);
     emitAppHubOperationResult(operation, identifier, false, message);
+    if (operation == Operation::DistroboxStart)
+        emit distroboxStartFinished(identifier, false, message);
+    emitDistroboxBulkResult(operation, false, message);
 
     m_operation = Operation::None;
     clearFlatpakUpdateState();
@@ -3301,6 +3373,9 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         }
         emitFlatpakOperationResult(operation, identifier, false, failure);
         emitAppHubOperationResult(operation, identifier, false, failure);
+        if (operation == Operation::DistroboxStart)
+            emit distroboxStartFinished(identifier, false, failure);
+        emitDistroboxBulkResult(operation, false, failure);
         if (operation == Operation::FlatpakSearch && !m_query.isEmpty() && m_flatpakSearchRetryAttempt < MaxNetworkRetries) {
             const QString retryQuery = m_query;
             const int retryAttempt = m_flatpakSearchRetryAttempt++;
@@ -3395,8 +3470,20 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         emit userBundleBuilt(identifier, true, m_userBundleOutputUrl, {});
         break;
     }
-    case Operation::DistroboxCreate:
     case Operation::DistroboxStart:
+        refreshDistrobox();
+        setStatusMessage(QStringLiteral("Started %1.").arg(identifier));
+        emit distroboxStartFinished(identifier, true, {});
+        break;
+    case Operation::DistroboxStopAll:
+    case Operation::DistroboxRemoveAll:
+        refreshDistrobox();
+        emitDistroboxBulkResult(operation, true,
+                                operation == Operation::DistroboxStopAll
+                                    ? QStringLiteral("All running Distrobox containers were stopped.")
+                                    : QStringLiteral("All Distrobox containers were deleted."));
+        break;
+    case Operation::DistroboxCreate:
     case Operation::DistroboxStop:
     case Operation::DistroboxClone:
     case Operation::DistroboxRemove:

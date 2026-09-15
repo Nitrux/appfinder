@@ -1047,6 +1047,7 @@ Maui.Page {
         z: 2
         itemData: control.detailItem
         sourceTitle: qsTr("NX AppHub")
+        descriptionIsMarkdown: true
         busy: appHub.busy
         actionHandler: function(identifier) { appHub.appHubAction(identifier) }
         onBackRequested: control.closeDetails()
@@ -1160,7 +1161,10 @@ Maui.Page {
 
                                 delegate: Item {
                                     id: appHubFeaturedSlide
-                                    TapHandler { onTapped: control.openDetails(model) }
+                                    TapHandler {
+                                        enabled: appHubFeaturedSlide.currentSlide
+                                        onTapped: control.openDetails(model)
+                                    }
                                     anchors.fill: parent
                                     readonly property bool currentSlide: index === appHubFeaturedCarousel.currentIndex
                                     readonly property color bannerBackground: Maui.ColorUtils.tintWithAlpha(Maui.Theme.alternateBackgroundColor,
@@ -1512,17 +1516,14 @@ Maui.Page {
                             id: installedDelegate
                             width: ListView.view.width
                             isCurrentItem: control.selectedInstalledAppBox === model.identifier
-                            onClicked: {
-                                ListView.view.currentIndex = index
-                                control.selectedInstalledAppBox = model.identifier
-                            }
+                            onClicked: control.openDetails(model)
                             iconSource: model.icon
                             iconSizeHint: Maui.Style.iconSizes.big
                             template.leftLabels.spacing: Maui.Style.space.small
                             label1.text: model.name
                             label1.font.weight: Font.DemiBold
                             label1.elide: Text.ElideRight
-                            label2.text: model.description.length > 0 ? model.description : model.summary
+                            label2.text: model.summary.length > 0 ? model.summary : model.identifier
                             label2.elide: Text.ElideRight
 
                             ToolButton {

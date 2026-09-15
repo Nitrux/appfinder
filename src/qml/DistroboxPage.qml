@@ -32,6 +32,31 @@ Maui.Page {
     background: null
     headBar.visible: false
 
+    Connections {
+        target: appHub
+
+        function onDistroboxStartFinished(identifier, success, error) {
+            if (success) {
+                Maui.App.rootComponent.notify("dialog-ok", qsTr("Container started"),
+                                              qsTr("%1 started successfully.").arg(identifier))
+                return
+            }
+
+            const body = String(error || "").trim()
+            Maui.App.rootComponent.notify("dialog-error", qsTr("Container could not be started"),
+                                          body.length > 0 ? body : qsTr("The container failed to start."))
+        }
+
+        function onDistroboxBulkOperationFinished(action, success, message) {
+            const stopping = action === "stop"
+            const body = String(message || "").trim()
+            Maui.App.rootComponent.notify(success ? "dialog-ok" : "dialog-error",
+                                          success ? (stopping ? qsTr("Containers stopped") : qsTr("Containers deleted"))
+                                                  : (stopping ? qsTr("Could not stop containers") : qsTr("Could not delete containers")),
+                                          body.length > 0 ? body : qsTr("The container operation failed."))
+        }
+    }
+
     SearchResultsView {
         anchors.fill: parent
         visible: control.searchActive && !control.detailVisible
@@ -45,22 +70,16 @@ Maui.Page {
         actionTextResolver: function(item) {
             const status = item && item.status ? String(item.status).toLowerCase() : ""
             return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
-                   ? qsTr("Open Terminal")
+                   ? ""
                    : qsTr("Start Container")
         }
         actionIconResolver: function(item) {
             const status = item && item.status ? String(item.status).toLowerCase() : ""
             return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
-                   ? "utilities-terminal"
+                   ? ""
                    : "media-playback-start"
         }
-        actionHandler: function(identifier, item) {
-            const status = item && item.status ? String(item.status).toLowerCase() : ""
-            if (status.indexOf("up") >= 0 || status.indexOf("running") >= 0)
-                appHub.enterDistrobox(identifier)
-            else
-                appHub.startDistrobox(identifier)
-        }
+        actionHandler: function(identifier, item) { appHub.startDistrobox(identifier) }
         secondaryActionVisibleResolver: function(item) { return true }
         secondaryActionTextResolver: function(item) { return qsTr("Delete") }
         secondaryActionIconResolver: function(item) { return "edit-delete" }
@@ -79,8 +98,8 @@ Maui.Page {
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
-                text1: qsTr("Distrobox Containers")
-                text2: qsTr("Manage isolated development environments and their lifecycles.")
+                text1: qsTr("Explore Containers")
+                text2: qsTr("Manage isolated development environments.")
                 label2.wrapMode: Text.Wrap
             }
 
@@ -177,9 +196,10 @@ Maui.Page {
                             spacing: Maui.Style.space.medium
 
                             Button {
-                                text: containerCard.running ? qsTr("Open Terminal") : qsTr("Start Container")
+                                visible: !containerCard.running
+                                text: qsTr("Start Container")
                                 enabled: !appHub.busy
-                                onClicked: containerCard.running ? appHub.enterDistrobox(model.name) : appHub.startDistrobox(model.name)
+                                onClicked: appHub.startDistrobox(model.name)
                             }
 
                             Button {
@@ -219,16 +239,10 @@ Maui.Page {
         actionTextResolver: function(item) {
             const status = item && item.status ? String(item.status).toLowerCase() : ""
             return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
-                   ? qsTr("Open Terminal")
+                   ? ""
                    : qsTr("Start Container")
         }
-        actionHandler: function(identifier, item) {
-            const status = item && item.status ? String(item.status).toLowerCase() : ""
-            if (status.indexOf("up") >= 0 || status.indexOf("running") >= 0)
-                appHub.enterDistrobox(identifier)
-            else
-                appHub.startDistrobox(identifier)
-        }
+        actionHandler: function(identifier, item) { appHub.startDistrobox(identifier) }
         onBackRequested: control.closeDetails()
     }
 }

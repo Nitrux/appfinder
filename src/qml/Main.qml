@@ -47,7 +47,9 @@ Maui.ApplicationWindow {
         appHubRefreshAction,
         appHubBackAction,
         appHubRevealAction,
-        distroboxCreateAction
+        distroboxCreateAction,
+        distroboxStopAllAction,
+        distroboxDeleteAllAction
     ]
 
     Action {
@@ -58,6 +60,27 @@ Maui.ApplicationWindow {
         icon.name: "list-add"
         enabled: root.currentSection === 2 && contentLoader.item !== null && !appHub.busy
         onTriggered: contentLoader.item.createContainerRequested()
+    }
+
+    Action {
+        id: distroboxStopAllAction
+        property bool actionVisible: root.currentSection === 2 && contentLoader.item !== null
+
+        text: qsTr("Stop All Containers")
+        icon.name: "media-playback-stop"
+        enabled: actionVisible && appHub.distroboxModel.count > 0 && !appHub.busy
+        onTriggered: appHub.stopAllDistroboxes()
+    }
+
+    Action {
+        id: distroboxDeleteAllAction
+        property bool actionVisible: root.currentSection === 2 && contentLoader.item !== null
+
+        text: qsTr("Delete All Containers")
+        icon.name: "edit-delete"
+        Maui.Controls.status: Maui.Controls.Negative
+        enabled: actionVisible && appHub.distroboxModel.count > 0 && !appHub.busy
+        onTriggered: deleteAllContainersDialog.open()
     }
 
     Action {
@@ -355,9 +378,8 @@ Maui.ApplicationWindow {
                 },
 
                 ToolSeparator {
-                    visible: page.detailsVisible
-                    topPadding: Maui.Style.space.small
-                    bottomPadding: Maui.Style.space.small
+                    topPadding: toolbarSeparator.topPadding
+                    bottomPadding: toolbarSeparator.bottomPadding
                 },
 
                 ToolButton {
@@ -499,6 +521,7 @@ Maui.ApplicationWindow {
                 },
 
                 ToolSeparator {
+                    id: toolbarSeparator
                     bottomPadding: 10
                     topPadding: 10
                 },
@@ -648,6 +671,19 @@ Maui.ApplicationWindow {
             appHub.createDistrobox(containerNameField.text, containerImageField.text, containerHomeField.text)
             containerNameField.clear()
             containerHomeField.clear()
+            close()
+        }
+        onRejected: close()
+    }
+
+    Maui.InfoDialog {
+        id: deleteAllContainersDialog
+        title: qsTr("Delete All Containers")
+        message: qsTr("This will stop and permanently delete all Distrobox containers. Container data may be lost.")
+        template.iconSource: "dialog-warning"
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: {
+            appHub.removeAllDistroboxes()
             close()
         }
         onRejected: close()

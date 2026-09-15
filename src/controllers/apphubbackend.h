@@ -157,8 +157,10 @@ public:
     Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {});
     Q_INVOKABLE void startDistrobox(const QString &name);
     Q_INVOKABLE void stopDistrobox(const QString &name);
+    Q_INVOKABLE void stopAllDistroboxes();
     Q_INVOKABLE void cloneDistrobox(const QString &source, const QString &name);
     Q_INVOKABLE void removeDistrobox(const QString &name);
+    Q_INVOKABLE void removeAllDistroboxes();
     Q_INVOKABLE bool isFlatpakInstalled(const QString &identifier) const;
 
 signals:
@@ -173,6 +175,8 @@ signals:
     void flathubAppDetailsReady(const QVariantMap &details);
     void flatpakOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
     void appHubOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
+    void distroboxStartFinished(const QString &identifier, bool success, const QString &error);
+    void distroboxBulkOperationFinished(const QString &action, bool success, const QString &message);
     void userBundleOutputUrlChanged();
     void userBundleGenerated(const QString &projectId, bool success, const QString &error);
     void userBundleSaved(const QString &projectId, bool success, const QString &error);
@@ -208,8 +212,10 @@ private:
         DistroboxCreate,
         DistroboxStart,
         DistroboxStop,
+        DistroboxStopAll,
         DistroboxClone,
-        DistroboxRemove
+        DistroboxRemove,
+        DistroboxRemoveAll
     };
 
     QByteArray runCommand(const QString &program, const QStringList &arguments, int timeout = 10000) const;
@@ -226,6 +232,7 @@ private:
                                   const QString &identifier,
                                   bool success,
                                   const QString &error = {});
+    void emitDistroboxBulkResult(Operation operation, bool success, const QString &message);
 
     void refreshFlatpakInstalled();
     void refreshFlatpakUpdates();

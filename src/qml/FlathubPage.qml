@@ -365,7 +365,10 @@ Maui.Page {
 
                                 delegate: Item {
                                     id: featuredSlide
-                                    TapHandler { onTapped: control.openDetails(model) }
+                                    TapHandler {
+                                        enabled: featuredSlide.currentSlide
+                                        onTapped: control.openDetails(model)
+                                    }
                                     anchors.fill: parent
                                     property bool currentSlide: index === featuredCarousel.currentIndex
                                     opacity: currentSlide ? 1 : 0
@@ -1200,12 +1203,9 @@ Maui.Page {
                         delegate: Maui.ListBrowserDelegate {
                             id: userInstalledDelegate
                             width: ListView.view.width
+                            mouseArea.preventStealing: true
                             isCurrentItem: control.selectedInstalledScope === "user" && control.selectedInstalledIdentifier === model.identifier
-                            onClicked: {
-                                ListView.view.currentIndex = index
-                                control.selectedInstalledScope = "user"
-                                control.selectedInstalledIdentifier = model.identifier
-                            }
+                            onClicked: control.openDetails(model)
                             iconSource: model.icon
                             iconSizeHint: Maui.Style.iconSizes.big
                             template.leftLabels.spacing: Maui.Style.space.small
@@ -1298,12 +1298,9 @@ Maui.Page {
                         delegate: Maui.ListBrowserDelegate {
                             id: systemInstalledDelegate
                             width: ListView.view.width
+                            mouseArea.preventStealing: true
                             isCurrentItem: control.selectedInstalledScope === "system" && control.selectedInstalledIdentifier === model.identifier
-                            onClicked: {
-                                ListView.view.currentIndex = index
-                                control.selectedInstalledScope = "system"
-                                control.selectedInstalledIdentifier = model.identifier
-                            }
+                            onClicked: control.openDetails(model)
                             iconSource: model.icon
                             iconSizeHint: Maui.Style.iconSizes.big
                             template.leftLabels.spacing: Maui.Style.space.small

@@ -15,11 +15,14 @@ Maui.ScrollColumn {
     property string sourceTitle: ""
     property var actionHandler: null
     property var actionTextResolver: function(item) {
-        return item && item.actionText ? String(item.actionText) : qsTr("Install")
+        return item && item.actionText ? String(item.actionText) : ""
     }
     property bool busy: false
     property bool showFlathubLinks: false
+    property bool descriptionIsMarkdown: false
     property bool releasesExpanded: false
+    property int screenshotIndex: 0
+    property var loadedScreenshotIndexes: []
     signal backRequested()
     signal similarRequested(var item)
 
@@ -56,12 +59,6 @@ Maui.ScrollColumn {
         if (control.itemHomepage.length > 0)
             links.push({ title: qsTr("Project Website"), url: control.itemHomepage, icon: "globe" })
         return links
-    }
-    readonly property var itemScreenshotEntries: {
-        const entries = []
-        for (let index = 0; index < control.itemScreenshots.length; ++index)
-            entries.push({ source: String(control.itemScreenshots[index]) })
-        return entries
     }
     readonly property string actionText: control.actionTextResolver(control.itemData)
     readonly property int actionStatus: {
@@ -118,6 +115,31 @@ Maui.ScrollColumn {
         if (!Number.isFinite(seconds) || seconds <= 0)
             return qsTr("Date unavailable")
         return Qt.formatDate(new Date(seconds * 1000), Qt.DefaultLocaleShortDate)
+    }
+
+    function advanceScreenshot(offset) {
+        const count = control.itemScreenshots.length
+        if (count < 2)
+            return
+
+        const index = (control.screenshotIndex + offset + count) % count
+        control.ensureScreenshotLoaded(index)
+        control.screenshotIndex = index
+    }
+
+    function ensureScreenshotLoaded(index) {
+        if (index < 0 || index >= control.itemScreenshots.length
+            || control.loadedScreenshotIndexes.indexOf(index) >= 0)
+            return
+
+        const loadedIndexes = control.loadedScreenshotIndexes.slice()
+        loadedIndexes.push(index)
+        control.loadedScreenshotIndexes = loadedIndexes
+    }
+
+    onItemScreenshotsChanged: {
+        control.screenshotIndex = 0
+        control.loadedScreenshotIndexes = control.itemScreenshots.length > 0 ? [0] : []
     }
 
     function forwardGridWheel(wheel) {
@@ -298,50 +320,197 @@ Maui.ScrollColumn {
         }
     }
 
-    GridLayout {
-        id: screenshotsGrid
-        Layout.fillWidth: true
-        visible: control.itemScreenshotEntries.length > 0
-        columns: Math.max(1, Math.min(2, Math.floor(control.availableWidth / (Maui.Style.units.gridUnit * 26))))
-        columnSpacing: Maui.Style.space.medium
-        rowSpacing: Maui.Style.space.medium
+    Rectangle {
+        id: screenshotsCarousel
+        Layout.fillWidth: false
+        Layout.preferredWidth: Math.min(control.availableWidth, Maui.Style.units.gridUnit * 64)
+        Layout.alignment: Qt.AlignHCenter
+        visible: control.itemScreenshots.length > 0
+        implicitHeight: width * 9 / 16
+        radius: Maui.Style.radiusV
+        color: Maui.Theme.alternateBackgroundColor
+        clip: true
 
         Repeater {
-            model: control.itemScreenshotEntries
+            model: control.itemScreenshots
 
-            delegate: ColumnLayout {
-                Layout.fillWidth: true
-                Layout.minimumWidth: Maui.Style.units.gridUnit * 14
-                Layout.preferredWidth: (screenshotsGrid.width - screenshotsGrid.columnSpacing * (screenshotsGrid.columns - 1))
-                                       / screenshotsGrid.columns
-                spacing: Maui.Style.space.small
+            delegate: Image {
+                required property int index
+                required property var modelData
+                anchors.fill: parent
+                anchors.margins: Maui.Style.contentMargins
+                source: control.loadedScreenshotIndexes.indexOf(index) >= 0 ? String(modelData) : ""
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                cache: true
+                visible: index === control.screenshotIndex
 
-                Rectangle {
-                    id: screenshotCard
-                    Layout.fillWidth: true
-                    implicitHeight: {
-                        const contentWidth = Math.max(0, width - Maui.Style.space.small * 2)
-                        const imageWidth = screenshotImage.sourceSize.width
-                        const imageHeight = screenshotImage.sourceSize.height
-                        return imageWidth > 0 && imageHeight > 0
-                               ? contentWidth * imageHeight / imageWidth + Maui.Style.space.small * 2
-                               : contentWidth * 9 / 16 + Maui.Style.space.small * 2
-                    }
-                    radius: Maui.Style.radiusV
-                    color: Maui.Theme.alternateBackgroundColor
-                    clip: true
+                Maui.ProgressIndicator {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    visible: parent.status === Image.Loading
+                }
+            }
+        }
 
-                    Image {
-                        id: screenshotImage
-                        anchors.fill: parent
-                        anchors.margins: Maui.Style.space.small
-                        source: modelData.source
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: true
-                        cache: true
-                    }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: screenshotPreview.open()
+        }
+
+        ToolButton {
+            anchors.left: parent.left
+            anchors.leftMargin: Maui.Style.contentMargins
+            anchors.verticalCenter: parent.verticalCenter
+            visible: control.itemScreenshots.length > 1
+            z: 1
+            text: qsTr("Previous screenshot")
+            display: AbstractButton.IconOnly
+            icon.name: "go-previous"
+            ToolTip.visible: hovered
+            ToolTip.text: text
+            onClicked: control.advanceScreenshot(-1)
+        }
+
+        ToolButton {
+            anchors.right: parent.right
+            anchors.rightMargin: Maui.Style.contentMargins
+            anchors.verticalCenter: parent.verticalCenter
+            visible: control.itemScreenshots.length > 1
+            z: 1
+            text: qsTr("Next screenshot")
+            display: AbstractButton.IconOnly
+            icon.name: "go-next"
+            ToolTip.visible: hovered
+            ToolTip.text: text
+            onClicked: control.advanceScreenshot(1)
+        }
+
+        PageIndicator {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Maui.Style.contentMargins
+            visible: count > 1
+            z: 1
+            count: control.itemScreenshots.length
+            currentIndex: control.screenshotIndex
+            padding: Maui.Style.space.small
+
+            background: Rectangle {
+                radius: height / 2
+                color: Qt.rgba(Maui.Theme.backgroundColor.r,
+                               Maui.Theme.backgroundColor.g,
+                               Maui.Theme.backgroundColor.b,
+                               0.8)
+            }
+
+            delegate: Rectangle {
+                required property int index
+                implicitWidth: Maui.Style.iconSizes.small / 2
+                implicitHeight: implicitWidth
+                radius: width / 2
+                color: index === control.screenshotIndex
+                       ? Maui.Theme.highlightColor
+                       : Qt.rgba(Maui.Theme.highlightColor.r,
+                                 Maui.Theme.highlightColor.g,
+                                 Maui.Theme.highlightColor.b,
+                                 0.35)
+                border.width: 1
+                border.color: Maui.Theme.highlightColor
+            }
+        }
+
+        Timer {
+            interval: 7000
+            repeat: true
+            running: screenshotsCarousel.visible
+                     && control.itemScreenshots.length > 1
+                     && !screenshotPreview.opened
+            onTriggered: control.advanceScreenshot(1)
+        }
+    }
+
+    Maui.PopupPage {
+        id: screenshotPreview
+        title: control.itemName
+        filling: true
+        persistent: true
+
+        stack: Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Maui.ImageViewer {
+                anchors.fill: parent
+                anchors.margins: Maui.Style.contentMargins
+                source: control.itemScreenshots.length > 0 ? control.itemScreenshots[control.screenshotIndex] : ""
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                cache: true
+            }
+
+            ToolButton {
+                anchors.left: parent.left
+                anchors.leftMargin: Maui.Style.contentMargins
+                anchors.verticalCenter: parent.verticalCenter
+                visible: control.itemScreenshots.length > 1
+                z: 1
+                text: qsTr("Previous screenshot")
+                display: AbstractButton.IconOnly
+                icon.name: "go-previous"
+                ToolTip.visible: hovered
+                ToolTip.text: text
+                onClicked: control.advanceScreenshot(-1)
+            }
+
+            ToolButton {
+                anchors.right: parent.right
+                anchors.rightMargin: Maui.Style.contentMargins
+                anchors.verticalCenter: parent.verticalCenter
+                visible: control.itemScreenshots.length > 1
+                z: 1
+                text: qsTr("Next screenshot")
+                display: AbstractButton.IconOnly
+                icon.name: "go-next"
+                ToolTip.visible: hovered
+                ToolTip.text: text
+                onClicked: control.advanceScreenshot(1)
+            }
+
+            PageIndicator {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: Maui.Style.contentMargins
+                visible: count > 1
+                z: 1
+                count: control.itemScreenshots.length
+                currentIndex: control.screenshotIndex
+                padding: Maui.Style.space.small
+
+                background: Rectangle {
+                    radius: height / 2
+                    color: Qt.rgba(Maui.Theme.backgroundColor.r,
+                                   Maui.Theme.backgroundColor.g,
+                                   Maui.Theme.backgroundColor.b,
+                                   0.8)
                 }
 
+                delegate: Rectangle {
+                    required property int index
+                    implicitWidth: Maui.Style.iconSizes.small / 2
+                    implicitHeight: implicitWidth
+                    radius: width / 2
+                    color: index === control.screenshotIndex
+                           ? Maui.Theme.highlightColor
+                           : Qt.rgba(Maui.Theme.highlightColor.r,
+                                     Maui.Theme.highlightColor.g,
+                                     Maui.Theme.highlightColor.b,
+                                     0.35)
+                    border.width: 1
+                    border.color: Maui.Theme.highlightColor
+                }
             }
         }
     }
@@ -373,7 +542,7 @@ Maui.ScrollColumn {
                 Layout.rightMargin: Maui.Style.contentMargins
                 text: control.itemDescription
                 wrapMode: Text.WrapAnywhere
-                textFormat: Text.RichText
+                textFormat: control.descriptionIsMarkdown ? Text.MarkdownText : Text.RichText
                 color: Maui.Theme.textColor
             }
 
