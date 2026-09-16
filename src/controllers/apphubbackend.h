@@ -167,6 +167,8 @@ public:
     Q_INVOKABLE bool saveUserBundle(const QString &projectId, const QVariantMap &recipe, const QVariantMap &metadata);
     Q_INVOKABLE bool removeUserBundle(const QString &projectId);
     Q_INVOKABLE void buildUserBundle(const QString &projectId);
+    Q_INVOKABLE void cancelUserBundleBuild();
+    Q_INVOKABLE bool copyUserBundlePath(const QString &projectId);
     Q_INVOKABLE bool appHubHasBackups(const QString &identifier) const;
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
     Q_INVOKABLE void restoreAppHubBackup(const QString &identifier, const QString &backup);

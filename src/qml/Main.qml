@@ -591,7 +591,7 @@ Maui.ApplicationWindow {
                 },
 
                 ToolSeparator {
-                    visible: root.currentSection === 1
+                    visible: root.currentSection === 1 || root.currentSection === 2
                     topPadding: toolbarSeparator.topPadding
                     bottomPadding: toolbarSeparator.bottomPadding
                 },

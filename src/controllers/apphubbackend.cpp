@@ -12,6 +12,8 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QFileSystemWatcher>
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -2118,6 +2120,34 @@ void AppHubBackend::buildUserBundle(const QString &projectId)
     setStatusMessage(QStringLiteral("Building the %1 personal bundle…").arg(projectId));
 }
 
+void AppHubBackend::cancelUserBundleBuild()
+{
+    if (m_operation != Operation::UserBundleBuild || m_process->state() == QProcess::NotRunning)
+        return;
+
+    appendOperationLog(QByteArray("\nBuild cancelled by the user.\n"));
+    m_process->kill();
+}
+
+bool AppHubBackend::copyUserBundlePath(const QString &projectId)
+{
+    const QVariantMap document = m_userBundleStore.load(projectId);
+    if (!document.value(QStringLiteral("valid")).toBool())
+        return false;
+
+    const QString outputPath = m_userBundleStore.outputPath(projectId, document.value(QStringLiteral("recipe")).toMap());
+    const QFileInfo outputInfo(outputPath);
+    if (!outputInfo.isFile() || outputInfo.isSymbolicLink())
+        return false;
+
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    if (!clipboard)
+        return false;
+
+    clipboard->setText(outputInfo.absoluteFilePath(), QClipboard::Clipboard);
+    return true;
+}
+
 bool AppHubBackend::appHubHasBackups(const QString &identifier) const
 {
     return !appHubBackupItems(identifier).isEmpty();
@@ -3588,7 +3618,9 @@ void AppHubBackend::watchAppHubInstallDirectory()
 void AppHubBackend::watchUserBundleDirectory()
 {
     const QString rootPath = m_userBundleStore.rootPath();
-    m_userBundleWatcher->removePaths(m_userBundleWatcher->directories());
+    const QStringList watchedDirectories = m_userBundleWatcher->directories();
+    if (!watchedDirectories.isEmpty())
+        m_userBundleWatcher->removePaths(watchedDirectories);
 
     QString parentDirectory = QFileInfo(rootPath).dir().absolutePath();
     while (!QFileInfo(parentDirectory).isDir()) {

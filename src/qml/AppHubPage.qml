@@ -81,6 +81,29 @@ Maui.Page {
     property bool metadataHomepageEnabled: false
     property string collectionEditorType: ""
     property int collectionEditorIndex: -1
+    property string buildOutputProject: ""
+    property bool buildOutputFinished: false
+    property bool buildOutputSucceeded: false
+    property string buildOutputError: ""
+
+    function logPersonalBundleGeometry(label, reason, card, layout, browser, preferredHeight) {
+        if (!card || !layout || !browser || !browser.holder)
+            return
+
+        console.log("[AppHubPage][PersonalBundles] " + label + " " + reason
+                    + " count=" + browser.count
+                    + " holderVisible=" + browser.holder.visible
+                    + " holderHeight=" + browser.holder.height
+                    + " holderImplicitHeight=" + browser.holder.implicitHeight
+                    + " contentHeight=" + browser.contentHeight
+                    + " browserHeight=" + browser.height
+                    + " browserImplicitHeight=" + browser.implicitHeight
+                    + " preferredHeight=" + preferredHeight
+                    + " layoutHeight=" + layout.height
+                    + " layoutImplicitHeight=" + layout.implicitHeight
+                    + " cardHeight=" + card.height
+                    + " cardImplicitHeight=" + card.implicitHeight)
+    }
 
     property string bundleName: ""
     property string bundleVersion: ""
@@ -649,6 +672,12 @@ Maui.Page {
             return
         if ((editingProject.length === 0 || editorDirty) && !saveEditor())
             return
+        buildOutputProject = editingProject
+        buildOutputFinished = false
+        buildOutputSucceeded = false
+        buildOutputError = ""
+        buildOutputDialog.animatedEllipsis = ""
+        buildOutputDialog.open()
         appHub.buildUserBundle(editingProject)
     }
     function revealEditorOutput() {
@@ -745,6 +774,11 @@ Maui.Page {
         }
 
         function onUserBundleBuilt(projectId, success, artifact, error) {
+            if (projectId === control.buildOutputProject) {
+                control.buildOutputFinished = true
+                control.buildOutputSucceeded = success
+                control.buildOutputError = String(error || "")
+            }
             if (success) {
                 if (projectId === control.editingProject)
                     control.artifactUrl = String(artifact)
@@ -1045,6 +1079,66 @@ Maui.Page {
     Maui.InfoDialog {
         id: messageDialog
         standardButtons: Dialog.Close
+    }
+
+    Maui.InfoDialog {
+        id: buildOutputDialog
+        property string animatedEllipsis: ""
+        implicitWidth: Math.min(control.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 40)
+        title: control.buildOutputFinished
+               ? (control.buildOutputSucceeded ? qsTr("Bundle Built") : qsTr("Build Failed"))
+               : qsTr("Building Bundle")
+        message: control.buildOutputFinished
+                 ? (control.buildOutputSucceeded
+                    ? qsTr("%1 was built successfully.").arg(control.buildOutputProject)
+                    : qsTr("The build failed. Review the nx-apphub-cli output below."))
+                 : qsTr("Building %1 with nx-apphub-cli%2").arg(control.buildOutputProject).arg(buildOutputDialog.animatedEllipsis)
+        template.iconSource: "run-build"
+        standardButtons: control.buildOutputFinished || !appHub.busy ? Dialog.Close : Dialog.Cancel
+
+        Timer {
+            id: buildOutputEllipsisTimer
+            interval: 400
+            repeat: true
+            running: buildOutputDialog.visible && !control.buildOutputFinished
+            onTriggered: buildOutputDialog.animatedEllipsis = buildOutputDialog.animatedEllipsis.length >= 3
+                ? ""
+                : buildOutputDialog.animatedEllipsis + "."
+        }
+
+        Maui.SectionHeader {
+            Layout.fillWidth: true
+            text1: qsTr("Command Output")
+            text2: appHub.busy ? qsTr("nx-apphub-cli is still running.") : qsTr("The operation has finished.")
+            label2.wrapMode: Text.Wrap
+        }
+
+        onRejected: {
+            if (!control.buildOutputFinished && appHub.busy && appHub.operationAction === "apphub-build-bundle") {
+                appHub.cancelUserBundleBuild()
+                return
+            }
+            close()
+        }
+
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Maui.Style.units.gridUnit * 18
+            clip: true
+
+            TextArea {
+                width: parent.width
+                readOnly: true
+                selectByMouse: true
+                textFormat: TextEdit.PlainText
+                wrapMode: TextEdit.WrapAnywhere
+                text: appHub.operationLog.length > 0
+                      ? appHub.operationLog
+                      : (control.buildOutputError.length > 0
+                         ? control.buildOutputError
+                         : qsTr("Waiting for nx-apphub-cli output…"))
+            }
+        }
     }
 
     Loader {
@@ -1415,8 +1509,8 @@ Maui.Page {
             }
 
             Rectangle {
+                id: userRecipeCard
                 Layout.fillWidth: true
-                Layout.fillHeight: true
                 Layout.preferredHeight: implicitHeight
                 color: Maui.Theme.alternateBackgroundColor
                 radius: Maui.Style.radiusV
@@ -1424,11 +1518,17 @@ Maui.Page {
                 border.width: 1
                 implicitHeight: userRecipeLayout.implicitHeight + Maui.Style.contentMargins * 2
 
+                onHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "card height", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
+                onImplicitHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "card implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
+
                 ColumnLayout {
                     id: userRecipeLayout
                     anchors.fill: parent
                     anchors.margins: Maui.Style.contentMargins
                     spacing: Maui.Style.space.small
+
+                    onHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "layout height", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
+                    onImplicitHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "layout implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
 
                     Maui.SectionHeader {
                         Layout.fillWidth: true
@@ -1437,82 +1537,112 @@ Maui.Page {
                         label2.wrapMode: Text.Wrap
                     }
 
-                    Maui.ListBrowser {
-                        id: userRecipeBrowser
+                    Item {
+                        id: userRecipeListContainer
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.preferredHeight: holder.visible ? holder.implicitHeight : -1
-                        verticalScrollBarPolicy: ScrollBar.AlwaysOff
-                        padding: 0
-                        clip: true
-                        model: appHub.userBundleRecipesModel
-                        flickable.interactive: false
+                        implicitHeight: userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight
+                        Layout.preferredHeight: implicitHeight
 
-                        holder.visible: count === 0
-                        holder.title: qsTr("No Saved Recipes")
-                        holder.body: qsTr("Save a bundle recipe.")
-                        holder.label1.horizontalAlignment: Text.AlignLeft
-                        holder.label2.horizontalAlignment: Text.AlignLeft
-
-                        delegate: Maui.ListBrowserDelegate {
-                            id: userRecipeDelegate
-                            width: ListView.view.width
-                            isCurrentItem: false
-                            iconSource: model.icon
-                            iconSizeHint: Maui.Style.iconSizes.big
-                            template.leftLabels.spacing: Maui.Style.space.small
-                            label1.text: model.name
-                            label1.font.weight: Font.DemiBold
-                            label1.elide: Text.ElideRight
-                            label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
-                            label2.elide: Text.ElideRight
-
-                            ToolButton {
-                                text: qsTr("Edit")
-                                icon.name: "document-edit"
-                                icon.color: control.contrastingForeground(down || checked
-                                                                              ? Maui.Theme.highlightColor
-                                                                              : (hovered
-                                                                                 ? Maui.Theme.hoverColor
-                                                                                 : userRecipeDelegate.effectiveBackgroundColor))
-                                display: ToolButton.IconOnly
-                                enabled: !appHub.busy
-                                ToolTip.visible: hovered
-                                ToolTip.text: text
-                                onClicked: control.openProject(model.identifier)
-                            }
-
-                            ToolButton {
-                                text: qsTr("Remove")
-                                icon.name: "edit-delete"
-                                icon.color: control.contrastingForeground(down || checked
-                                                                              ? Maui.Theme.highlightColor
-                                                                              : (hovered
-                                                                                 ? Maui.Theme.hoverColor
-                                                                                 : userRecipeDelegate.effectiveBackgroundColor))
-                                display: ToolButton.IconOnly
-                                enabled: !appHub.busy
-                                ToolTip.visible: hovered
-                                ToolTip.text: text
-                                onClicked: appHub.removeUserBundle(model.identifier)
-                            }
-                        }
-
-                        MouseArea {
+                        Maui.ListBrowser {
+                            id: userRecipeBrowser
                             anchors.fill: parent
-                            acceptedButtons: Qt.NoButton
-                            propagateComposedEvents: true
-                            scrollGestureEnabled: true
-                            z: 100
-                            onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
+                            verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                            padding: 0
+                            clip: true
+                            model: appHub.userBundleRecipesModel
+                            flickable.interactive: false
+                            flickable.reuseItems: false
+
+                            onCountChanged: control.logPersonalBundleGeometry("saved-recipes", "count", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+                            onContentHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "contentHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+                            onHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "browser height", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+                            onImplicitHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "browser implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+
+                            holder.visible: count === 0
+                            holder.title: qsTr("No Saved Recipes")
+                            holder.body: qsTr("Save a bundle recipe.")
+                            holder.label1.horizontalAlignment: Text.AlignLeft
+                            holder.label2.horizontalAlignment: Text.AlignLeft
+
+                            Connections {
+                                target: userRecipeBrowser.holder
+
+                                function onVisibleChanged() {
+                                    control.logPersonalBundleGeometry("saved-recipes", "holder visible", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
+                                }
+
+                                function onHeightChanged() {
+                                    control.logPersonalBundleGeometry("saved-recipes", "holder height", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
+                                }
+
+                                function onImplicitHeightChanged() {
+                                    control.logPersonalBundleGeometry("saved-recipes", "holder implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
+                                }
+                            }
+
+                            delegate: Maui.ListBrowserDelegate {
+                                id: userRecipeDelegate
+                                width: ListView.view.width
+                                isCurrentItem: false
+                                iconSource: model.icon
+                                iconSizeHint: Maui.Style.iconSizes.big
+                                template.leftLabels.spacing: Maui.Style.space.small
+                                label1.text: model.name
+                                label1.font.weight: Font.DemiBold
+                                label1.elide: Text.ElideRight
+                                label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
+                                label2.elide: Text.ElideRight
+
+                                onHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] saved-recipes delegate height index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
+                                onImplicitHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] saved-recipes delegate implicitHeight index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
+
+                                ToolButton {
+                                    text: qsTr("Edit")
+                                    icon.name: "document-edit"
+                                    icon.color: control.contrastingForeground(down || checked
+                                                                                  ? Maui.Theme.highlightColor
+                                                                                  : (hovered
+                                                                                     ? Maui.Theme.hoverColor
+                                                                                     : userRecipeDelegate.effectiveBackgroundColor))
+                                    display: ToolButton.IconOnly
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: control.openProject(model.identifier)
+                                }
+
+                                ToolButton {
+                                    text: qsTr("Remove")
+                                    icon.name: "edit-delete"
+                                    icon.color: control.contrastingForeground(down || checked
+                                                                                  ? Maui.Theme.highlightColor
+                                                                                  : (hovered
+                                                                                     ? Maui.Theme.hoverColor
+                                                                                     : userRecipeDelegate.effectiveBackgroundColor))
+                                    display: ToolButton.IconOnly
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: appHub.removeUserBundle(model.identifier)
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.NoButton
+                                propagateComposedEvents: true
+                                scrollGestureEnabled: true
+                                z: 100
+                                onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
+                            }
                         }
                     }
                 }
             }
 
             Rectangle {
+                id: builtBundleCard
                 Layout.fillWidth: true
-                Layout.fillHeight: true
                 Layout.preferredHeight: implicitHeight
                 color: Maui.Theme.alternateBackgroundColor
                 radius: Maui.Style.radiusV
@@ -1520,11 +1650,17 @@ Maui.Page {
                 border.width: 1
                 implicitHeight: builtBundleLayout.implicitHeight + Maui.Style.contentMargins * 2
 
+                onHeightChanged: control.logPersonalBundleGeometry("built-bundles", "card height", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
+                onImplicitHeightChanged: control.logPersonalBundleGeometry("built-bundles", "card implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
+
                 ColumnLayout {
                     id: builtBundleLayout
                     anchors.fill: parent
                     anchors.margins: Maui.Style.contentMargins
                     spacing: Maui.Style.space.small
+
+                    onHeightChanged: control.logPersonalBundleGeometry("built-bundles", "layout height", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
+                    onImplicitHeightChanged: control.logPersonalBundleGeometry("built-bundles", "layout implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
 
                     Maui.SectionHeader {
                         Layout.fillWidth: true
@@ -1533,91 +1669,136 @@ Maui.Page {
                         label2.wrapMode: Text.Wrap
                     }
 
-                    Maui.ListBrowser {
-                        id: builtBundleBrowser
+                    Item {
+                        id: builtBundleListContainer
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.preferredHeight: holder.visible ? holder.implicitHeight : -1
-                        verticalScrollBarPolicy: ScrollBar.AlwaysOff
-                        padding: 0
-                        clip: true
-                        model: appHub.userBundleBuildsModel
-                        flickable.interactive: false
+                        implicitHeight: builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight
+                        Layout.preferredHeight: implicitHeight
 
-                        holder.visible: count === 0
-                        holder.title: qsTr("No Built Bundles")
-                        holder.body: qsTr("Build a personal recipe.")
-                        holder.label1.horizontalAlignment: Text.AlignLeft
-                        holder.label2.horizontalAlignment: Text.AlignLeft
-
-                        delegate: Maui.ListBrowserDelegate {
-                            id: builtBundleDelegate
-                            width: ListView.view.width
-                            isCurrentItem: false
-                            onClicked: control.openProject(model.identifier)
-                            iconSource: model.icon
-                            iconSizeHint: Maui.Style.iconSizes.big
-                            template.leftLabels.spacing: Maui.Style.space.small
-                            label1.text: model.name
-                            label1.font.weight: Font.DemiBold
-                            label1.elide: Text.ElideRight
-                            label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
-                            label2.elide: Text.ElideRight
-
-                            ToolButton {
-                                text: qsTr("Edit")
-                                icon.name: "document-edit"
-                                icon.color: control.contrastingForeground(down || checked
-                                                                              ? Maui.Theme.highlightColor
-                                                                              : (hovered
-                                                                                 ? Maui.Theme.hoverColor
-                                                                                 : builtBundleDelegate.effectiveBackgroundColor))
-                                display: ToolButton.IconOnly
-                                enabled: !appHub.busy
-                                ToolTip.visible: hovered
-                                ToolTip.text: text
-                                onClicked: control.openProject(model.identifier)
-                            }
-
-                            ToolButton {
-                                visible: String(model.integration).toLowerCase() === "gui"
-                                text: qsTr("Open")
-                                icon.name: "go-next"
-                                icon.color: control.contrastingForeground(down || checked
-                                                                              ? Maui.Theme.highlightColor
-                                                                              : (hovered
-                                                                                 ? Maui.Theme.hoverColor
-                                                                                 : builtBundleDelegate.effectiveBackgroundColor))
-                                display: ToolButton.IconOnly
-                                enabled: !appHub.busy
-                                ToolTip.visible: hovered
-                                ToolTip.text: text
-                                onClicked: appHub.launchUserBundle(model.identifier)
-                            }
-
-                            ToolButton {
-                                text: qsTr("Remove")
-                                icon.name: "edit-delete"
-                                icon.color: control.contrastingForeground(down || checked
-                                                                              ? Maui.Theme.highlightColor
-                                                                              : (hovered
-                                                                                 ? Maui.Theme.hoverColor
-                                                                                 : builtBundleDelegate.effectiveBackgroundColor))
-                                display: ToolButton.IconOnly
-                                enabled: !appHub.busy
-                                ToolTip.visible: hovered
-                                ToolTip.text: text
-                                onClicked: appHub.removeUserBundle(model.identifier)
-                            }
-                        }
-
-                        MouseArea {
+                        Maui.ListBrowser {
+                            id: builtBundleBrowser
                             anchors.fill: parent
-                            acceptedButtons: Qt.NoButton
-                            propagateComposedEvents: true
-                            scrollGestureEnabled: true
-                            z: 100
-                            onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
+                            verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                            padding: 0
+                            clip: true
+                            model: appHub.userBundleBuildsModel
+                            flickable.interactive: false
+                            flickable.reuseItems: false
+
+                            onCountChanged: control.logPersonalBundleGeometry("built-bundles", "count", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+                            onContentHeightChanged: control.logPersonalBundleGeometry("built-bundles", "contentHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+                            onHeightChanged: control.logPersonalBundleGeometry("built-bundles", "browser height", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+                            onImplicitHeightChanged: control.logPersonalBundleGeometry("built-bundles", "browser implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
+
+                            holder.visible: count === 0
+                            holder.title: qsTr("No Built Bundles")
+                            holder.body: qsTr("Build a personal recipe.")
+                            holder.label1.horizontalAlignment: Text.AlignLeft
+                            holder.label2.horizontalAlignment: Text.AlignLeft
+
+                            Connections {
+                                target: builtBundleBrowser.holder
+
+                                function onVisibleChanged() {
+                                    control.logPersonalBundleGeometry("built-bundles", "holder visible", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
+                                }
+
+                                function onHeightChanged() {
+                                    control.logPersonalBundleGeometry("built-bundles", "holder height", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
+                                }
+
+                                function onImplicitHeightChanged() {
+                                    control.logPersonalBundleGeometry("built-bundles", "holder implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
+                                }
+                            }
+
+                            delegate: Maui.ListBrowserDelegate {
+                                id: builtBundleDelegate
+                                width: ListView.view.width
+                                isCurrentItem: false
+                                onClicked: control.openProject(model.identifier)
+                                iconSource: model.icon
+                                iconSizeHint: Maui.Style.iconSizes.big
+                                template.leftLabels.spacing: Maui.Style.space.small
+                                label1.text: model.name
+                                label1.font.weight: Font.DemiBold
+                                label1.elide: Text.ElideRight
+                                label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
+                                label2.elide: Text.ElideRight
+
+                                onHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] built-bundles delegate height index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
+                                onImplicitHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] built-bundles delegate implicitHeight index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
+
+                                ToolButton {
+                                    text: qsTr("Edit")
+                                    icon.name: "document-edit"
+                                    icon.color: control.contrastingForeground(down || checked
+                                                                                  ? Maui.Theme.highlightColor
+                                                                                  : (hovered
+                                                                                     ? Maui.Theme.hoverColor
+                                                                                     : builtBundleDelegate.effectiveBackgroundColor))
+                                    display: ToolButton.IconOnly
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: control.openProject(model.identifier)
+                                }
+
+                                ToolButton {
+                                    text: qsTr("Copy Path")
+                                    icon.name: "edit-copy"
+                                    icon.color: control.contrastingForeground(down || checked
+                                                                                  ? Maui.Theme.highlightColor
+                                                                                  : (hovered
+                                                                                     ? Maui.Theme.hoverColor
+                                                                                     : builtBundleDelegate.effectiveBackgroundColor))
+                                    display: ToolButton.IconOnly
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: appHub.copyUserBundlePath(model.identifier)
+                                }
+
+                                ToolButton {
+                                    visible: String(model.integration).toLowerCase() === "gui"
+                                    text: qsTr("Open")
+                                    icon.name: "go-next"
+                                    icon.color: control.contrastingForeground(down || checked
+                                                                                  ? Maui.Theme.highlightColor
+                                                                                  : (hovered
+                                                                                     ? Maui.Theme.hoverColor
+                                                                                     : builtBundleDelegate.effectiveBackgroundColor))
+                                    display: ToolButton.IconOnly
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: appHub.launchUserBundle(model.identifier)
+                                }
+
+                                ToolButton {
+                                    text: qsTr("Remove")
+                                    icon.name: "edit-delete"
+                                    icon.color: control.contrastingForeground(down || checked
+                                                                                  ? Maui.Theme.highlightColor
+                                                                                  : (hovered
+                                                                                     ? Maui.Theme.hoverColor
+                                                                                     : builtBundleDelegate.effectiveBackgroundColor))
+                                    display: ToolButton.IconOnly
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: appHub.removeUserBundle(model.identifier)
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.NoButton
+                                propagateComposedEvents: true
+                                scrollGestureEnabled: true
+                                z: 100
+                                onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
+                            }
                         }
                     }
                 }
@@ -3151,37 +3332,7 @@ Maui.Page {
                 }
             }
 
-            Rectangle {
-                visible: control.editingProject.length > 0 && (appHub.busy || appHub.operationLog.length > 0)
-                Layout.fillWidth: true
-                color: Maui.Theme.alternateBackgroundColor
-                radius: Maui.Style.radiusV
-                border.color: Maui.Theme.backgroundColor
-                border.width: 1
-                implicitHeight: buildOutputLayout.implicitHeight + Maui.Style.contentMargins * 2
 
-                ColumnLayout {
-                    id: buildOutputLayout
-                    anchors.fill: parent
-                    anchors.margins: Maui.Style.contentMargins
-                    spacing: Maui.Style.space.small
-
-                    Maui.SectionHeader {
-                        Layout.fillWidth: true
-                        text1: qsTr("Build Output")
-                        text2: appHub.statusMessage
-                        label2.wrapMode: Text.Wrap
-                    }
-                    BusyIndicator { Layout.alignment: Qt.AlignHCenter; running: appHub.busy; visible: running }
-                    TextArea {
-                        Layout.fillWidth: true
-                        readOnly: true
-                        selectByMouse: true
-                        wrapMode: TextEdit.WrapAnywhere
-                        text: appHub.operationLog
-                    }
-                }
-            }
         }
     }
 }
