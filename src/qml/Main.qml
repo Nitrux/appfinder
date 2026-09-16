@@ -518,14 +518,14 @@ Maui.ApplicationWindow {
 
                 ToolSeparator {
                     id: toolbarSeparator
-                    visible: root.currentSection === 0
+                    visible: root.currentSection === 0 && !page.detailsVisible
                     bottomPadding: 10
                     topPadding: 10
                 },
 
                 Maui.ToolButtonMenu {
                     icon.name: "overflow-menu"
-                    visible: root.currentSection === 0
+                    visible: root.currentSection === 0 && !page.detailsVisible
 
                     Menu {
                         title: qsTr("Sort Installed Flatpaks")
@@ -575,7 +575,7 @@ Maui.ApplicationWindow {
 
                 Maui.ToolButtonMenu {
                     icon.name: "overflow-menu"
-                    visible: root.currentSection !== 0
+                    visible: root.currentSection !== 0 || page.detailsVisible
 
                     MenuItem {
                         text: qsTr("Preferences")

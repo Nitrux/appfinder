@@ -115,6 +115,16 @@ Maui.Page {
     readonly property var metadataCategories: ["AppHub.Development", "AppHub.Graphics", "AppHub.Internet", "AppHub.Games", "AppHub.Multimedia", "AppHub.Office", "AppHub.System", "AppHub.Utilities"]
     readonly property var sandboxListOptions: ["bwrap-unset-env", "cap-drop", "bind", "ro-bind", "bind-try", "ro-bind-try", "remount-ro"]
     readonly property int settingsControlWidth: Maui.Style.units.gridUnit * 13
+    readonly property bool ppaAvailable: {
+        if (repositoryModel.count === 0)
+            return false
+        for (let index = 0; index < repositoryModel.count; ++index) {
+            const distro = String(repositoryModel.get(index).distro || "").toLowerCase()
+            if (distro !== "ubuntu" && distro !== "ubuntu-ports")
+                return false
+        }
+        return true
+    }
 
     signal sectionLeaveApproved(int section)
     signal closeApproved()
@@ -945,7 +955,7 @@ Maui.Page {
             }
 
             Maui.FlexSectionItem {
-                visible: control.collectionEditorType === "repository" || control.collectionEditorType === "ppa" || control.collectionEditorType === "dependency" || control.collectionEditorType === "environment" || control.collectionEditorType === "bwrapEnvironment"
+                visible: control.collectionEditorType === "repository" || control.collectionEditorType === "ppa" || (control.collectionEditorType === "dependency" && control.ppaAvailable && ppaModel.count > 0) || control.collectionEditorType === "environment" || control.collectionEditorType === "bwrapEnvironment"
                 Layout.fillWidth: true
                 flat: true
                 label1.text: control.collectionEditorType === "repository" ? qsTr("Components")
@@ -1393,93 +1403,6 @@ Maui.Page {
                     onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
                 }
             }
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.preferredHeight: implicitHeight
-                color: Maui.Theme.alternateBackgroundColor
-                radius: Maui.Style.radiusV
-                border.color: Maui.Theme.backgroundColor
-                implicitHeight: projectLayout.implicitHeight + Maui.Style.contentMargins * 2
-
-                ColumnLayout {
-                    id: projectLayout
-                    anchors.fill: parent
-                    anchors.margins: Maui.Style.contentMargins
-                    spacing: Maui.Style.space.small
-
-                    Maui.SectionHeader {
-                        Layout.fillWidth: true
-                        text1: qsTr("Personal Bundles (%1)").arg(appHub.userBundleModel.count)
-                        text2: qsTr("Projects stored in %1").arg(control.displayLocalPath(appHub.userBundleRoot))
-                        label2.wrapMode: Text.Wrap
-                    }
-
-                    Maui.GridBrowser {
-                        id: projectGrid
-                        readonly property real availableLayoutWidth: projectLayout.width
-                        readonly property int fittedColumns: Math.max(1, Math.min(4, count, Math.floor(availableLayoutWidth / itemSize)))
-
-                        Layout.fillWidth: holder.visible
-                        Layout.preferredWidth: holder.visible ? availableLayoutWidth : Math.min(availableLayoutWidth, itemSize * fittedColumns)
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredHeight: holder.visible ? holder.implicitHeight : contentHeight
-                        padding: 0
-                        itemSize: Maui.Style.units.gridUnit * 17
-                        itemHeight: Maui.Style.units.gridUnit * 7
-                        adaptContent: true
-                        wheelResizeEnabled: false
-                        pinchEnabled: false
-                        verticalScrollBarPolicy: ScrollBar.AlwaysOff
-                        model: appHub.userBundleModel
-                        flickable.interactive: false
-
-                        holder.visible: count === 0
-                        holder.title: qsTr("No Personal Bundles")
-                        holder.body: qsTr("Open the Personal Bundle Builder from the action bar to create your first bundle.")
-
-                        delegate: Item {
-                            width: GridView.view.cellWidth
-                            height: GridView.view.cellHeight
-
-                            Maui.ListBrowserDelegate {
-                                anchors.fill: parent
-                                anchors.margins: Maui.Style.space.small
-                                flat: false
-                                iconSource: model.icon
-                                iconSizeHint: Maui.Style.iconSizes.big
-                                template.leftLabels.spacing: Maui.Style.space.small
-                                label1.text: model.name
-                                label1.font.weight: Font.DemiBold
-                                label1.elide: Text.ElideRight
-                                label2.text: qsTr("%1\n%2 • %3")
-                                             .arg(model.summary.length > 0 ? model.summary : model.identifier)
-                                             .arg(model.version.length > 0 ? model.version : qsTr("Draft"))
-                                             .arg(model.status)
-                                label2.wrapMode: Text.WordWrap
-                                label2.maximumLineCount: 3
-                                label2.elide: Text.ElideRight
-                                onClicked: control.openProject(model.identifier)
-
-                                ToolButton {
-                                    text: qsTr("Open")
-                                    icon.name: "document-edit"
-                                    onClicked: control.openProject(model.identifier)
-                                }
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            acceptedButtons: Qt.NoButton
-                            propagateComposedEvents: true
-                            scrollGestureEnabled: true
-                            z: 100
-                            onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
-                        }
-                    }
-                }
-            }
 
         }
     }
@@ -1542,7 +1465,7 @@ Maui.Page {
                         id: installedAppBoxBrowser
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredHeight: holder.visible ? holder.implicitHeight : implicitHeight
+                        Layout.preferredHeight: holder.visible ? holder.implicitHeight : -1
                         verticalScrollBarPolicy: ScrollBar.AlwaysOff
                         padding: 0
                         clip: true
@@ -1993,6 +1916,7 @@ Maui.Page {
                     Button {
                         Layout.alignment: Qt.AlignRight
                         text: qsTr("Add PPA")
+                        enabled: control.ppaAvailable
                         onClicked: control.openCollectionEditor("ppa", -1)
                     }
                 }

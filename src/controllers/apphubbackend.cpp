@@ -1944,6 +1944,34 @@ QVariantMap AppHubBackend::loadUserBundle(const QString &projectId) const
     return m_userBundleStore.load(projectId);
 }
 
+void AppHubBackend::launchUserBundle(const QString &projectId)
+{
+    const QVariantMap document = m_userBundleStore.load(projectId);
+    if (!document.value(QStringLiteral("valid")).toBool()) {
+        setStatusMessage(document.value(QStringLiteral("error")).toString());
+        return;
+    }
+
+    const QVariantMap recipe = document.value(QStringLiteral("recipe")).toMap();
+    const QString integration = recipe.value(QStringLiteral("integration")).toMap().value(QStringLiteral("type")).toString().trimmed().toLower();
+    if (integration != QLatin1String("gui")) {
+        setStatusMessage(QStringLiteral("Only GUI personal bundles can be opened here."));
+        return;
+    }
+
+    const QString artifactPath = document.value(QStringLiteral("outputUrl")).toUrl().toLocalFile();
+    const QFileInfo artifactInfo(artifactPath);
+    if (!artifactInfo.isFile() || artifactInfo.isSymbolicLink()) {
+        setStatusMessage(QStringLiteral("The personal bundle has not been built."));
+        return;
+    }
+
+    if (QProcess::startDetached(artifactPath, {}))
+        setStatusMessage(QStringLiteral("Opening %1.").arg(projectId));
+    else
+        setStatusMessage(QStringLiteral("Could not open %1.").arg(projectId));
+}
+
 bool AppHubBackend::createUserBundle(const QString &projectId,
                                      const QVariantMap &recipe,
                                      const QVariantMap &metadata)
@@ -1974,6 +2002,19 @@ bool AppHubBackend::saveUserBundle(const QString &projectId,
     }
     emit userBundleSaved(projectId, saved, error);
     return saved;
+}
+
+bool AppHubBackend::removeUserBundle(const QString &projectId)
+{
+    QString error;
+    const bool removed = m_userBundleStore.remove(projectId, &error);
+    if (removed) {
+        refreshUserBundles();
+        setStatusMessage(QStringLiteral("Removed the %1 personal-bundle project.").arg(projectId));
+    } else {
+        setStatusMessage(error);
+    }
+    return removed;
 }
 
 void AppHubBackend::buildUserBundle(const QString &projectId)

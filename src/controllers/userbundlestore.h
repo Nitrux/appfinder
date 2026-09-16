@@ -35,6 +35,7 @@ public:
               const QVariantMap &recipe,
               const QVariantMap &metadata,
               QString *error = nullptr) const;
+    bool remove(const QString &projectId, QString *error = nullptr) const;
     QString preflight(const QVariantMap &recipe) const;
 
 private:

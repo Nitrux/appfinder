@@ -531,12 +531,13 @@ QList<AppModel::Item> UserBundleStore::projects() const
         item.architecture = hostPackageArchitecture();
         item.identifier = projectId;
         item.category = metadata.value(QStringLiteral("category")).toString();
-        item.actionText = QStringLiteral("Open");
+        item.actionText = QStringLiteral("Edit");
         item.actionIcon = QStringLiteral("document-edit");
         item.icon = QStringLiteral("application-x-iso9660-appimage");
         item.status = !valid ? QStringLiteral("Invalid Recipe") : built ? QStringLiteral("Bundle Built") : QStringLiteral("Draft");
         item.created = projectInfo.lastModified().toString(Qt::ISODate);
         item.description = item.summary;
+        item.integration = recipe.value(QStringLiteral("integration")).toMap().value(QStringLiteral("type")).toString();
         item.type = QStringLiteral("Personal Bundle");
         items.append(item);
     }
@@ -545,6 +546,19 @@ QList<AppModel::Item> UserBundleStore::projects() const
         return left.name.compare(right.name, Qt::CaseInsensitive) < 0;
     });
     return items;
+}
+
+bool UserBundleStore::remove(const QString &projectId, QString *error) const
+{
+    const QString path = checkedProjectPath(projectId, true, error);
+    if (path.isEmpty())
+        return false;
+    if (!QDir(path).removeRecursively()) {
+        if (error)
+            *error = QStringLiteral("Could not remove the personal-bundle project.");
+        return false;
+    }
+    return true;
 }
 
 QString UserBundleStore::preflight(const QVariantMap &recipe) const

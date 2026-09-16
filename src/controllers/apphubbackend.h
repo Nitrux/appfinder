@@ -158,8 +158,10 @@ public:
     Q_INVOKABLE void refreshUserBundles();
     Q_INVOKABLE void generateUserBundle(const QString &projectId, const QVariantMap &options);
     Q_INVOKABLE QVariantMap loadUserBundle(const QString &projectId) const;
+    Q_INVOKABLE void launchUserBundle(const QString &projectId);
     Q_INVOKABLE bool createUserBundle(const QString &projectId, const QVariantMap &recipe, const QVariantMap &metadata);
     Q_INVOKABLE bool saveUserBundle(const QString &projectId, const QVariantMap &recipe, const QVariantMap &metadata);
+    Q_INVOKABLE bool removeUserBundle(const QString &projectId);
     Q_INVOKABLE void buildUserBundle(const QString &projectId);
     Q_INVOKABLE bool appHubHasBackups(const QString &identifier) const;
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
