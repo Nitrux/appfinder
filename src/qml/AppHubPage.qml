@@ -1404,6 +1404,13 @@ Maui.Page {
                 }
             }
 
+            Maui.SectionHeader {
+                Layout.fillWidth: true
+                text1: qsTr("Personal Bundles")
+                text2: qsTr("Create and manage local bundles.")
+                label2.wrapMode: Text.Wrap
+            }
+
         }
     }
 
