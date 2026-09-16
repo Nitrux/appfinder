@@ -395,6 +395,7 @@ Maui.Page {
         else if (action === "editor") {
             editingProject = ""
             artifactUrl = ""
+            viewMode = AppHubPage.Recipes
         }
     }
 
@@ -636,6 +637,7 @@ Maui.Page {
         }
         editingProject = ""
         artifactUrl = ""
+        viewMode = AppHubPage.Recipes
     }
 
     function openNewBundleDialog() {
@@ -1029,6 +1031,7 @@ Maui.Page {
                 control.pendingAction = ""
                 control.editingProject = ""
                 control.artifactUrl = ""
+                control.viewMode = AppHubPage.Recipes
             } else {
                 control.finishPendingAction()
             }
@@ -1411,6 +1414,215 @@ Maui.Page {
                 label2.wrapMode: Text.Wrap
             }
 
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.preferredHeight: implicitHeight
+                color: Maui.Theme.alternateBackgroundColor
+                radius: Maui.Style.radiusV
+                border.color: Maui.Theme.backgroundColor
+                border.width: 1
+                implicitHeight: userRecipeLayout.implicitHeight + Maui.Style.contentMargins * 2
+
+                ColumnLayout {
+                    id: userRecipeLayout
+                    anchors.fill: parent
+                    anchors.margins: Maui.Style.contentMargins
+                    spacing: Maui.Style.space.small
+
+                    Maui.SectionHeader {
+                        Layout.fillWidth: true
+                        text1: qsTr("Saved Recipes (%1)").arg(appHub.userBundleRecipesModel.count)
+                        text2: qsTr("Personal bundle recipes saved for later editing.")
+                        label2.wrapMode: Text.Wrap
+                    }
+
+                    Maui.ListBrowser {
+                        id: userRecipeBrowser
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.preferredHeight: holder.visible ? holder.implicitHeight : -1
+                        verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                        padding: 0
+                        clip: true
+                        model: appHub.userBundleRecipesModel
+                        flickable.interactive: false
+
+                        holder.visible: count === 0
+                        holder.title: qsTr("No Saved Recipes")
+                        holder.body: qsTr("Save a bundle recipe.")
+                        holder.label1.horizontalAlignment: Text.AlignLeft
+                        holder.label2.horizontalAlignment: Text.AlignLeft
+
+                        delegate: Maui.ListBrowserDelegate {
+                            id: userRecipeDelegate
+                            width: ListView.view.width
+                            isCurrentItem: false
+                            iconSource: model.icon
+                            iconSizeHint: Maui.Style.iconSizes.big
+                            template.leftLabels.spacing: Maui.Style.space.small
+                            label1.text: model.name
+                            label1.font.weight: Font.DemiBold
+                            label1.elide: Text.ElideRight
+                            label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
+                            label2.elide: Text.ElideRight
+
+                            ToolButton {
+                                text: qsTr("Edit")
+                                icon.name: "document-edit"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                              ? Maui.Theme.highlightColor
+                                                                              : (hovered
+                                                                                 ? Maui.Theme.hoverColor
+                                                                                 : userRecipeDelegate.effectiveBackgroundColor))
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: control.openProject(model.identifier)
+                            }
+
+                            ToolButton {
+                                text: qsTr("Remove")
+                                icon.name: "edit-delete"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                              ? Maui.Theme.highlightColor
+                                                                              : (hovered
+                                                                                 ? Maui.Theme.hoverColor
+                                                                                 : userRecipeDelegate.effectiveBackgroundColor))
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: appHub.removeUserBundle(model.identifier)
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+                            scrollGestureEnabled: true
+                            z: 100
+                            onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.preferredHeight: implicitHeight
+                color: Maui.Theme.alternateBackgroundColor
+                radius: Maui.Style.radiusV
+                border.color: Maui.Theme.backgroundColor
+                border.width: 1
+                implicitHeight: builtBundleLayout.implicitHeight + Maui.Style.contentMargins * 2
+
+                ColumnLayout {
+                    id: builtBundleLayout
+                    anchors.fill: parent
+                    anchors.margins: Maui.Style.contentMargins
+                    spacing: Maui.Style.space.small
+
+                    Maui.SectionHeader {
+                        Layout.fillWidth: true
+                        text1: qsTr("Built Bundles (%1)").arg(appHub.userBundleBuildsModel.count)
+                        text2: qsTr("Personal bundles built from saved recipes.")
+                        label2.wrapMode: Text.Wrap
+                    }
+
+                    Maui.ListBrowser {
+                        id: builtBundleBrowser
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.preferredHeight: holder.visible ? holder.implicitHeight : -1
+                        verticalScrollBarPolicy: ScrollBar.AlwaysOff
+                        padding: 0
+                        clip: true
+                        model: appHub.userBundleBuildsModel
+                        flickable.interactive: false
+
+                        holder.visible: count === 0
+                        holder.title: qsTr("No Built Bundles")
+                        holder.body: qsTr("Build a personal recipe.")
+                        holder.label1.horizontalAlignment: Text.AlignLeft
+                        holder.label2.horizontalAlignment: Text.AlignLeft
+
+                        delegate: Maui.ListBrowserDelegate {
+                            id: builtBundleDelegate
+                            width: ListView.view.width
+                            isCurrentItem: false
+                            onClicked: control.openProject(model.identifier)
+                            iconSource: model.icon
+                            iconSizeHint: Maui.Style.iconSizes.big
+                            template.leftLabels.spacing: Maui.Style.space.small
+                            label1.text: model.name
+                            label1.font.weight: Font.DemiBold
+                            label1.elide: Text.ElideRight
+                            label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
+                            label2.elide: Text.ElideRight
+
+                            ToolButton {
+                                text: qsTr("Edit")
+                                icon.name: "document-edit"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                              ? Maui.Theme.highlightColor
+                                                                              : (hovered
+                                                                                 ? Maui.Theme.hoverColor
+                                                                                 : builtBundleDelegate.effectiveBackgroundColor))
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: control.openProject(model.identifier)
+                            }
+
+                            ToolButton {
+                                visible: String(model.integration).toLowerCase() === "gui"
+                                text: qsTr("Open")
+                                icon.name: "go-next"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                              ? Maui.Theme.highlightColor
+                                                                              : (hovered
+                                                                                 ? Maui.Theme.hoverColor
+                                                                                 : builtBundleDelegate.effectiveBackgroundColor))
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: appHub.launchUserBundle(model.identifier)
+                            }
+
+                            ToolButton {
+                                text: qsTr("Remove")
+                                icon.name: "edit-delete"
+                                icon.color: control.contrastingForeground(down || checked
+                                                                              ? Maui.Theme.highlightColor
+                                                                              : (hovered
+                                                                                 ? Maui.Theme.hoverColor
+                                                                                 : builtBundleDelegate.effectiveBackgroundColor))
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: text
+                                onClicked: appHub.removeUserBundle(model.identifier)
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+                            scrollGestureEnabled: true
+                            z: 100
+                            onWheel: (wheel) => appHubScroll.forwardGridWheel(wheel)
+                        }
+                    }
+                }
+            }
+
         }
     }
 
@@ -1576,7 +1788,7 @@ Maui.Page {
                 Layout.fillWidth: true
                 text1: control.editingProject.length > 0 ? control.bundleName : qsTr("Personal Bundle Builder")
                 text2: control.editingProject.length > 0
-                       ? qsTr("Project %1 • Personal Bundle • %2").arg(control.editingProject, appHub.userBundleArchitecture)
+                       ? qsTr("Project %1 • Personal Bundle • %2").arg(control.editingProject).arg(appHub.userBundleArchitecture)
                        : qsTr("Create and maintain local bundles. Personal bundles remain separate from managed AppBoxes.")
                 label2.wrapMode: Text.Wrap
             }

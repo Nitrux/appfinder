@@ -48,6 +48,8 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(AppModel *appHubFeaturedModel READ appHubFeaturedModel CONSTANT)
     Q_PROPERTY(AppModel *appHubBackupsModel READ appHubBackupsModel CONSTANT)
     Q_PROPERTY(AppModel *userBundleModel READ userBundleModel CONSTANT)
+    Q_PROPERTY(AppModel *userBundleRecipesModel READ userBundleRecipesModel CONSTANT)
+    Q_PROPERTY(AppModel *userBundleBuildsModel READ userBundleBuildsModel CONSTANT)
     Q_PROPERTY(QUrl userBundleRoot READ userBundleRoot CONSTANT)
     Q_PROPERTY(QUrl userBundleOutputUrl READ userBundleOutputUrl NOTIFY userBundleOutputUrlChanged)
     Q_PROPERTY(QString userBundleArchitecture READ userBundleArchitecture CONSTANT)
@@ -98,6 +100,8 @@ public:
     AppModel *appHubModel();
     AppModel *appHubFeaturedModel();
     AppModel *userBundleModel();
+    AppModel *userBundleRecipesModel();
+    AppModel *userBundleBuildsModel();
     QUrl userBundleRoot() const;
     QUrl userBundleOutputUrl() const;
     QString userBundleArchitecture() const;
@@ -284,6 +288,7 @@ private:
     QString normalizedAppHubCategory(const AppModel::Item &item) const;
     void refreshAppHubCategories();
     void watchAppHubInstallDirectory();
+    void watchUserBundleDirectory();
     QString appHubInstallDirectory() const;
     QList<AppModel::Item> loadAppHubItems() const;
     QList<AppModel::Item> appHubBackupItems(const QString &identifier) const;
@@ -316,11 +321,14 @@ private:
     AppModel *m_appHubModel;
     AppModel *m_appHubFeaturedModel;
     AppModel *m_userBundleModel;
+    AppModel *m_userBundleRecipesModel;
+    AppModel *m_userBundleBuildsModel;
     AppModel *m_appHubBackupsModel;
     AppModel *m_distroboxModel;
     QProcess *m_process;
     QTimer *m_operationAnimationTimer;
     QFileSystemWatcher *m_appHubInstallWatcher;
+    QFileSystemWatcher *m_userBundleWatcher;
     QNetworkAccessManager *m_network;
     QNetworkReply *m_featuredCollectionReply = nullptr;
     QHash<QNetworkReply *, int> m_featuredDetailReplies;

@@ -663,11 +663,14 @@ AppHubBackend::AppHubBackend(QObject *parent)
     , m_appHubModel(new AppModel(this))
     , m_appHubFeaturedModel(new AppModel(this))
     , m_userBundleModel(new AppModel(this))
+    , m_userBundleRecipesModel(new AppModel(this))
+    , m_userBundleBuildsModel(new AppModel(this))
     , m_appHubBackupsModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
     , m_process(new QProcess(this))
     , m_operationAnimationTimer(new QTimer(this))
     , m_appHubInstallWatcher(new QFileSystemWatcher(this))
+    , m_userBundleWatcher(new QFileSystemWatcher(this))
     , m_network(new QNetworkAccessManager(this))
 {
     for (const QString &category : flathubCategorySlugs())
@@ -687,6 +690,11 @@ AppHubBackend::AppHubBackend(QObject *parent)
         refreshAppHubCatalog();
     });
     watchAppHubInstallDirectory();
+    connect(m_userBundleWatcher, &QFileSystemWatcher::directoryChanged, this, [this] {
+        watchUserBundleDirectory();
+        refreshUserBundles();
+    });
+    watchUserBundleDirectory();
 
     connect(m_process, &QProcess::readyReadStandardError, this, &AppHubBackend::processOutputReady);
 }
@@ -863,6 +871,16 @@ AppModel *AppHubBackend::appHubFeaturedModel()
 AppModel *AppHubBackend::userBundleModel()
 {
     return m_userBundleModel;
+}
+
+AppModel *AppHubBackend::userBundleRecipesModel()
+{
+    return m_userBundleRecipesModel;
+}
+
+AppModel *AppHubBackend::userBundleBuildsModel()
+{
+    return m_userBundleBuildsModel;
 }
 
 QUrl AppHubBackend::userBundleRoot() const
@@ -1845,10 +1863,24 @@ void AppHubBackend::refreshUserBundles()
     QString error;
     if (!m_userBundleStore.ensureRoot(&error)) {
         m_userBundleModel->setItems({});
+        m_userBundleRecipesModel->setItems({});
+        m_userBundleBuildsModel->setItems({});
         setStatusMessage(error);
         return;
     }
-    m_userBundleModel->setItems(m_userBundleStore.projects());
+
+    const QList<AppModel::Item> items = m_userBundleStore.projects();
+    QList<AppModel::Item> recipes;
+    QList<AppModel::Item> builds;
+    for (const AppModel::Item &item : items) {
+        if (item.status == QLatin1String("Bundle Built"))
+            builds.append(item);
+        else
+            recipes.append(item);
+    }
+    m_userBundleModel->setItems(items);
+    m_userBundleRecipesModel->setItems(recipes);
+    m_userBundleBuildsModel->setItems(builds);
 }
 
 void AppHubBackend::generateUserBundle(const QString &projectId, const QVariantMap &options)
@@ -3551,6 +3583,42 @@ void AppHubBackend::watchAppHubInstallDirectory()
     if (QFileInfo(installDirectory).isDir()
         && !m_appHubInstallWatcher->directories().contains(installDirectory))
         m_appHubInstallWatcher->addPath(installDirectory);
+}
+
+void AppHubBackend::watchUserBundleDirectory()
+{
+    const QString rootPath = m_userBundleStore.rootPath();
+    m_userBundleWatcher->removePaths(m_userBundleWatcher->directories());
+
+    QString parentDirectory = QFileInfo(rootPath).dir().absolutePath();
+    while (!QFileInfo(parentDirectory).isDir()) {
+        const QString nextDirectory = QFileInfo(parentDirectory).dir().absolutePath();
+        if (nextDirectory == parentDirectory)
+            return;
+        parentDirectory = nextDirectory;
+    }
+    m_userBundleWatcher->addPath(parentDirectory);
+
+    const QFileInfo rootInfo(rootPath);
+    if (!rootInfo.isDir() || rootInfo.isSymbolicLink())
+        return;
+    m_userBundleWatcher->addPath(rootPath);
+
+    const QDir root(rootPath);
+    const QStringList projects = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    for (const QString &projectId : projects) {
+        const QString projectPath = root.filePath(projectId);
+        const QFileInfo projectInfo(projectPath);
+        if (!projectInfo.isDir() || projectInfo.isSymbolicLink())
+            continue;
+        m_userBundleWatcher->addPath(projectPath);
+        for (const QString &subdirectory : {QStringLiteral("metadata"), QStringLiteral("dist")}) {
+            const QString subdirectoryPath = QDir(projectPath).filePath(subdirectory);
+            const QFileInfo subdirectoryInfo(subdirectoryPath);
+            if (subdirectoryInfo.isDir() && !subdirectoryInfo.isSymbolicLink())
+                m_userBundleWatcher->addPath(subdirectoryPath);
+        }
+    }
 }
 
 bool AppHubBackend::appHubItemInstalled(const QString &name) const

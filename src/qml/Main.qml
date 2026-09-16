@@ -45,7 +45,6 @@ Maui.ApplicationWindow {
         appHubInstalledAction,
         appHubWikiAction,
         appHubRefreshAction,
-        appHubBackAction,
         appHubRevealAction,
         distroboxCreateAction,
         distroboxStopAllAction,
@@ -208,7 +207,7 @@ Maui.ApplicationWindow {
         id: appHubBackAction
         property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0
 
-        text: qsTr("Back to Projects")
+        text: qsTr("Back to NX AppHub")
         icon.name: "go-previous"
         enabled: root.currentSection === 1 && contentLoader.item !== null && contentLoader.item.viewMode === AppHubPage.Builder && contentLoader.item.editingProject.length > 0 && !appHub.busy
         onTriggered: contentLoader.item.closeEditor()
@@ -428,6 +427,24 @@ Maui.ApplicationWindow {
                              && contentLoader.item !== null
                              && typeof contentLoader.item.viewMode !== "undefined"
                              && contentLoader.item.viewMode === AppHubPage.Builder
+                             && appHubBackAction.actionVisible
+                    action: appHubBackAction
+                    display: AbstractButton.IconOnly
+                    ToolTip.visible: hovered
+                    ToolTip.text: text
+                },
+
+                ToolSeparator {
+                    visible: appHubBackAction.actionVisible
+                    topPadding: toolbarSeparator.topPadding
+                    bottomPadding: toolbarSeparator.bottomPadding
+                },
+
+                ToolButton {
+                    visible: root.currentSection === 1
+                             && contentLoader.item !== null
+                             && typeof contentLoader.item.viewMode !== "undefined"
+                             && contentLoader.item.viewMode === AppHubPage.Builder
                     action: appHubSaveAction
                     display: AbstractButton.IconOnly
                     ToolTip.visible: hovered
@@ -571,6 +588,12 @@ Maui.ApplicationWindow {
                         icon.name: "documentinfo"
                         onTriggered: Maui.App.aboutDialog()
                     }
+                },
+
+                ToolSeparator {
+                    visible: root.currentSection === 1
+                    topPadding: toolbarSeparator.topPadding
+                    bottomPadding: toolbarSeparator.bottomPadding
                 },
 
                 Maui.ToolButtonMenu {
