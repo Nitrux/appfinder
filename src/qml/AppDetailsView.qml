@@ -14,6 +14,8 @@ Maui.ScrollColumn {
     property var itemData: null
     property string sourceTitle: ""
     property string developerFallback: ""
+    property var openHandler: null
+    property var openVisibleResolver: function(item) { return false }
     property var actionHandler: null
     property var actionTextResolver: function(item) {
         return item && item.actionText ? String(item.actionText) : ""
@@ -285,6 +287,17 @@ Maui.ScrollColumn {
                         color: Maui.Theme.disabledTextColor
                         elide: Text.ElideRight
                     }
+                }
+
+                Button {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.minimumWidth: Maui.Style.units.gridUnit * 6
+                    Layout.minimumHeight: Maui.Style.rowHeight
+                    visible: control.openHandler !== null && control.openVisibleResolver(control.itemData)
+                    text: qsTr("Open")
+                    display: Button.TextOnly
+                    enabled: !control.busy
+                    onClicked: control.openHandler(control.itemIdentifier, control.itemData)
                 }
 
                 Button {

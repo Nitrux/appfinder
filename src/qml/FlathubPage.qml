@@ -243,6 +243,8 @@ Maui.Page {
         operationPrefix: "flatpak-"
         showFlathubLinks: true
         busy: appHub.busy
+        openHandler: function(identifier) { appHub.launchFlatpak(identifier) }
+        openVisibleResolver: function(item) { return item && item.status === "Installed" }
         actionHandler: function(identifier) { control.flatpakAction(identifier) }
         onBackRequested: control.closeDetails()
         onSimilarRequested: function(item) { control.openDetails(item) }

@@ -23,8 +23,10 @@
 #include "../models/appmodel.h"
 #include "userbundlestore.h"
 
+class QFileSystemWatcher;
 class QNetworkAccessManager;
 class QNetworkReply;
+class QTimer;
 
 class AppHubBackend final : public QObject
 {
@@ -144,6 +146,7 @@ public:
     Q_INVOKABLE bool appHubOsTargetMatches(const QString &target) const;
     Q_INVOKABLE void loadFlathubAppDetails(const QString &identifier);
     Q_INVOKABLE void installFlatpak(const QString &identifier);
+    Q_INVOKABLE void launchFlatpak(const QString &identifier);
     Q_INVOKABLE void updateFlatpak(const QString &identifier);
     Q_INVOKABLE void removeFlatpak(const QString &identifier);
     Q_INVOKABLE void removeInstalledFlatpak(const QString &identifier, bool systemWide);
@@ -151,6 +154,7 @@ public:
     Q_INVOKABLE void installFlatpakAddon(const QString &ref);
     Q_INVOKABLE void removeFlatpakAddon(const QString &ref);
     Q_INVOKABLE void appHubAction(const QString &identifier);
+    Q_INVOKABLE void launchAppHub(const QString &identifier);
     Q_INVOKABLE void refreshUserBundles();
     Q_INVOKABLE void generateUserBundle(const QString &projectId, const QVariantMap &options);
     Q_INVOKABLE QVariantMap loadUserBundle(const QString &projectId) const;
@@ -277,6 +281,8 @@ private:
     QList<AppModel::Item> filterAppHubItems(const QList<AppModel::Item> &items) const;
     QString normalizedAppHubCategory(const AppModel::Item &item) const;
     void refreshAppHubCategories();
+    void watchAppHubInstallDirectory();
+    QString appHubInstallDirectory() const;
     QList<AppModel::Item> loadAppHubItems() const;
     QList<AppModel::Item> appHubBackupItems(const QString &identifier) const;
     QList<AppModel::Item> loadDistroboxItems(const QByteArray &output) const;
@@ -311,6 +317,8 @@ private:
     AppModel *m_appHubBackupsModel;
     AppModel *m_distroboxModel;
     QProcess *m_process;
+    QTimer *m_operationAnimationTimer;
+    QFileSystemWatcher *m_appHubInstallWatcher;
     QNetworkAccessManager *m_network;
     QNetworkReply *m_featuredCollectionReply = nullptr;
     QHash<QNetworkReply *, int> m_featuredDetailReplies;
@@ -350,6 +358,7 @@ private:
     QString m_flatpakUpdateIdentifier;
     int m_flatpakUpdateProgress = -1;
     Operation m_operation = Operation::None;
+    int m_operationAnimationStep = 0;
     int m_currentSection = AppHub;
     int m_flathubCollection = TrendingCollection;
     QString m_flatpakSortMode = QStringLiteral("name");

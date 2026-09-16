@@ -11,6 +11,7 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QFile>
+#include <QFileSystemWatcher>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -49,6 +50,7 @@ constexpr qsizetype MaxFeaturedIconBytes = 2 * 1024 * 1024;
 constexpr int MaxNetworkRetries = 3;
 constexpr int NetworkRetryBaseDelayMs = 1000;
 constexpr int NetworkRequestTimeoutMs = 15000;
+constexpr int OperationAnimationIntervalMs = 350;
 
 int networkRetryDelay(int attempt)
 {
@@ -664,6 +666,8 @@ AppHubBackend::AppHubBackend(QObject *parent)
     , m_appHubBackupsModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
     , m_process(new QProcess(this))
+    , m_operationAnimationTimer(new QTimer(this))
+    , m_appHubInstallWatcher(new QFileSystemWatcher(this))
     , m_network(new QNetworkAccessManager(this))
 {
     for (const QString &category : flathubCategorySlugs())
@@ -672,6 +676,18 @@ AppHubBackend::AppHubBackend(QObject *parent)
     connect(m_process, &QProcess::finished, this, &AppHubBackend::processFinished);
     connect(m_process, &QProcess::errorOccurred, this, &AppHubBackend::processErrorOccurred);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &AppHubBackend::processOutputReady);
+    m_operationAnimationTimer->setInterval(OperationAnimationIntervalMs);
+    connect(m_operationAnimationTimer, &QTimer::timeout, this, [this] {
+        m_operationAnimationStep = (m_operationAnimationStep + 1) % 4;
+        emit operationStateChanged();
+    });
+
+    connect(m_appHubInstallWatcher, &QFileSystemWatcher::directoryChanged, this, [this] {
+        watchAppHubInstallDirectory();
+        refreshAppHubCatalog();
+    });
+    watchAppHubInstallDirectory();
+
     connect(m_process, &QProcess::readyReadStandardError, this, &AppHubBackend::processOutputReady);
 }
 
@@ -938,40 +954,41 @@ QString AppHubBackend::operationIdentifier() const
 
 QString AppHubBackend::operationLabel() const
 {
+    const QString ellipsis = QString(m_operationAnimationStep, QLatin1Char('.'));
+    const auto animate = [&ellipsis](QString label) {
+        label.replace(QStringLiteral("…"), ellipsis);
+        return label;
+    };
     switch (m_operation) {
-    case Operation::AppHubSync: return tr("Refreshing…");
+    case Operation::AppHubSync: return animate(tr("Refreshing…"));
     case Operation::FlatpakInstall:
-        return m_flatpakUpdateProgress >= 0
+        return animate(m_flatpakUpdateProgress >= 0
             ? tr("Installing… %1%").arg(m_flatpakUpdateProgress)
-            : tr("Installing…");
+            : tr("Installing…"));
     case Operation::FlatpakUpdate:
-        return m_flatpakUpdateProgress >= 0
+        return animate(m_flatpakUpdateProgress >= 0
             ? tr("Updating… %1%").arg(m_flatpakUpdateProgress)
-            : tr("Updating…");
+            : tr("Updating…"));
     case Operation::FlatpakRemove:
-        return m_flatpakUpdateProgress >= 0
-            ? tr("Remove… %1%").arg(m_flatpakUpdateProgress)
-            : tr("Remove…");
-    case Operation::FlatpakAddonInstall: return tr("Installing add-on…");
-    case Operation::FlatpakAddonRemove: return tr("Removing add-on…");
+        return animate(tr("Remove…"));
+    case Operation::FlatpakAddonInstall: return animate(tr("Installing add-on…"));
+    case Operation::FlatpakAddonRemove: return animate(tr("Removing add-on…"));
     case Operation::AppHubInstall:
-        return m_flatpakUpdateProgress >= 0
-            ? tr("Activate… %1%").arg(m_flatpakUpdateProgress)
-            : tr("Activate…");
+        return animate(m_flatpakUpdateProgress >= 0
+            ? tr("Activating… %1%").arg(m_flatpakUpdateProgress)
+            : tr("Activating…"));
     case Operation::AppHubRemove:
-        return m_flatpakUpdateProgress >= 0
-            ? tr("Remove… %1%").arg(m_flatpakUpdateProgress)
-            : tr("Remove…");
-    case Operation::AppHubRestore: return tr("Restoring…");
-    case Operation::UserBundleGenerate: return tr("Generating…");
-    case Operation::UserBundleBuild: return tr("Building…");
-    case Operation::DistroboxCreate: return tr("Creating container…");
-    case Operation::DistroboxStart: return tr("Starting container…");
-    case Operation::DistroboxStop: return tr("Stopping container…");
-    case Operation::DistroboxStopAll: return tr("Stopping all containers…");
-    case Operation::DistroboxClone: return tr("Cloning container…");
-    case Operation::DistroboxRemove: return tr("Deleting container…");
-    case Operation::DistroboxRemoveAll: return tr("Deleting all containers…");
+        return animate(tr("Remove…"));
+    case Operation::AppHubRestore: return animate(tr("Restoring…"));
+    case Operation::UserBundleGenerate: return animate(tr("Generating…"));
+    case Operation::UserBundleBuild: return animate(tr("Building…"));
+    case Operation::DistroboxCreate: return animate(tr("Creating container…"));
+    case Operation::DistroboxStart: return animate(tr("Starting container…"));
+    case Operation::DistroboxStop: return animate(tr("Stopping container…"));
+    case Operation::DistroboxStopAll: return animate(tr("Stopping all containers…"));
+    case Operation::DistroboxClone: return animate(tr("Cloning container…"));
+    case Operation::DistroboxRemove: return animate(tr("Deleting container…"));
+    case Operation::DistroboxRemoveAll: return animate(tr("Deleting all containers…"));
     case Operation::None:
     case Operation::FlatpakSearch:
         return {};
@@ -995,7 +1012,14 @@ void AppHubBackend::setBusy(bool busy)
         return;
 
     m_busy = busy;
+    if (m_busy) {
+        m_operationAnimationStep = 1;
+        m_operationAnimationTimer->start();
+    } else {
+        m_operationAnimationTimer->stop();
+    }
     emit busyChanged();
+    emit operationStateChanged();
 }
 
 void AppHubBackend::setStatusMessage(const QString &message)
@@ -1012,7 +1036,14 @@ QString AppHubBackend::findExecutable(const QString &program) const
     if (program.contains('/'))
         return program;
 
-    return QStandardPaths::findExecutable(program);
+    const QString executable = QStandardPaths::findExecutable(program);
+    if (!executable.isEmpty())
+        return executable;
+
+    const QString userExecutable = QDir(QStandardPaths::writableLocation(QStandardPaths::HomeLocation))
+                                       .filePath(QStringLiteral(".local/bin/%1").arg(program));
+    const QFileInfo executableInfo(userExecutable);
+    return executableInfo.isFile() && executableInfo.isExecutable() ? userExecutable : QString();
 }
 
 QByteArray AppHubBackend::runCommand(const QString &program, const QStringList &arguments, int timeout) const
@@ -1078,21 +1109,10 @@ bool AppHubBackend::startOperation(const QString &program,
         return false;
     }
 
-    QStringList processArguments = arguments;
-    if (operation == Operation::FlatpakRemove) {
-        const QString stdbufExecutable = findExecutable(QStringLiteral("stdbuf"));
-        if (!stdbufExecutable.isEmpty()) {
-            processArguments.prepend(executable);
-            processArguments.prepend(QStringLiteral("-eL"));
-            processArguments.prepend(QStringLiteral("-oL"));
-            executable = stdbufExecutable;
-        }
-    }
-
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
     environment.insert(QStringLiteral("LANG"), QStringLiteral("C"));
-    if (operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate || operation == Operation::FlatpakRemove)
+    if (operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate)
         environment.insert(QStringLiteral("FLATPAK_FANCY_OUTPUT"), QStringLiteral("0"));
     m_process->setProcessEnvironment(environment);
     m_process->setProcessChannelMode(QProcess::SeparateChannels);
@@ -1105,7 +1125,7 @@ bool AppHubBackend::startOperation(const QString &program,
     m_operationDisplayName = notificationName(identifier);
     if (operation == Operation::FlatpakSearch)
         m_flatpakSearchQuery = m_query;
-    if (operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate || operation == Operation::FlatpakRemove || operation == Operation::AppHubInstall || operation == Operation::AppHubRemove) {
+    if (operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate || operation == Operation::AppHubInstall) {
         if (operation == Operation::FlatpakUpdate)
             m_flatpakUpdateIdentifier = identifier;
         m_flatpakUpdateProgress = -1;
@@ -1115,7 +1135,7 @@ bool AppHubBackend::startOperation(const QString &program,
     m_operationLog = QStringLiteral("Starting %1…").arg(program);
     emit operationLogChanged();
     setBusy(true);
-    m_process->start(executable, processArguments);
+    m_process->start(executable, arguments);
     return true;
 }
 
@@ -1679,6 +1699,21 @@ void AppHubBackend::installFlatpak(const QString &identifier)
     setStatusMessage(QStringLiteral("Installing %1 from Flathub…").arg(identifier));
 }
 
+void AppHubBackend::launchFlatpak(const QString &identifier)
+{
+    if (!isSafeIdentifier(identifier))
+        return;
+
+    const QString executable = findExecutable(QStringLiteral("flatpak"));
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("flatpak is not installed."));
+        return;
+    }
+
+    if (!QProcess::startDetached(executable, {QStringLiteral("run"), identifier}))
+        setStatusMessage(QStringLiteral("Could not open %1.").arg(identifier));
+}
+
 void AppHubBackend::updateFlatpak(const QString &identifier)
 {
     if (!isSafeIdentifier(identifier)) {
@@ -1784,6 +1819,25 @@ void AppHubBackend::appHubAction(const QString &identifier)
         return;
     }
     setStatusMessage(QStringLiteral("%1 %2 through NX AppHub…").arg(installed ? QStringLiteral("Removing") : QStringLiteral("Activating"), identifier));
+}
+
+void AppHubBackend::launchAppHub(const QString &identifier)
+{
+    if (!isSafeIdentifier(identifier))
+        return;
+
+    const QDir installDirectory(appHubInstallDirectory());
+    const QStringList appBoxes = installDirectory.entryList({QStringLiteral("%1-*-%2.AppBox").arg(identifier, architecture())},
+                                                              QDir::Files,
+                                                              QDir::Name);
+    if (appBoxes.isEmpty()) {
+        setStatusMessage(QStringLiteral("AppBox is not installed."));
+        return;
+    }
+
+    const QString appBoxPath = installDirectory.filePath(appBoxes.constFirst());
+    if (!QProcess::startDetached(appBoxPath, {}))
+        setStatusMessage(QStringLiteral("Could not open %1.").arg(identifier));
 }
 
 void AppHubBackend::refreshUserBundles()
@@ -3434,12 +3488,35 @@ QString AppHubBackend::markdownSection(const QString &markdown, const QString &h
     return value;
 }
 
+QString AppHubBackend::appHubInstallDirectory() const
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::HomeLocation))
+        .filePath(QStringLiteral(".local/bin/nx-apphub"));
+}
+
+void AppHubBackend::watchAppHubInstallDirectory()
+{
+    const QString installDirectory = appHubInstallDirectory();
+    QString parentDirectory = QFileInfo(installDirectory).dir().absolutePath();
+    while (!QFileInfo(parentDirectory).isDir()) {
+        const QString nextDirectory = QFileInfo(parentDirectory).dir().absolutePath();
+        if (nextDirectory == parentDirectory)
+            return;
+        parentDirectory = nextDirectory;
+    }
+
+    if (!m_appHubInstallWatcher->directories().contains(parentDirectory))
+        m_appHubInstallWatcher->addPath(parentDirectory);
+    if (QFileInfo(installDirectory).isDir()
+        && !m_appHubInstallWatcher->directories().contains(installDirectory))
+        m_appHubInstallWatcher->addPath(installDirectory);
+}
+
 bool AppHubBackend::appHubItemInstalled(const QString &name) const
 {
     if (!isSafeIdentifier(name))
         return false;
-    const QDir installDirectory(QDir(QStandardPaths::writableLocation(QStandardPaths::HomeLocation))
-                                    .filePath(QStringLiteral(".local/bin/nx-apphub")));
+    const QDir installDirectory(appHubInstallDirectory());
     return !installDirectory.entryList({QStringLiteral("%1-*-%2.AppBox").arg(name, architecture())},
                                        QDir::Files).isEmpty();
 }
@@ -3575,7 +3652,7 @@ void AppHubBackend::processOutputReady()
     m_processOutput += standardOutput;
     m_processErrorOutput += standardError;
 
-    if (m_operation == Operation::FlatpakInstall || m_operation == Operation::FlatpakUpdate || m_operation == Operation::FlatpakRemove || m_operation == Operation::AppHubInstall || m_operation == Operation::AppHubRemove) {
+    if (m_operation == Operation::FlatpakInstall || m_operation == Operation::FlatpakUpdate || m_operation == Operation::AppHubInstall) {
         static const QRegularExpression progressPattern(QStringLiteral("(?:^|[^0-9])(100|[0-9]{1,2})%"));
         QRegularExpressionMatchIterator matches = progressPattern.globalMatch(
             QString::fromLocal8Bit(m_processOutput + m_processErrorOutput));
@@ -3606,7 +3683,7 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const QString identifier = m_operationIdentifier;
     const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
         && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
-    if ((operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate || operation == Operation::FlatpakRemove || operation == Operation::AppHubInstall || operation == Operation::AppHubRemove)
+    if ((operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate || operation == Operation::AppHubInstall)
         && exitStatus == QProcess::NormalExit
         && exitCode == 0
         && m_flatpakUpdateProgress != 100) {

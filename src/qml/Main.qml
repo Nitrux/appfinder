@@ -400,10 +400,6 @@ Maui.ApplicationWindow {
                               && contentLoader.item.categoriesView
                               && !contentLoader.item.searchActive
                               && contentLoader.item.selectedCategory.length > 0)
-                             || (root.currentSection === 1
-                                 && contentLoader.item !== null
-                                 && typeof contentLoader.item.viewMode !== "undefined"
-                                 && contentLoader.item.viewMode === AppHubPage.Builder)
                     bottomPadding: 10
                     topPadding: 10
                 },
@@ -522,12 +518,14 @@ Maui.ApplicationWindow {
 
                 ToolSeparator {
                     id: toolbarSeparator
+                    visible: root.currentSection === 0
                     bottomPadding: 10
                     topPadding: 10
                 },
 
                 Maui.ToolButtonMenu {
                     icon.name: "overflow-menu"
+                    visible: root.currentSection === 0
 
                     Menu {
                         title: qsTr("Sort Installed Flatpaks")
@@ -561,6 +559,23 @@ Maui.ApplicationWindow {
                             }
                         }
                     }
+
+                    MenuItem {
+                        text: qsTr("Preferences")
+                        icon.name: "settings-configure"
+                        onTriggered: root.selectSection(4)
+                    }
+
+                    MenuItem {
+                        text: qsTr("About")
+                        icon.name: "documentinfo"
+                        onTriggered: Maui.App.aboutDialog()
+                    }
+                },
+
+                Maui.ToolButtonMenu {
+                    icon.name: "overflow-menu"
+                    visible: root.currentSection !== 0
 
                     MenuItem {
                         text: qsTr("Preferences")

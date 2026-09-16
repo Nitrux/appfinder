@@ -1076,6 +1076,10 @@ Maui.Page {
         }
         descriptionIsMarkdown: true
         busy: appHub.busy
+        openHandler: function(identifier) { appHub.launchAppHub(identifier) }
+        openVisibleResolver: function(item) {
+            return item && item.status === "Active" && String(item.integration).toLowerCase() === "gui"
+        }
         actionTextResolver: function(item) {
             const action = item && item.actionText ? String(item.actionText) : ""
             return action.toLowerCase() === "activate" && !appHub.appHubOsTargetMatches(item.osTarget)
@@ -1820,8 +1824,8 @@ Maui.Page {
                         Layout.fillWidth: true
                         flat: true
                         enabled: control.osTargetEnabled
-                        label1.text: qsTr("OS target")
-                        label2.text: qsTr("Target platform identifier written to the build recipe.")
+                        label1.text: qsTr("OS version target")
+                        label2.text: qsTr("Target platform version identifier written to the build recipe.")
                         label2.wrapMode: Text.Wrap
                         template.content: Maui.TextField {
                             property Item wideParent

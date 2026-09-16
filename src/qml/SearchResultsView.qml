@@ -53,7 +53,7 @@ Maui.ScrollColumn {
                 itemSize: Math.max(control.minimumItemSize,
                                    Math.min(control.maximumItemSize,
                                             width / Math.max(1, Math.floor(width / control.targetItemSize))))
-                itemHeight: control.previewEnabled ? itemSize * 19 / 20 : itemSize * 9 / 20
+                itemHeight: control.previewEnabled ? itemSize + Maui.Style.rowHeight : itemSize * 9 / 20
                 adaptContent: true
                 model: control.sourceModel
                 holder.visible: !control.sourceModel || control.sourceModel.count === 0
