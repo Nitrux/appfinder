@@ -2,7 +2,18 @@
 
 AppFinder is a software-management GUI for Nitrux. Built with **[MauiKit](https://mauikit.org/)**.
 
-It brings together complementary software workflows: mainstream GUI applications from Flathub, curated NX AppHub recipes for host-integrated AppBoxes, personal AppImage recipes managed by the built-in Bundle Builder, and mutable development environments through Distrobox. NX AppHub entries are build recipes rather than conventional app-store listings; personal bundles remain local and are not installed or managed as AppBoxes.
+![](https://nxos.org/wp-content/uploads/2026/09/screenshot-20260917-090604.png)
+> AppFinder is a software-management GUI for Nitrux
+
+It brings together complementary software workflows: 
+
+- Curated NX AppHub recipes for host-integrated AppBoxes.
+- Mainstream GUI applications from Flathub.
+- Personal AppImage recipes managed by the built-in Bundle Builder.
+- Mutable development environments through Distrobox. 
+
+> [!NOTE]
+> NX AppHub entries are build recipes rather than conventional app-store listings; personal bundles are not managed as AppBoxes.
 
 # Licensing
 
