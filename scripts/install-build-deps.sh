@@ -46,7 +46,7 @@ $APT_COMMAND install -y --no-install-recommends \
     pkg-config \
     qt6-base-dev \
     qt6-declarative-dev \
-    qt6-declarative-dev-tools
+    qt6-declarative-dev-tools \
     qt6-svg-dev \
     qt6-wayland-dev
 
