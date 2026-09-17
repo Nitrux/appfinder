@@ -126,3 +126,4 @@ int main(int argc, char *argv[])
 
     return application.exec();
 }
+                     QString(GIT_BRANCH) + "/" + QString(GIT_COMMIT_HASH));
