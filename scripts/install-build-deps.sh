@@ -22,18 +22,33 @@ fi
 
 $APT_COMMAND update -q
 $APT_COMMAND install -y --no-install-recommends \
+    appstream \
+    automake \
+    autotools-dev \
     build-essential \
+    checkinstall \
+    clang \
     cmake \
     curl \
+    devscripts \
+    equivs \
+    extra-cmake-modules \
+    gettext \
     git \
     gnupg \
+    gnupg2 \
     libkf6coreaddons-dev \
     libkf6i18n-dev \
+    libkf6notifications-dev \
+    libkf6windowsystem-dev \
     libyaml-cpp-dev \
+    lintian \
     pkg-config \
     qt6-base-dev \
     qt6-declarative-dev \
     qt6-declarative-dev-tools
+    qt6-svg-dev \
+    qt6-wayland-dev
 
 
 # -- Add package from our repository.
