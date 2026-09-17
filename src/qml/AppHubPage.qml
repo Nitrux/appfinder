@@ -87,25 +87,6 @@ Maui.Page {
     property bool buildOutputSucceeded: false
     property string buildOutputError: ""
 
-    function logPersonalBundleGeometry(label, reason, card, layout, browser, preferredHeight) {
-        if (!card || !layout || !browser || !browser.holder)
-            return
-
-        console.log("[AppHubPage][PersonalBundles] " + label + " " + reason
-                    + " count=" + browser.count
-                    + " holderVisible=" + browser.holder.visible
-                    + " holderHeight=" + browser.holder.height
-                    + " holderImplicitHeight=" + browser.holder.implicitHeight
-                    + " contentHeight=" + browser.contentHeight
-                    + " browserHeight=" + browser.height
-                    + " browserImplicitHeight=" + browser.implicitHeight
-                    + " preferredHeight=" + preferredHeight
-                    + " layoutHeight=" + layout.height
-                    + " layoutImplicitHeight=" + layout.implicitHeight
-                    + " cardHeight=" + card.height
-                    + " cardImplicitHeight=" + card.implicitHeight)
-    }
-
     property string bundleName: ""
     property string bundleVersion: ""
     property string binaryPath: ""
@@ -1584,17 +1565,11 @@ Maui.Page {
                 border.width: 1
                 implicitHeight: userRecipeLayout.implicitHeight + Maui.Style.contentMargins * 2
 
-                onHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "card height", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
-                onImplicitHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "card implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
-
                 ColumnLayout {
                     id: userRecipeLayout
                     anchors.fill: parent
                     anchors.margins: Maui.Style.contentMargins
                     spacing: Maui.Style.space.small
-
-                    onHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "layout height", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
-                    onImplicitHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "layout implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
 
                     Maui.SectionHeader {
                         Layout.fillWidth: true
@@ -1619,32 +1594,11 @@ Maui.Page {
                             flickable.interactive: false
                             flickable.reuseItems: false
 
-                            onCountChanged: control.logPersonalBundleGeometry("saved-recipes", "count", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-                            onContentHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "contentHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-                            onHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "browser height", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-                            onImplicitHeightChanged: control.logPersonalBundleGeometry("saved-recipes", "browser implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-
                             holder.visible: count === 0
                             holder.title: qsTr("No Saved Recipes")
                             holder.body: qsTr("Save a bundle recipe.")
                             holder.label1.horizontalAlignment: Text.AlignLeft
                             holder.label2.horizontalAlignment: Text.AlignLeft
-
-                            Connections {
-                                target: userRecipeBrowser.holder
-
-                                function onVisibleChanged() {
-                                    control.logPersonalBundleGeometry("saved-recipes", "holder visible", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
-                                }
-
-                                function onHeightChanged() {
-                                    control.logPersonalBundleGeometry("saved-recipes", "holder height", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
-                                }
-
-                                function onImplicitHeightChanged() {
-                                    control.logPersonalBundleGeometry("saved-recipes", "holder implicitHeight", userRecipeCard, userRecipeLayout, userRecipeBrowser, userRecipeBrowser.holder.visible ? userRecipeBrowser.holder.implicitHeight : userRecipeBrowser.contentHeight)
-                                }
-                            }
 
                             delegate: Maui.ListBrowserDelegate {
                                 id: userRecipeDelegate
@@ -1658,9 +1612,6 @@ Maui.Page {
                                 label1.elide: Text.ElideRight
                                 label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
                                 label2.elide: Text.ElideRight
-
-                                onHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] saved-recipes delegate height index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
-                                onImplicitHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] saved-recipes delegate implicitHeight index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
 
                                 ToolButton {
                                     text: qsTr("Edit")
@@ -1716,17 +1667,11 @@ Maui.Page {
                 border.width: 1
                 implicitHeight: builtBundleLayout.implicitHeight + Maui.Style.contentMargins * 2
 
-                onHeightChanged: control.logPersonalBundleGeometry("built-bundles", "card height", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
-                onImplicitHeightChanged: control.logPersonalBundleGeometry("built-bundles", "card implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
-
                 ColumnLayout {
                     id: builtBundleLayout
                     anchors.fill: parent
                     anchors.margins: Maui.Style.contentMargins
                     spacing: Maui.Style.space.small
-
-                    onHeightChanged: control.logPersonalBundleGeometry("built-bundles", "layout height", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
-                    onImplicitHeightChanged: control.logPersonalBundleGeometry("built-bundles", "layout implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
 
                     Maui.SectionHeader {
                         Layout.fillWidth: true
@@ -1751,32 +1696,11 @@ Maui.Page {
                             flickable.interactive: false
                             flickable.reuseItems: false
 
-                            onCountChanged: control.logPersonalBundleGeometry("built-bundles", "count", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-                            onContentHeightChanged: control.logPersonalBundleGeometry("built-bundles", "contentHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-                            onHeightChanged: control.logPersonalBundleGeometry("built-bundles", "browser height", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-                            onImplicitHeightChanged: control.logPersonalBundleGeometry("built-bundles", "browser implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, holder.visible ? holder.implicitHeight : contentHeight)
-
                             holder.visible: count === 0
                             holder.title: qsTr("No Built Bundles")
                             holder.body: qsTr("Build a personal recipe.")
                             holder.label1.horizontalAlignment: Text.AlignLeft
                             holder.label2.horizontalAlignment: Text.AlignLeft
-
-                            Connections {
-                                target: builtBundleBrowser.holder
-
-                                function onVisibleChanged() {
-                                    control.logPersonalBundleGeometry("built-bundles", "holder visible", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
-                                }
-
-                                function onHeightChanged() {
-                                    control.logPersonalBundleGeometry("built-bundles", "holder height", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
-                                }
-
-                                function onImplicitHeightChanged() {
-                                    control.logPersonalBundleGeometry("built-bundles", "holder implicitHeight", builtBundleCard, builtBundleLayout, builtBundleBrowser, builtBundleBrowser.holder.visible ? builtBundleBrowser.holder.implicitHeight : builtBundleBrowser.contentHeight)
-                                }
-                            }
 
                             delegate: Maui.ListBrowserDelegate {
                                 id: builtBundleDelegate
@@ -1791,9 +1715,6 @@ Maui.Page {
                                 label1.elide: Text.ElideRight
                                 label2.text: qsTr("%1 • %2").arg(model.summary.length > 0 ? model.summary : model.identifier).arg(model.status)
                                 label2.elide: Text.ElideRight
-
-                                onHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] built-bundles delegate height index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
-                                onImplicitHeightChanged: if (index < 3) console.log("[AppHubPage][PersonalBundles] built-bundles delegate implicitHeight index=" + index + " height=" + height + " implicitHeight=" + implicitHeight + " width=" + width + " implicitWidth=" + implicitWidth)
 
                                 ToolButton {
                                     text: qsTr("Edit")
