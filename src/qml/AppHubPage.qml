@@ -7,6 +7,7 @@ import QtQuick
 import QtCore
 import QtQml
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
 
@@ -1324,6 +1325,9 @@ Maui.Page {
                                     readonly property color bannerSecondaryForeground: Maui.ColorUtils.tintWithAlpha(bannerForeground,
                                                                                                                       bannerBackground,
                                                                                                                       0.55)
+                                    readonly property real iconGroupWidth: Maui.Style.units.gridUnit * 10
+                                    readonly property real previewMaximumWidth: Math.max(0, (appHubFeaturedSlide.height - Maui.Style.space.medium * 2) * 5 / 2)
+                                    readonly property real previewWidth: Math.max(0, Math.min(previewMaximumWidth, appHubFeaturedSlide.width * 3 / 5))
 
                                     opacity: currentSlide ? 1 : 0
                                     z: currentSlide ? 1 : 0
@@ -1344,48 +1348,110 @@ Maui.Page {
                                                                                    0.18)
                                         border.width: 1
 
-                                        ColumnLayout {
-                                            anchors.centerIn: parent
-                                            width: Math.min(parent.width - Maui.Style.contentMargins * 2,
-                                                            Maui.Style.units.gridUnit * 32)
-                                            spacing: Maui.Style.space.small
+                                        RowLayout {
+                                            anchors.top: parent.top
+                                            anchors.bottom: parent.bottom
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            anchors.topMargin: Maui.Style.space.medium
+                                            anchors.bottomMargin: Maui.Style.space.medium
+                                            width: Math.min(parent.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 64)
+                                            spacing: Maui.Style.space.big
 
-                                            Maui.IconItem {
-                                                Layout.alignment: Qt.AlignHCenter
-                                                width: Maui.Style.iconSizes.huge
-                                                height: Maui.Style.iconSizes.huge
-                                                iconSizeHint: Maui.Style.iconSizes.huge
-                                                imageSource: model.iconUrl
-                                                iconSource: model.icon
-                                            }
-
-                                            Label {
+                                            ColumnLayout {
+                                                Layout.fillHeight: true
                                                 Layout.fillWidth: true
-                                                text: model.name
-                                                color: appHubFeaturedSlide.bannerForeground
-                                                horizontalAlignment: Text.AlignHCenter
-                                                font: Maui.Style.h2Font
-                                                elide: Text.ElideRight
+                                                Layout.preferredWidth: appHubFeaturedSlide.iconGroupWidth
+                                                Layout.minimumWidth: 0
+                                                spacing: Maui.Style.space.small
+
+                                                Maui.IconItem {
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                    width: Maui.Style.iconSizes.huge
+                                                    height: Maui.Style.iconSizes.huge
+                                                    iconSizeHint: Maui.Style.iconSizes.huge
+                                                    imageSource: model.iconUrl
+                                                    iconSource: model.icon
+                                                }
+
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: model.name
+                                                    color: appHubFeaturedSlide.bannerForeground
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    font: Maui.Style.h2Font
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: model.summary.length > 0 ? model.summary : model.description
+                                                    color: appHubFeaturedSlide.bannerSecondaryForeground
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 3
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Maui.Chip {
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                    text: control.appHubCategoryLabel(model.category)
+                                                    visible: text.length > 0
+                                                    enabled: false
+                                                    hoverEnabled: false
+                                                    color: Qt.rgba(0, 0, 0, 0.3)
+                                                    label.font.weight: Font.Medium
+                                                }
                                             }
 
-                                            Label {
-                                                Layout.fillWidth: true
-                                                text: model.summary.length > 0 ? model.summary : model.description
-                                                color: appHubFeaturedSlide.bannerSecondaryForeground
-                                                horizontalAlignment: Text.AlignHCenter
-                                                wrapMode: Text.WordWrap
-                                                maximumLineCount: 3
-                                                elide: Text.ElideRight
-                                            }
+                                            Rectangle {
+                                                id: appHubFeaturedScreenshotFrame
+                                                visible: appHubFeaturedSlide.width >= Maui.Style.units.gridUnit * 42
+                                                Layout.fillHeight: true
+                                                Layout.fillWidth: false
+                                                Layout.minimumWidth: appHubFeaturedSlide.previewWidth
+                                                Layout.preferredWidth: appHubFeaturedSlide.previewWidth
+                                                Layout.maximumWidth: appHubFeaturedSlide.previewWidth
+                                                color: "transparent"
+                                                radius: Maui.Style.radiusV
+                                                border.color: "transparent"
+                                                border.width: 0
+                                                clip: true
+                                                layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
+                                                layer.effect: MultiEffect {
+                                                    maskEnabled: true
+                                                    maskThresholdMin: 0.5
+                                                    maskSpreadAtMin: 1.0
+                                                    maskSpreadAtMax: 0.0
+                                                    maskThresholdMax: 1.0
+                                                    maskSource: ShaderEffectSource {
+                                                        sourceItem: Rectangle {
+                                                            width: appHubFeaturedScreenshotFrame.width
+                                                            height: appHubFeaturedScreenshotFrame.height
+                                                            radius: appHubFeaturedScreenshotFrame.radius
+                                                        }
+                                                    }
+                                                }
 
-                                            Maui.Chip {
-                                                Layout.alignment: Qt.AlignHCenter
-                                                text: control.appHubCategoryLabel(model.category)
-                                                visible: text.length > 0
-                                                enabled: false
-                                                hoverEnabled: false
-                                                color: Qt.rgba(0, 0, 0, 0.3)
-                                                label.font.weight: Font.Medium
+                                                Image {
+                                                    id: appHubFeaturedScreenshot
+                                                    anchors.fill: parent
+                                                    source: model.screenshot
+                                                    fillMode: Image.PreserveAspectCrop
+                                                    verticalAlignment: Image.AlignTop
+                                                    asynchronous: true
+                                                    cache: true
+                                                    visible: status === Image.Ready
+                                                }
+
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    width: parent.width - Maui.Style.space.big * 2
+                                                    text: model.screenshotCaption.length > 0 ? model.screenshotCaption : model.summary
+                                                    color: appHubFeaturedSlide.bannerSecondaryForeground
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    wrapMode: Text.WordWrap
+                                                    visible: !appHubFeaturedScreenshot.visible
+                                                }
                                             }
                                         }
                                     }
