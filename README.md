@@ -2,7 +2,7 @@
 
 AppFinder is a software-management GUI for Nitrux. Built with **[MauiKit](https://mauikit.org/)**.
 
-![](https://nxos.org/wp-content/uploads/2026/09/screenshot-20260917-090604.png)
+![](https://nxos.org/wp-content/uploads/2026/09/screenshot-20260917-091333.png)
 > AppFinder is a software-management GUI for Nitrux
 
 It brings together complementary software workflows: 
