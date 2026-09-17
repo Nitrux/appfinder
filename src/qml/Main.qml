@@ -535,7 +535,7 @@ Maui.ApplicationWindow {
 
                 ToolSeparator {
                     id: toolbarSeparator
-                    visible: root.currentSection === 0 && !page.detailsVisible
+                    visible: root.currentSection === 0 && !page.detailsVisible && !page.compactSearch
                     bottomPadding: 10
                     topPadding: 10
                 },
@@ -591,7 +591,8 @@ Maui.ApplicationWindow {
                 },
 
                 ToolSeparator {
-                    visible: root.currentSection === 1 || root.currentSection === 2
+                    visible: (root.currentSection === 1 || root.currentSection === 2) && !page.compactSearch
+                    orientation: Qt.Vertical
                     topPadding: toolbarSeparator.topPadding
                     bottomPadding: toolbarSeparator.bottomPadding
                 },
