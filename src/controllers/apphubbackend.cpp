@@ -1375,7 +1375,7 @@ void AppHubBackend::refresh()
     m_flathubCollectionTotalPages.clear();
     refreshFlathubCollection();
     refreshFlathubCategories();
-    refreshAppHubCatalog();
+    refreshAppHubRepository();
     refreshUserBundles();
     refreshDistrobox();
     setStatusMessage(QStringLiteral("Sources refreshed."));
