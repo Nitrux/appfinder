@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
     application.setApplicationName(QStringLiteral("appfinder"));
     application.setDesktopFileName(QStringLiteral("org.nitrux.appfinder"));
     application.setOrganizationName(QStringLiteral("Nitrux"));
-    application.setWindowIcon(QIcon::fromTheme(QStringLiteral("application-x-iso9660-appimage")));
+    application.setWindowIcon(QIcon::fromTheme(QStringLiteral("nx-software-center")));
 
     KLocalizedString::setApplicationDomain(QByteArrayLiteral("appfinder"));
 
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
     about.setProgramLogo(application.windowIcon());
     KAboutData::setApplicationData(about);
 
-    MauiApp::instance()->setIconName(QStringLiteral("application-x-iso9660-appimage"));
+    MauiApp::instance()->setIconName(QStringLiteral("nx-software-center"));
 
     AppHubBackend backend;
     CachedNetworkAccessManagerFactory networkAccessManagerFactory;
