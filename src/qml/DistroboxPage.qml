@@ -47,6 +47,7 @@ Maui.Page {
             const title = hostServiceUnavailable ? qsTr("Container unavailable in this session")
                         : action === "create" ? qsTr("Could not create container")
                         : action === "start" ? qsTr("Could not start container")
+                        : action === "open" ? qsTr("Could not open container")
                         : action === "stop" ? qsTr("Could not stop container")
                         : action === "stop-all" ? qsTr("Could not stop containers")
                         : action === "clone" ? qsTr("Could not clone container")
@@ -71,18 +72,12 @@ Maui.Page {
         emptyBody: qsTr("Try a different container name or image.")
         busy: appHub.busy
         actionTextResolver: function(item) {
-            const status = item && item.status ? String(item.status).toLowerCase() : ""
-            return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
-                   ? ""
-                   : qsTr("Start Container")
+            return qsTr("Open Container Environment")
         }
         actionIconResolver: function(item) {
-            const status = item && item.status ? String(item.status).toLowerCase() : ""
-            return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
-                   ? ""
-                   : "media-playback-start"
+            return "utilities-terminal"
         }
-        actionHandler: function(identifier, item) { appHub.startDistrobox(identifier) }
+        actionHandler: function(identifier, item) { appHub.openDistrobox(identifier) }
         secondaryActionVisibleResolver: function(item) { return true }
         secondaryActionTextResolver: function(item) { return qsTr("Delete") }
         secondaryActionIconResolver: function(item) { return "edit-delete" }
@@ -199,11 +194,9 @@ Maui.Page {
                             spacing: Maui.Style.space.medium
 
                             Button {
-                                visible: !containerCard.running
-                                text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
-                                      ? appHub.operationLabel : qsTr("Start Container")
+                                text: qsTr("Open Container Environment")
                                 enabled: !appHub.busy
-                                onClicked: appHub.startDistrobox(model.name)
+                                onClicked: appHub.openDistrobox(model.name)
                             }
 
                             Button {
@@ -244,12 +237,10 @@ Maui.Page {
         operationPrefix: "distrobox-"
         busy: appHub.busy
         actionTextResolver: function(item) {
-            const status = item && item.status ? String(item.status).toLowerCase() : ""
-            return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
-                   ? ""
-                   : qsTr("Start Container")
+            return qsTr("Open Container Environment")
         }
-        actionHandler: function(identifier, item) { appHub.startDistrobox(identifier) }
+        actionIconResolver: function(item) { return "utilities-terminal" }
+        actionHandler: function(identifier, item) { appHub.openDistrobox(identifier) }
         onBackRequested: control.closeDetails()
     }
 }

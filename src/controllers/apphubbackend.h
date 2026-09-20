@@ -172,7 +172,7 @@ public:
     Q_INVOKABLE bool appHubHasBackups(const QString &identifier) const;
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
     Q_INVOKABLE void restoreAppHubBackup(const QString &identifier, const QString &backup);
-    Q_INVOKABLE void enterDistrobox(const QString &name);
+    Q_INVOKABLE void openDistrobox(const QString &name);
     Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {});
     Q_INVOKABLE void startDistrobox(const QString &name);
     Q_INVOKABLE void stopDistrobox(const QString &name);
@@ -282,6 +282,7 @@ private:
     void cancelFlathubBrowseRequests(bool cancelFeatured);
     void refreshAppHubCatalog();
     void refreshDistrobox();
+    void openDistroboxInStation(const QString &name);
     void parseFlatpakSearch(const QByteArray &output);
 
     QList<AppModel::Item> filterItems(const QList<AppModel::Item> &items) const;
@@ -365,6 +366,7 @@ private:
     QString m_flatpakSearchQuery;
     QString m_operationIdentifier;
     QString m_operationDisplayName;
+    QString m_pendingDistroboxOpen;
     QString m_flatpakAddonsApplication;
     bool m_flatpakAddonsSystemWide = false;
     QString m_flatpakUpdateIdentifier;

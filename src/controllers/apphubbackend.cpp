@@ -2341,29 +2341,66 @@ void AppHubBackend::removeAllDistroboxes()
         emitDistroboxOperationResult(Operation::DistroboxRemoveAll, {}, false, statusMessage());
 }
 
-void AppHubBackend::enterDistrobox(const QString &name)
+void AppHubBackend::openDistrobox(const QString &name)
 {
     if (!isSafeIdentifier(name)) {
         setStatusMessage(QStringLiteral("Invalid Distrobox name."));
+        emit distroboxOperationFinished(name, QStringLiteral("open"), false, statusMessage());
         return;
     }
+
+    refreshDistrobox();
+    const auto container = std::find_if(m_allDistroboxItems.cbegin(), m_allDistroboxItems.cend(), [&name](const AppModel::Item &item) {
+        return item.identifier == name;
+    });
+    if (container == m_allDistroboxItems.cend()) {
+        setStatusMessage(QStringLiteral("Container %1 was not found.").arg(name));
+        emit distroboxOperationFinished(name, QStringLiteral("open"), false, statusMessage());
+        return;
+    }
+
+    const QString status = container->status.toLower();
+    const bool running = status.contains(QLatin1String("up")) || status.contains(QLatin1String("running"));
+    if (!running) {
+        m_pendingDistroboxOpen = name;
+        startDistrobox(name);
+        if (m_operation != Operation::DistroboxStart)
+            m_pendingDistroboxOpen.clear();
+        return;
+    }
+
+    openDistroboxInStation(name);
+}
+
+void AppHubBackend::openDistroboxInStation(const QString &name)
+{
     const QString executable = findExecutable(QStringLiteral("distrobox"));
     if (executable.isEmpty()) {
         setStatusMessage(QStringLiteral("distrobox is not installed."));
+        emit distroboxOperationFinished(name, QStringLiteral("open"), false, statusMessage());
         return;
     }
 
     const QString terminal = findExecutable(QStringLiteral("station"));
     if (terminal.isEmpty()) {
         setStatusMessage(QStringLiteral("Station is not installed."));
+        emit distroboxOperationFinished(name, QStringLiteral("open"), false, statusMessage());
         return;
     }
 
-    const QString command = QStringLiteral("%1 enter %2").arg(executable, name);
-    if (QProcess::startDetached(terminal, {QStringLiteral("--execute"), command}))
+    const QStringList arguments {
+        QStringLiteral("--command"), executable,
+        QStringLiteral("--argument"), QStringLiteral("enter"),
+        QStringLiteral("--argument"), name,
+        QStringLiteral("--working-directory"), QDir::homePath()
+    };
+    if (QProcess::startDetached(terminal, arguments)) {
         setStatusMessage(QStringLiteral("Opening a Station terminal in %1.").arg(name));
-    else
-        setStatusMessage(QStringLiteral("Could not enter %1.").arg(name));
+        return;
+    }
+
+    setStatusMessage(QStringLiteral("Could not open %1 in Station.").arg(name));
+    emit distroboxOperationFinished(name, QStringLiteral("open"), false, statusMessage());
 }
 
 void AppHubBackend::refreshFlatpakInstalled()
@@ -3769,6 +3806,9 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
         emit userBundleBuilt(identifier, false, {}, message);
     }
 
+    if (operation == Operation::DistroboxStart && m_pendingDistroboxOpen == identifier)
+        m_pendingDistroboxOpen.clear();
+
     emitFlatpakOperationResult(operation, identifier, false, message);
     emitAppHubOperationResult(operation, identifier, false, message);
     emitDistroboxOperationResult(operation, identifier, false, message);
@@ -3822,6 +3862,7 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const QByteArray processErrorOutput = m_processErrorOutput;
     const Operation operation = m_operation;
     const QString identifier = m_operationIdentifier;
+    const bool openDistroboxAfterStart = operation == Operation::DistroboxStart && m_pendingDistroboxOpen == identifier;
     const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
         && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
     if ((operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate || operation == Operation::AppHubInstall)
@@ -3852,6 +3893,8 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             failure = QStringLiteral("The operation failed.");
     }
     if (!failure.isEmpty()) {
+        if (openDistroboxAfterStart)
+            m_pendingDistroboxOpen.clear();
         if (operation == Operation::UserBundleGenerate) {
             m_userBundleGenerationDirectory.reset();
             emit userBundleGenerated(identifier, false, failure);
@@ -3964,6 +4007,10 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         refreshDistrobox();
         setStatusMessage(QStringLiteral("Started %1.").arg(identifier));
         emitDistroboxOperationResult(Operation::DistroboxStart, identifier, true);
+        if (openDistroboxAfterStart) {
+            m_pendingDistroboxOpen.clear();
+            openDistroboxInStation(identifier);
+        }
         break;
     case Operation::DistroboxStopAll:
     case Operation::DistroboxRemoveAll:
