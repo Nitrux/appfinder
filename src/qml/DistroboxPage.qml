@@ -40,15 +40,22 @@ Maui.Page {
                 return
 
             const body = String(error || "").trim()
-            const title = action === "create" ? qsTr("Could not create container")
+            const normalizedBody = body.toLowerCase()
+            const hostServiceUnavailable = action === "start"
+                                           && normalizedBody.indexOf("not provided by any") >= 0
+                                           && normalizedBody.indexOf("no route to host") >= 0
+            const title = hostServiceUnavailable ? qsTr("Container unavailable in this session")
+                        : action === "create" ? qsTr("Could not create container")
                         : action === "start" ? qsTr("Could not start container")
                         : action === "stop" ? qsTr("Could not stop container")
                         : action === "stop-all" ? qsTr("Could not stop containers")
                         : action === "clone" ? qsTr("Could not clone container")
                         : action === "remove" ? qsTr("Could not delete container")
                                               : qsTr("Could not delete containers")
-            Maui.App.rootComponent.notify("dialog-error", title,
-                                          body.length > 0 ? body : qsTr("The container operation failed."))
+            const message = hostServiceUnavailable
+                ? qsTr("The container was created, but this session does not provide the host service needed to start it. Try starting it after booting the installed system.")
+                : (body.length > 0 ? body : qsTr("The container operation failed."))
+            Maui.App.rootComponent.notify("dialog-error", title, message)
         }
     }
 
