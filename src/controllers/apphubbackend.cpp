@@ -2205,7 +2205,7 @@ void AppHubBackend::createDistrobox(const QString &name, const QString &image, c
         return;
     }
 
-    QStringList arguments {QStringLiteral("--name"), normalizedName, QStringLiteral("--image"), normalizedImage};
+    QStringList arguments {QStringLiteral("--yes"), QStringLiteral("--name"), normalizedName, QStringLiteral("--image"), normalizedImage};
     if (!normalizedHome.isEmpty())
         arguments << QStringLiteral("--home") << normalizedHome;
 

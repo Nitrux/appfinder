@@ -93,6 +93,10 @@ Maui.ScrollColumn {
                     readonly property bool statusPositive: resultDelegate.itemStatus === "Installed" || resultDelegate.itemStatus === "Active"
                                                        || resultDelegate.itemStatus.toLowerCase().indexOf("up") >= 0
                                                        || resultDelegate.itemStatus.toLowerCase().indexOf("running") >= 0
+                    readonly property bool itemRunning: {
+                        const status = resultDelegate.itemStatus.toLowerCase()
+                        return status.indexOf("up") >= 0 || status.indexOf("running") >= 0
+                    }
 
                     Maui.GridBrowserDelegate {
                         id: resultCard
@@ -227,7 +231,7 @@ Maui.ScrollColumn {
                                         icon.name: control.secondaryActionIconResolver(model)
                                         display: ToolButton.IconOnly
                                         flat: false
-                                        enabled: !control.busy
+                                        enabled: !control.busy && !resultDelegate.itemRunning
                                         ToolTip.visible: hovered
                                         ToolTip.text: control.secondaryActionTextResolver(model)
                                         onClicked: {

@@ -733,6 +733,74 @@ Maui.ApplicationWindow {
         onRejected: close()
     }
 
+    Connections {
+        target: appHub
+
+        function onBusyChanged() {
+            if (!appHub.busy || appHub.operationAction !== "distrobox-create")
+                return
+
+            createOutputDialog.operationFinished = false
+            createOutputDialog.operationSucceeded = false
+            createOutputDialog.operationError = ""
+            createOutputDialog.open()
+        }
+
+        function onDistroboxOperationFinished(identifier, action, success, error) {
+            if (action !== "create" || !createOutputDialog.visible)
+                return
+
+            createOutputDialog.operationFinished = true
+            createOutputDialog.operationSucceeded = success
+            createOutputDialog.operationError = String(error || "").trim()
+        }
+    }
+
+    Maui.InfoDialog {
+        id: createOutputDialog
+        property bool operationFinished: false
+        property bool operationSucceeded: false
+        property string operationError: ""
+
+        implicitWidth: Math.min(root.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 40)
+        title: operationFinished
+               ? (operationSucceeded ? qsTr("Container Created") : qsTr("Container Creation Failed"))
+               : qsTr("Creating Container")
+        message: operationFinished
+                 ? (operationSucceeded
+                    ? qsTr("The container was created successfully.")
+                    : (operationError.length > 0 ? operationError : qsTr("The container could not be created.")))
+                 : qsTr("distrobox-create is still running.")
+        template.iconSource: "utilities-terminal"
+        standardButtons: Dialog.Close
+
+        Maui.SectionHeader {
+            Layout.fillWidth: true
+            text1: qsTr("Command Output")
+            text2: createOutputDialog.operationFinished
+                   ? qsTr("The operation has finished.")
+                   : qsTr("distrobox-create is still running.")
+            label2.wrapMode: Text.Wrap
+        }
+
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Maui.Style.units.gridUnit * 18
+            clip: true
+
+            TextArea {
+                width: parent.width
+                readOnly: true
+                selectByMouse: true
+                textFormat: TextEdit.PlainText
+                wrapMode: TextEdit.WrapAnywhere
+                text: appHub.operationLog.length > 0
+                      ? appHub.operationLog
+                      : qsTr("Waiting for distrobox-create output…")
+            }
+        }
+    }
+
     Maui.InfoDialog {
         id: deleteAllContainersDialog
         title: qsTr("Delete All Containers")

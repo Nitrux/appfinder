@@ -211,14 +211,14 @@ Maui.Page {
 
                             Button {
                                 text: qsTr("Clone")
-                                enabled: !appHub.busy
+                                enabled: !appHub.busy && !containerCard.running
                                 onClicked: control.cloneRequested(model.name)
                             }
 
                             Button {
                                 text: appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Delete")
-                                enabled: !appHub.busy
+                                enabled: !appHub.busy && !containerCard.running
                                 onClicked: appHub.removeDistrobox(model.name)
                             }
                         }
