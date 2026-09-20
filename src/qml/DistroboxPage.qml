@@ -239,7 +239,6 @@ Maui.Page {
         actionTextResolver: function(item) {
             return qsTr("Open Container Environment")
         }
-        actionIconResolver: function(item) { return "utilities-terminal" }
         actionHandler: function(identifier, item) { appHub.openDistrobox(identifier) }
         onBackRequested: control.closeDetails()
     }
