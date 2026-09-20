@@ -33,6 +33,7 @@ class AppHubBackend final : public QObject
     Q_OBJECT
     Q_PROPERTY(AppModel *flathubModel READ flathubModel CONSTANT)
     Q_PROPERTY(AppModel *flathubUpdatesModel READ flathubUpdatesModel CONSTANT)
+    Q_PROPERTY(AppModel *flathubRuntimeUpdatesModel READ flathubRuntimeUpdatesModel CONSTANT)
     Q_PROPERTY(AppModel *systemFlatpakModel READ systemFlatpakModel CONSTANT)
     Q_PROPERTY(AppModel *flatpakAddonsModel READ flatpakAddonsModel CONSTANT)
     Q_PROPERTY(AppModel *flathubFeaturedModel READ flathubFeaturedModel CONSTANT)
@@ -91,6 +92,7 @@ public:
 
     AppModel *flathubModel();
     AppModel *flathubUpdatesModel();
+    AppModel *flathubRuntimeUpdatesModel();
     AppModel *systemFlatpakModel();
     AppModel *flatpakAddonsModel();
     AppModel *flathubFeaturedModel();
@@ -152,6 +154,7 @@ public:
     Q_INVOKABLE void installFlatpak(const QString &identifier);
     Q_INVOKABLE void launchFlatpak(const QString &identifier);
     Q_INVOKABLE void updateFlatpak(const QString &identifier);
+    Q_INVOKABLE void updateFlatpakRuntime(const QString &identifier, bool systemWide);
     Q_INVOKABLE void removeFlatpak(const QString &identifier);
     Q_INVOKABLE void removeInstalledFlatpak(const QString &identifier, bool systemWide);
     Q_INVOKABLE void loadFlatpakAddons(const QString &identifier, bool systemWide);
@@ -315,6 +318,7 @@ private:
 
     AppModel *m_flathubModel;
     AppModel *m_flathubUpdatesModel;
+    AppModel *m_flathubRuntimeUpdatesModel;
     AppModel *m_systemFlatpakModel;
     AppModel *m_flatpakAddonsModel;
     AppModel *m_flathubFeaturedModel;

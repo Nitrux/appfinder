@@ -1155,8 +1155,61 @@ Maui.Page {
 
             Rectangle {
                 Layout.fillWidth: true
+                visible: appHub.flathubRuntimeUpdatesModel.count > 0
+                Layout.topMargin: appHub.flathubUpdatesModel.count > 0 ? Math.max(0, Maui.Style.space.big - installedScroll.spacing) : 0
+                color: Maui.Theme.alternateBackgroundColor
+                radius: Maui.Style.radiusV
+                border.color: Maui.Theme.backgroundColor
+                border.width: 1
+                implicitHeight: runtimeUpdatesLayout.implicitHeight + Maui.Style.contentMargins * 2
+
+                ColumnLayout {
+                    id: runtimeUpdatesLayout
+                    anchors.fill: parent
+                    anchors.margins: Maui.Style.contentMargins
+                    spacing: Maui.Style.space.small
+
+                    Maui.SectionHeader {
+                        Layout.fillWidth: true
+                        text1: qsTr("Runtime Updates (%1)").arg(appHub.flathubRuntimeUpdatesModel.count)
+                        text2: qsTr("New Flatpak runtime versions available from Flathub.")
+                        label2.wrapMode: Text.Wrap
+                    }
+
+                    Repeater {
+                        model: appHub.flathubRuntimeUpdatesModel
+
+                        delegate: Maui.ListBrowserDelegate {
+                            id: runtimeUpdateDelegate
+
+                            readonly property bool updating: appHub.flatpakUpdateIdentifier === model.identifier
+
+                            Layout.fillWidth: true
+                            iconSource: model.icon
+                            iconSizeHint: Maui.Style.iconSizes.big
+                            template.leftLabels.spacing: Maui.Style.space.small
+                            label1.text: model.name
+                            label1.font.weight: Font.DemiBold
+                            label1.elide: Text.ElideRight
+                            label2.text: model.version.length > 0
+                                         ? qsTr("Version %1 • %2 download").arg(model.version).arg(control.sizeText(model.size))
+                                         : qsTr("A new runtime version is available")
+                            label2.elide: Text.ElideRight
+
+                            Button {
+                                text: runtimeUpdateDelegate.updating ? appHub.operationLabel : qsTr("Update")
+                                enabled: !appHub.busy
+                                onClicked: appHub.updateFlatpakRuntime(model.identifier, model.integration === "system")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.topMargin: appHub.flathubUpdatesModel.count > 0 ? Math.max(0, 16 - installedScroll.spacing) : 0
+                Layout.topMargin: (appHub.flathubUpdatesModel.count > 0 || appHub.flathubRuntimeUpdatesModel.count > 0) ? Math.max(0, 16 - installedScroll.spacing) : 0
                 Layout.preferredHeight: installedBrowser.holder.visible ? Math.max(implicitHeight, installedScroll.availableHeight - y) : implicitHeight
                 color: Maui.Theme.alternateBackgroundColor
                 radius: Maui.Style.radiusV

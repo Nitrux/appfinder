@@ -656,6 +656,7 @@ AppHubBackend::AppHubBackend(QObject *parent)
     : QObject(parent)
     , m_flathubModel(new AppModel(this))
     , m_flathubUpdatesModel(new AppModel(this))
+    , m_flathubRuntimeUpdatesModel(new AppModel(this))
     , m_systemFlatpakModel(new AppModel(this))
     , m_flatpakAddonsModel(new AppModel(this))
     , m_flathubFeaturedModel(new AppModel(this))
@@ -709,6 +710,11 @@ AppModel *AppHubBackend::flathubModel()
 AppModel *AppHubBackend::flathubUpdatesModel()
 {
     return m_flathubUpdatesModel;
+}
+
+AppModel *AppHubBackend::flathubRuntimeUpdatesModel()
+{
+    return m_flathubRuntimeUpdatesModel;
 }
 
 AppModel *AppHubBackend::systemFlatpakModel()
@@ -1244,6 +1250,7 @@ QString AppHubBackend::notificationName(const QString &identifier) const
     const QList<AppModel *> models {
         m_flathubModel,
         m_flathubUpdatesModel,
+        m_flathubRuntimeUpdatesModel,
         m_systemFlatpakModel,
         m_flatpakAddonsModel,
         m_flathubFeaturedModel,
@@ -1750,6 +1757,24 @@ void AppHubBackend::updateFlatpak(const QString &identifier)
         return;
     }
     setStatusMessage(QStringLiteral("Updating %1 from Flathub…").arg(identifier));
+}
+
+void AppHubBackend::updateFlatpakRuntime(const QString &identifier, bool systemWide)
+{
+    if (!isSafeIdentifier(identifier)) {
+        const QString error = QStringLiteral("Invalid Flatpak runtime identifier.");
+        setStatusMessage(error);
+        emitFlatpakOperationResult(Operation::FlatpakUpdate, identifier, false, error);
+        return;
+    }
+    if (!startOperation(QStringLiteral("flatpak"),
+                        {QStringLiteral("update"), systemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--runtime"), identifier},
+                        Operation::FlatpakUpdate,
+                        identifier)) {
+        emitFlatpakOperationResult(Operation::FlatpakUpdate, identifier, false, statusMessage());
+        return;
+    }
+    setStatusMessage(QStringLiteral("Updating runtime %1 from Flathub…").arg(identifier));
 }
 
 void AppHubBackend::removeFlatpak(const QString &identifier)
@@ -2522,6 +2547,76 @@ void AppHubBackend::refreshFlatpakUpdates()
         return left.identifier.compare(right.identifier, Qt::CaseInsensitive) < 0;
     });
     m_flathubUpdatesModel->setItems(items);
+
+    const auto parseRuntimeUpdates = [this](const QByteArray &output, bool systemWide) {
+        QList<AppModel::Item> runtimeItems;
+        for (const QByteArray &line : output.split(10)) {
+            const QStringList fields = QString::fromLocal8Bit(line).split(QChar(9));
+            if (fields.size() < 4)
+                continue;
+
+            const QString identifier = fields.at(0).trimmed();
+            if (!isSafeIdentifier(identifier))
+                continue;
+
+            QString name = fields.value(1).trimmed();
+            if (name.isEmpty())
+                name = identifier;
+
+            runtimeItems.append({
+                name,
+                QStringLiteral("Update available"),
+                fields.value(2).trimmed(),
+                architecture(),
+                identifier,
+                QStringLiteral("Runtime"),
+                {},
+                {},
+                QStringLiteral("application-x-flatpak"),
+                QStringLiteral("Update Available"),
+                {},
+                {},
+                {},
+                QStringLiteral("An updated Flatpak runtime is available from Flathub."),
+                systemWide ? QStringLiteral("system") : QStringLiteral("user"),
+                QStringLiteral("Flatpak Runtime"),
+                fields.value(3).trimmed(),
+                {},
+                {},
+                {},
+                {}
+            });
+        }
+        return runtimeItems;
+    };
+
+    const QByteArray userRuntimeOutput = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("remote-ls"),
+         QStringLiteral("--user"),
+         QStringLiteral("--runtime"),
+         QStringLiteral("--updates"),
+         QStringLiteral("--arch=%1").arg(architecture()),
+         QStringLiteral("--columns=application,name,version,download-size"),
+         QStringLiteral("flathub")});
+    const QByteArray systemRuntimeOutput = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("remote-ls"),
+         QStringLiteral("--system"),
+         QStringLiteral("--runtime"),
+         QStringLiteral("--updates"),
+         QStringLiteral("--arch=%1").arg(architecture()),
+         QStringLiteral("--columns=application,name,version,download-size"),
+         QStringLiteral("flathub")});
+    QList<AppModel::Item> runtimeItems = parseRuntimeUpdates(userRuntimeOutput, false);
+    runtimeItems.append(parseRuntimeUpdates(systemRuntimeOutput, true));
+    std::stable_sort(runtimeItems.begin(), runtimeItems.end(), [](const AppModel::Item &left, const AppModel::Item &right) {
+        const int nameComparison = left.name.compare(right.name, Qt::CaseInsensitive);
+        if (nameComparison != 0)
+            return nameComparison < 0;
+        return left.identifier.compare(right.identifier, Qt::CaseInsensitive) < 0;
+    });
+    m_flathubRuntimeUpdatesModel->setItems(runtimeItems);
 }
 
 void AppHubBackend::refreshFlatpakAddons()
