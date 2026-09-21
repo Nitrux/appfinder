@@ -1365,7 +1365,7 @@ void AppHubBackend::showOperationNotification(Operation operation, const QString
 
     QStringList arguments {
         QStringLiteral("--app-name=AppFinder"),
-        QStringLiteral("--icon=application-x-iso9660-appimage"),
+        QStringLiteral("--icon=nx-software-center"),
         title
     };
     if (!body.isEmpty())
