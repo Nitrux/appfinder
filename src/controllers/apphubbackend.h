@@ -249,6 +249,9 @@ private:
         Start,
         Chown,
         Chmod,
+        ManCacheInspect,
+        ManCacheOwner,
+        ManCacheMode,
         Stop
     };
 

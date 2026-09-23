@@ -1186,7 +1186,8 @@ void AppHubBackend::startDistroboxRepairStep(const QStringList &arguments)
 
 bool AppHubBackend::continueDistroboxRepair(int exitCode, QProcess::ExitStatus exitStatus)
 {
-    if (exitStatus != QProcess::NormalExit || exitCode != 0 || m_processOutputTooLarge)
+    const bool missingManCache = m_distroboxRepairStep == DistroboxRepairStep::ManCacheInspect && exitCode == 1;
+    if (exitStatus != QProcess::NormalExit || (exitCode != 0 && !missingManCache) || m_processOutputTooLarge)
         return false;
 
     const QString name = m_operationIdentifier;
@@ -1217,6 +1218,32 @@ bool AppHubBackend::continueDistroboxRepair(int exitCode, QProcess::ExitStatus e
                                   QStringLiteral("chmod"), QStringLiteral("4755"), QStringLiteral("/usr/bin/sudo")});
         return true;
     case DistroboxRepairStep::Chmod:
+        m_distroboxRepairStep = DistroboxRepairStep::ManCacheInspect;
+        startDistroboxRepairStep({QStringLiteral("exec"), QStringLiteral("--user"), QStringLiteral("0"), name,
+                                  QStringLiteral("test"), QStringLiteral("-d"), QStringLiteral("/var/cache/man")});
+        return true;
+    case DistroboxRepairStep::ManCacheInspect:
+        if (exitCode == 0) {
+            m_distroboxRepairStep = DistroboxRepairStep::ManCacheOwner;
+            startDistroboxRepairStep({QStringLiteral("exec"), QStringLiteral("--user"), QStringLiteral("0"), name,
+                                      QStringLiteral("chown"), QStringLiteral("-R"), QStringLiteral("man:man"),
+                                      QStringLiteral("/var/cache/man")});
+            return true;
+        }
+        if (!m_distroboxRepairWasRunning) {
+            m_distroboxRepairStep = DistroboxRepairStep::Stop;
+            startDistroboxRepairStep({QStringLiteral("container"), QStringLiteral("stop"), name});
+            return true;
+        }
+        m_distroboxRepairStep = DistroboxRepairStep::None;
+        return false;
+    case DistroboxRepairStep::ManCacheOwner:
+        m_distroboxRepairStep = DistroboxRepairStep::ManCacheMode;
+        startDistroboxRepairStep({QStringLiteral("exec"), QStringLiteral("--user"), QStringLiteral("0"), name,
+                                  QStringLiteral("chmod"), QStringLiteral("-R"), QStringLiteral("u+rwX"),
+                                  QStringLiteral("/var/cache/man")});
+        return true;
+    case DistroboxRepairStep::ManCacheMode:
         if (!m_distroboxRepairWasRunning) {
             m_distroboxRepairStep = DistroboxRepairStep::Stop;
             startDistroboxRepairStep({QStringLiteral("container"), QStringLiteral("stop"), name});
