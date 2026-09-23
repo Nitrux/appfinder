@@ -181,6 +181,7 @@ public:
     Q_INVOKABLE void stopDistrobox(const QString &name);
     Q_INVOKABLE void stopAllDistroboxes();
     Q_INVOKABLE void cloneDistrobox(const QString &source, const QString &name);
+    Q_INVOKABLE void repairDistrobox(const QString &name);
     Q_INVOKABLE void removeDistrobox(const QString &name);
     Q_INVOKABLE void removeAllDistroboxes();
     Q_INVOKABLE bool isFlatpakInstalled(const QString &identifier) const;
@@ -236,8 +237,19 @@ private:
         DistroboxStop,
         DistroboxStopAll,
         DistroboxClone,
+        DistroboxRepair,
         DistroboxRemove,
         DistroboxRemoveAll
+    };
+
+    enum class DistroboxRepairStep
+    {
+        None,
+        Inspect,
+        Start,
+        Chown,
+        Chmod,
+        Stop
     };
 
     QByteArray runCommand(const QString &program, const QStringList &arguments, int timeout = 10000) const;
@@ -246,6 +258,8 @@ private:
                         Operation operation,
                         const QString &identifier = {},
                         const QString &workingDirectory = {});
+    void startDistroboxRepairStep(const QStringList &arguments);
+    bool continueDistroboxRepair(int exitCode, QProcess::ExitStatus exitStatus);
     void emitFlatpakOperationResult(Operation operation,
                                     const QString &identifier,
                                     bool success,
@@ -376,6 +390,8 @@ private:
     QString m_flatpakUpdateIdentifier;
     int m_flatpakUpdateProgress = -1;
     Operation m_operation = Operation::None;
+    DistroboxRepairStep m_distroboxRepairStep = DistroboxRepairStep::None;
+    bool m_distroboxRepairWasRunning = false;
     int m_operationAnimationStep = 0;
     int m_currentSection = AppHub;
     int m_flathubCollection = TrendingCollection;

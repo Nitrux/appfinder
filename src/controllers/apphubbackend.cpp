@@ -964,6 +964,7 @@ QString AppHubBackend::operationAction() const
     case Operation::DistroboxStop: return QStringLiteral("distrobox-stop");
     case Operation::DistroboxStopAll: return QStringLiteral("distrobox-stop-all");
     case Operation::DistroboxClone: return QStringLiteral("distrobox-clone");
+    case Operation::DistroboxRepair: return QStringLiteral("distrobox-repair");
     case Operation::DistroboxRemove: return QStringLiteral("distrobox-remove");
     case Operation::DistroboxRemoveAll: return QStringLiteral("distrobox-remove-all");
     case Operation::None:
@@ -1013,6 +1014,7 @@ QString AppHubBackend::operationLabel() const
     case Operation::DistroboxStop: return animate(tr("Stopping container…"));
     case Operation::DistroboxStopAll: return animate(tr("Stopping all containers…"));
     case Operation::DistroboxClone: return animate(tr("Cloning container…"));
+    case Operation::DistroboxRepair: return animate(tr("Repairing…"));
     case Operation::DistroboxRemove: return animate(tr("Deleting container…"));
     case Operation::DistroboxRemoveAll: return animate(tr("Deleting all containers…"));
     case Operation::None:
@@ -1165,6 +1167,72 @@ bool AppHubBackend::startOperation(const QString &program,
     return true;
 }
 
+void AppHubBackend::startDistroboxRepairStep(const QStringList &arguments)
+{
+    const QString executable = findExecutable(QStringLiteral("podman"));
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
+    environment.insert(QStringLiteral("LANG"), QStringLiteral("C"));
+    m_process->setProcessEnvironment(environment);
+    m_process->setProcessChannelMode(QProcess::SeparateChannels);
+    m_process->setWorkingDirectory(QString());
+    m_processOutput.clear();
+    m_processErrorOutput.clear();
+    m_processOutputTooLarge = false;
+    m_operationLog = QStringLiteral("Running Podman repair step…");
+    emit operationLogChanged();
+    m_process->start(executable, arguments);
+}
+
+bool AppHubBackend::continueDistroboxRepair(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    if (exitStatus != QProcess::NormalExit || exitCode != 0 || m_processOutputTooLarge)
+        return false;
+
+    const QString name = m_operationIdentifier;
+    switch (m_distroboxRepairStep) {
+    case DistroboxRepairStep::Inspect: {
+        const QString state = QString::fromLocal8Bit(m_processOutput).trimmed();
+        m_distroboxRepairWasRunning = state == QLatin1String("true");
+        if (m_distroboxRepairWasRunning) {
+            m_distroboxRepairStep = DistroboxRepairStep::Chown;
+            startDistroboxRepairStep({QStringLiteral("exec"), QStringLiteral("--user"), QStringLiteral("0"), name,
+                                      QStringLiteral("chown"), QStringLiteral("0:0"), QStringLiteral("/etc/sudo.conf"),
+                                      QStringLiteral("/usr/bin/sudo")});
+        } else {
+            m_distroboxRepairStep = DistroboxRepairStep::Start;
+            startDistroboxRepairStep({QStringLiteral("container"), QStringLiteral("start"), name});
+        }
+        return true;
+    }
+    case DistroboxRepairStep::Start:
+        m_distroboxRepairStep = DistroboxRepairStep::Chown;
+        startDistroboxRepairStep({QStringLiteral("exec"), QStringLiteral("--user"), QStringLiteral("0"), name,
+                                  QStringLiteral("chown"), QStringLiteral("0:0"), QStringLiteral("/etc/sudo.conf"),
+                                  QStringLiteral("/usr/bin/sudo")});
+        return true;
+    case DistroboxRepairStep::Chown:
+        m_distroboxRepairStep = DistroboxRepairStep::Chmod;
+        startDistroboxRepairStep({QStringLiteral("exec"), QStringLiteral("--user"), QStringLiteral("0"), name,
+                                  QStringLiteral("chmod"), QStringLiteral("4755"), QStringLiteral("/usr/bin/sudo")});
+        return true;
+    case DistroboxRepairStep::Chmod:
+        if (!m_distroboxRepairWasRunning) {
+            m_distroboxRepairStep = DistroboxRepairStep::Stop;
+            startDistroboxRepairStep({QStringLiteral("container"), QStringLiteral("stop"), name});
+            return true;
+        }
+        m_distroboxRepairStep = DistroboxRepairStep::None;
+        return false;
+    case DistroboxRepairStep::Stop:
+        m_distroboxRepairStep = DistroboxRepairStep::None;
+        return false;
+    case DistroboxRepairStep::None:
+        return false;
+    }
+    return false;
+}
+
 void AppHubBackend::emitFlatpakOperationResult(Operation operation,
                                                const QString &identifier,
                                                bool success,
@@ -1227,6 +1295,7 @@ void AppHubBackend::emitDistroboxOperationResult(Operation operation,
     case Operation::DistroboxStop: action = QStringLiteral("stop"); break;
     case Operation::DistroboxStopAll: action = QStringLiteral("stop-all"); break;
     case Operation::DistroboxClone: action = QStringLiteral("clone"); break;
+    case Operation::DistroboxRepair: action = QStringLiteral("repair"); break;
     case Operation::DistroboxRemove: action = QStringLiteral("remove"); break;
     case Operation::DistroboxRemoveAll: action = QStringLiteral("remove-all"); break;
     default: return;
@@ -1350,6 +1419,10 @@ void AppHubBackend::showOperationNotification(Operation operation, const QString
     case Operation::DistroboxClone:
         title = tr("Container cloned");
         body = tr("%1 was cloned successfully.").arg(identifier);
+        break;
+    case Operation::DistroboxRepair:
+        title = tr("Container repaired");
+        body = tr("%1 was repaired successfully.").arg(identifier);
         break;
     case Operation::DistroboxRemove:
         title = tr("Container deleted");
@@ -2325,6 +2398,34 @@ void AppHubBackend::cloneDistrobox(const QString &source, const QString &name)
         return;
     }
     setStatusMessage(QStringLiteral("Cloning %1 as %2…").arg(source, name));
+}
+
+void AppHubBackend::repairDistrobox(const QString &name)
+{
+    if (!isSafeIdentifier(name)) {
+        setStatusMessage(QStringLiteral("Invalid Distrobox name."));
+        emitDistroboxOperationResult(Operation::DistroboxRepair, name, false, statusMessage());
+        return;
+    }
+    const QString executable = findExecutable(QStringLiteral("podman"));
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("podman is not installed."));
+        emitDistroboxOperationResult(Operation::DistroboxRepair, name, false, statusMessage());
+        return;
+    }
+
+    m_distroboxRepairWasRunning = false;
+    m_distroboxRepairStep = DistroboxRepairStep::Inspect;
+    if (!startOperation(executable,
+                        {QStringLiteral("container"), QStringLiteral("inspect"), QStringLiteral("--format"),
+                         QStringLiteral("{{.State.Running}}"), name},
+                        Operation::DistroboxRepair,
+                        name)) {
+        m_distroboxRepairStep = DistroboxRepairStep::None;
+        emitDistroboxOperationResult(Operation::DistroboxRepair, name, false, statusMessage());
+        return;
+    }
+    setStatusMessage(QStringLiteral("Repairing %1…").arg(name));
 }
 
 void AppHubBackend::removeDistrobox(const QString &name)
@@ -3904,6 +4005,9 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
     if (operation == Operation::DistroboxStart && m_pendingDistroboxOpen == identifier)
         m_pendingDistroboxOpen.clear();
 
+    if (operation == Operation::DistroboxRepair)
+        m_distroboxRepairStep = DistroboxRepairStep::None;
+
     emitFlatpakOperationResult(operation, identifier, false, message);
     emitAppHubOperationResult(operation, identifier, false, message);
     emitDistroboxOperationResult(operation, identifier, false, message);
@@ -3960,6 +4064,13 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const bool openDistroboxAfterStart = operation == Operation::DistroboxStart && m_pendingDistroboxOpen == identifier;
     const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
         && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
+    if (operation == Operation::DistroboxRepair
+        && m_distroboxRepairStep != DistroboxRepairStep::None
+        && continueDistroboxRepair(exitCode, exitStatus)) {
+        return;
+    }
+    if (operation == Operation::DistroboxRepair)
+        m_distroboxRepairStep = DistroboxRepairStep::None;
     if ((operation == Operation::FlatpakInstall || operation == Operation::FlatpakUpdate || operation == Operation::AppHubInstall)
         && exitStatus == QProcess::NormalExit
         && exitCode == 0
@@ -4106,6 +4217,11 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             m_pendingDistroboxOpen.clear();
             openDistroboxInStation(identifier);
         }
+        break;
+    case Operation::DistroboxRepair:
+        refreshDistrobox();
+        setStatusMessage(QStringLiteral("Repaired %1.").arg(identifier));
+        emitDistroboxOperationResult(Operation::DistroboxRepair, identifier, true);
         break;
     case Operation::DistroboxStopAll:
     case Operation::DistroboxRemoveAll:

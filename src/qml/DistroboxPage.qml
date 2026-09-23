@@ -51,6 +51,7 @@ Maui.Page {
                         : action === "stop" ? qsTr("Could not stop container")
                         : action === "stop-all" ? qsTr("Could not stop containers")
                         : action === "clone" ? qsTr("Could not clone container")
+                        : action === "repair" ? qsTr("Could not repair container")
                         : action === "remove" ? qsTr("Could not delete container")
                                               : qsTr("Could not delete containers")
             const message = hostServiceUnavailable
@@ -208,6 +209,13 @@ Maui.Page {
                             }
 
                             Item { Layout.fillWidth: true }
+
+                            Button {
+                                text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Repair")
+                                enabled: !appHub.busy
+                                onClicked: appHub.repairDistrobox(model.name)
+                            }
 
                             Button {
                                 text: qsTr("Clone")
