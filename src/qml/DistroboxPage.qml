@@ -135,6 +135,95 @@ Maui.Page {
                     border.width: 1
                 }
 
+                Maui.SettingsDialog {
+                    id: containerInformationPopup
+                    title: qsTr("Container Information")
+                    persistent: true
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Maui.Style.space.small
+
+                        Maui.FlexSectionItem {
+                            Layout.fillWidth: true
+                            flat: true
+                            wide: true
+                            label1.text: qsTr("Image")
+                            label2.text: qsTr("Base image used by the container.")
+                            label2.wrapMode: Text.Wrap
+
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                text: model.baseImage.length > 0 ? model.baseImage : qsTr("Unavailable")
+                                horizontalAlignment: Text.AlignRight
+                                wrapMode: Text.NoWrap
+                                elide: Text.ElideMiddle
+                            }
+                        }
+
+                        Maui.FlexSectionItem {
+                            Layout.fillWidth: true
+                            flat: true
+                            visible: model.uptime.length > 0
+                            label1.text: qsTr("Uptime")
+                            label2.text: qsTr("Time elapsed since the container started.")
+                            label2.wrapMode: Text.Wrap
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: model.uptime
+                                horizontalAlignment: Text.AlignRight
+                            }
+                        }
+
+                        Maui.FlexSectionItem {
+                            Layout.fillWidth: true
+                            flat: true
+                            visible: model.size.length > 0
+                            label1.text: qsTr("Size")
+                            label2.text: qsTr("Container storage usage.")
+                            label2.wrapMode: Text.Wrap
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: model.size
+                                horizontalAlignment: Text.AlignRight
+                            }
+                        }
+
+                        Maui.FlexSectionItem {
+                            Layout.fillWidth: true
+                            flat: true
+                            visible: model.created.length > 0
+                            label1.text: qsTr("Created")
+                            label2.text: qsTr("Date the container was created.")
+                            label2.wrapMode: Text.Wrap
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: model.created
+                                horizontalAlignment: Text.AlignRight
+                            }
+                        }
+
+                        Maui.FlexSectionItem {
+                            Layout.fillWidth: true
+                            flat: true
+                            visible: model.architecture.length > 0
+                            label1.text: qsTr("Architecture")
+                            label2.text: qsTr("Container CPU architecture.")
+                            label2.wrapMode: Text.Wrap
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: model.architecture
+                                horizontalAlignment: Text.AlignRight
+                            }
+                        }
+                    }
+                }
+
                 RowLayout {
                     id: cardLayout
                     anchors.fill: parent
@@ -146,6 +235,7 @@ Maui.Page {
                         Layout.preferredWidth: Maui.Style.iconSizes.large
                         Layout.preferredHeight: Maui.Style.iconSizes.large
                         iconSizeHint: Maui.Style.iconSizes.large
+                        imageSource: model.iconUrl
                         iconSource: model.icon
                     }
 
@@ -155,63 +245,83 @@ Maui.Page {
                         Layout.minimumWidth: 0
                         spacing: Maui.Style.space.medium
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Maui.Style.space.medium
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: model.name
-                                font: Maui.Style.h2Font
-                                elide: Text.ElideRight
-                            }
-
-                            AppFinderChip {
-                                text: containerCard.running ? qsTr("Running") : qsTr("Stopped")
-                            }
-                        }
-
-                        AppFinderChip {
-                            Layout.minimumWidth: 0
-                            Layout.maximumWidth: parent.width
-                            text: model.baseImage.length > 0 ? qsTr("Image: %1").arg(model.baseImage) : qsTr("Image: Unavailable")
-                        }
-
-                        Flow {
+                        ColumnLayout {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            visible: model.uptime.length > 0
-                                     || model.size.length > 0
-                                     || model.created.length > 0
-                                     || model.containerMode.length > 0
-                                     || model.architecture.length > 0
                             spacing: Maui.Style.space.small
 
-                            AppFinderChip {
-                                visible: model.uptime.length > 0
-                                text: qsTr("Uptime: %1").arg(model.uptime)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Maui.Style.space.medium
+
+                                Label {
+                                    id: text1
+                                    Layout.minimumWidth: 0
+                                    text: model.name
+                                    font: Maui.Style.h2Font
+                                    elide: Text.ElideRight
+                                }
+
+                                ToolSeparator {
+                                    visible: containerCard.running
+                                    Layout.alignment: Qt.AlignVCenter
+                                    orientation: Qt.Vertical
+                                    topPadding: 10
+                                    bottomPadding: 10
+                                }
+
+                                ToolButton {
+                                    visible: containerCard.running
+                                    text: qsTr("Open container")
+                                    display: AbstractButton.IconOnly
+                                    icon.name: "utilities-terminal"
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: appHub.openDistrobox(model.name)
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                ToolButton {
+                                    text: qsTr("Container information")
+                                    display: AbstractButton.IconOnly
+                                    icon.name: "documentinfo"
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: containerInformationPopup.open()
+                                }
+
+                                ToolSeparator {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    orientation: Qt.Vertical
+                                    topPadding: 10
+                                    bottomPadding: 10
+                                }
+
+                                AppFinderChip {
+                                    text: containerCard.running ? qsTr("Running") : qsTr("Stopped")
+                                    color: containerCard.running ? Maui.Theme.positiveBackgroundColor : Maui.Theme.negativeBackgroundColor
+                                    textOpacity: 1.00
+                                }
                             }
 
-                            AppFinderChip {
-                                visible: model.size.length > 0
-                                text: qsTr("Size: %1").arg(model.size)
-                            }
-
-                            AppFinderChip {
-                                visible: model.created.length > 0
-                                text: qsTr("Created: %1").arg(model.created)
-                            }
-
-                            AppFinderChip {
-                                visible: model.containerMode.length > 0
-                                text: qsTr("Mode: %1").arg(model.containerMode)
-                            }
-
-                            AppFinderChip {
-                                visible: model.architecture.length > 0
-                                text: qsTr("Architecture: %1").arg(model.architecture)
+                            Label {
+                                id: text2
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                visible: text.length > 0
+                                text: model.containerMode === "Rootless"
+                                      ? qsTr("Runs without root privileges.")
+                                      : model.containerMode === "Rootful"
+                                        ? qsTr("Runs with root privileges.")
+                                        : ""
+                                font.pointSize: Maui.Style.fontSizes.small
+                                opacity: 0.6
+                                elide: Text.ElideRight
                             }
                         }
+
 
                         RowLayout {
                             visible: !containerCard.compactLayout
@@ -220,31 +330,29 @@ Maui.Page {
                             spacing: Maui.Style.space.medium
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: !containerCard.running
                                 text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
-                                      ? appHub.operationLabel : qsTr("Start Container")
+                                      ? appHub.operationLabel : qsTr("Start")
+                                Maui.Controls.status: Maui.Controls.Positive
                                 enabled: !appHub.busy
                                 onClicked: appHub.startDistrobox(model.name)
                             }
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: containerCard.running
                                 text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
-                                      ? appHub.operationLabel : qsTr("Stop Container")
+                                      ? appHub.operationLabel : qsTr("Stop")
+                                Maui.Controls.status: Maui.Controls.Negative
                                 enabled: !appHub.busy
                                 onClicked: appHub.stopDistrobox(model.name)
-                            }
-
-                            Button {
-                                visible: containerCard.running
-                                text: qsTr("Open Container Environment")
-                                enabled: !appHub.busy
-                                onClicked: appHub.openDistrobox(model.name)
                             }
 
                             Item { Layout.fillWidth: true }
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Repair")
                                 enabled: !appHub.busy
@@ -252,12 +360,14 @@ Maui.Page {
                             }
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: qsTr("Clone")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: control.cloneRequested(model.name)
                             }
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Delete")
                                 enabled: !appHub.busy && !containerCard.running
@@ -273,29 +383,27 @@ Maui.Page {
                             spacing: Maui.Style.space.small
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: !containerCard.running
                                 text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
-                                      ? appHub.operationLabel : qsTr("Start Container")
+                                      ? appHub.operationLabel : qsTr("Start")
+                                Maui.Controls.status: Maui.Controls.Positive
                                 enabled: !appHub.busy
                                 onClicked: appHub.startDistrobox(model.name)
                             }
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: containerCard.running
                                 text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
-                                      ? appHub.operationLabel : qsTr("Stop Container")
+                                      ? appHub.operationLabel : qsTr("Stop")
+                                Maui.Controls.status: Maui.Controls.Negative
                                 enabled: !appHub.busy
                                 onClicked: appHub.stopDistrobox(model.name)
                             }
 
                             Button {
-                                visible: containerCard.running
-                                text: qsTr("Open Container Environment")
-                                enabled: !appHub.busy
-                                onClicked: appHub.openDistrobox(model.name)
-                            }
-
-                            Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Repair")
                                 enabled: !appHub.busy
@@ -303,12 +411,14 @@ Maui.Page {
                             }
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: qsTr("Clone")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: control.cloneRequested(model.name)
                             }
 
                             Button {
+                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Delete")
                                 enabled: !appHub.busy && !containerCard.running

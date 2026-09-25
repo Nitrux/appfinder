@@ -683,6 +683,7 @@ Maui.ApplicationWindow {
 
     Maui.InfoDialog {
         id: createDialog
+        property bool customHomeEnabled: false
         implicitWidth: Math.min(root.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 30)
         title: qsTr("New Container")
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -712,8 +713,20 @@ Maui.ApplicationWindow {
         }
 
         Maui.FlexSectionItem {
-            label1.text: qsTr("Custom home directory")
-            label2.text: qsTr("Host directory used as the container home. Optional.")
+            label1.text: qsTr("Use custom home directory")
+            label2.text: qsTr("Mount a host directory as the container home.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.customHomeEnabled
+                onToggled: createDialog.customHomeEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.customHomeEnabled
+            label1.text: qsTr("Home directory")
+            label2.text: qsTr("Host directory used as the container home.")
             label2.wrapMode: Text.Wrap
 
             Maui.TextField {
@@ -724,13 +737,18 @@ Maui.ApplicationWindow {
         }
 
         onAccepted: {
-            appHub.createDistrobox(containerNameField.text, containerImageField.text, containerHomeField.text)
+            appHub.createDistrobox(containerNameField.text, containerImageField.text, customHomeEnabled ? containerHomeField.text : "")
             containerNameField.clear()
             containerImageField.clear()
             containerHomeField.clear()
+            customHomeEnabled = false
             close()
         }
-        onRejected: close()
+        onRejected: {
+            containerHomeField.clear()
+            customHomeEnabled = false
+            close()
+        }
     }
 
     Connections {

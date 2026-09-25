@@ -11,14 +11,16 @@ Maui.Chip {
     hoverEnabled: false
     focusPolicy: Qt.NoFocus
     opacity: 1
+    property real textOpacity: 0.6
     padding: Maui.Style.space.small
+    color: "black"
     font.family: "Monospace"
     font.pointSize: Maui.Style.fontSizes.tiny
     implicitWidth: chipValue.implicitWidth + padding * 2
     implicitHeight: chipValue.implicitHeight + padding * 2
 
     background: Rectangle {
-        color: "black"
+        color: control.color
         opacity: 0.5
         radius: Maui.Style.radiusV
     }
@@ -27,7 +29,7 @@ Maui.Chip {
         id: chipValue
         text: control.text
         font: control.font
-        opacity: 0.6
+        opacity: control.textOpacity
         color: Maui.Theme.textColor
         horizontalAlignment: Text.AlignLeft
         elide: Text.ElideRight

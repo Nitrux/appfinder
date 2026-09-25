@@ -138,6 +138,18 @@ bool isSafeIdentifier(const QString &value)
     return pattern.match(value).hasMatch();
 }
 
+void removeDistroboxLauncher(const QString &name)
+{
+    if (!isSafeIdentifier(name))
+        return;
+
+    const QString dataLocation = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (dataLocation.isEmpty())
+        return;
+
+    QFile::remove(QDir(dataLocation).filePath(QStringLiteral("applications/%1.desktop").arg(name)));
+}
+
 struct FlatpakExtensionPoint
 {
     QString identifier;
@@ -3799,6 +3811,30 @@ QList<AppModel::Item> AppHubBackend::appHubBackupItems(const QString &identifier
 QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output) const
 {
     QList<AppModel::Item> items;
+    const QString dataLocation = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    const auto launcherIcon = [&dataLocation](const QString &name) {
+        if (dataLocation.isEmpty())
+            return QString();
+
+        QFile launcher(QDir(dataLocation).filePath(QStringLiteral("applications/%1.desktop").arg(name)));
+        if (!launcher.open(QIODevice::ReadOnly | QIODevice::Text))
+            return QString();
+
+        bool desktopEntry = false;
+        while (!launcher.atEnd()) {
+            const QString line = QString::fromLocal8Bit(launcher.readLine()).trimmed();
+            if (line == QLatin1String("[Desktop Entry]")) {
+                desktopEntry = true;
+                continue;
+            }
+            if (desktopEntry && line.startsWith(QLatin1String("[")))
+                break;
+            if (desktopEntry && line.startsWith(QLatin1String("Icon=")))
+                return line.mid(5).trimmed();
+        }
+
+        return QString();
+    };
     for (const QByteArray &line : output.split('\n')) {
         const QString text = QString::fromLocal8Bit(line).trimmed();
         if (!text.contains('|') || text.startsWith(QLatin1String("ID")))
@@ -3826,6 +3862,16 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
 
         if (name.isEmpty() || name == QLatin1String("NAME") || !isSafeIdentifier(name))
             continue;
+
+        QString icon = QStringLiteral("utilities-terminal");
+        QString iconUrl;
+        const QString launcherIconValue = launcherIcon(name);
+        if (launcherIconValue.startsWith(QLatin1Char(47)) && QFileInfo::exists(launcherIconValue)) {
+            icon = launcherIconValue;
+            iconUrl = QUrl::fromLocalFile(launcherIconValue).toString();
+        } else if (!launcherIconValue.isEmpty() && !launcherIconValue.startsWith(QLatin1Char(47)))
+            icon = launcherIconValue;
+
         items.append({
             name,
             QStringLiteral("%1 · %2").arg(status, baseImage),
@@ -3835,7 +3881,7 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
             QStringLiteral("Distrobox"),
             QStringLiteral("Enter"),
             QStringLiteral("utilities-terminal"),
-            QStringLiteral("utilities-terminal"),
+            icon,
             status,
             baseImage,
             {},
@@ -3843,7 +3889,7 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
             {},
             {},
             QStringLiteral("Development Sandbox"),
-            {},
+            iconUrl,
             {},
             {},
             {}
@@ -4456,14 +4502,24 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         emitDistroboxOperationResult(Operation::DistroboxRepair, identifier, true);
         break;
     case Operation::DistroboxStopAll:
+        refreshDistrobox();
+        emitDistroboxOperationResult(operation, identifier, true);
+        break;
     case Operation::DistroboxRemoveAll:
+        for (const AppModel::Item &item : m_allDistroboxItems)
+            removeDistroboxLauncher(item.identifier);
         refreshDistrobox();
         emitDistroboxOperationResult(operation, identifier, true);
         break;
     case Operation::DistroboxCreate:
     case Operation::DistroboxStop:
     case Operation::DistroboxClone:
+        refreshDistrobox();
+        setStatusMessage(QStringLiteral("Distrobox operation completed."));
+        emitDistroboxOperationResult(operation, identifier, true);
+        break;
     case Operation::DistroboxRemove:
+        removeDistroboxLauncher(identifier);
         refreshDistrobox();
         setStatusMessage(QStringLiteral("Distrobox operation completed."));
         emitDistroboxOperationResult(operation, identifier, true);
