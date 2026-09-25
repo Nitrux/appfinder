@@ -23,6 +23,7 @@ qt_add_qml_module(${PROJECT_NAME}
     RESOURCE_PREFIX /
     VERSION 1.0
     QML_FILES
+        qml/AppFinderChip.qml
         qml/Main.qml
         qml/SourcePage.qml
         qml/SearchResultsView.qml

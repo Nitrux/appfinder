@@ -233,6 +233,7 @@ private:
         UserBundleGenerate,
         UserBundleBuild,
         DistroboxCreate,
+        DistroboxMount,
         DistroboxStart,
         DistroboxStop,
         DistroboxStopAll,
@@ -256,11 +257,13 @@ private:
     };
 
     QByteArray runCommand(const QString &program, const QStringList &arguments, int timeout = 10000) const;
+    bool rootMountIsShared() const;
     bool startOperation(const QString &program,
                         const QStringList &arguments,
                         Operation operation,
                         const QString &identifier = {},
                         const QString &workingDirectory = {});
+    bool startDistroboxContainer(const QString &name);
     void startDistroboxRepairStep(const QStringList &arguments);
     bool continueDistroboxRepair(int exitCode, QProcess::ExitStatus exitStatus);
     void emitFlatpakOperationResult(Operation operation,
@@ -316,6 +319,7 @@ private:
     QList<AppModel::Item> loadAppHubItems() const;
     QList<AppModel::Item> appHubBackupItems(const QString &identifier) const;
     QList<AppModel::Item> loadDistroboxItems(const QByteArray &output) const;
+    void enrichDistroboxItems(QList<AppModel::Item> &items, const QByteArray &inspectOutput, const QByteArray &infoOutput) const;
 
     QString appHubRepositoryPath() const;
     QString architecture() const;

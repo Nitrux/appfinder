@@ -47,6 +47,8 @@ public:
         QString osTarget {};
         QStringList screenshots {};
         QVariantList releases {};
+        QString uptime {};
+        QString containerMode {};
     };
 
     enum Role
@@ -78,7 +80,9 @@ public:
         RuntimeRole,
         OsTargetRole,
         ScreenshotsRole,
-        ReleasesRole
+        ReleasesRole,
+        UptimeRole,
+        ContainerModeRole
     };
     Q_ENUM(Role)
 

@@ -87,6 +87,10 @@ QVariant AppModel::data(const QModelIndex &index, int role) const
         return item.screenshots;
     case ReleasesRole:
         return item.releases;
+    case UptimeRole:
+        return item.uptime;
+    case ContainerModeRole:
+        return item.containerMode;
     default:
         return {};
     }
@@ -123,6 +127,8 @@ QHash<int, QByteArray> AppModel::roleNames() const
         {OsTargetRole, "osTarget"},
         {ScreenshotsRole, "screenshots"},
         {ReleasesRole, "releases"},
+        {UptimeRole, "uptime"},
+        {ContainerModeRole, "containerMode"},
     };
 }
 

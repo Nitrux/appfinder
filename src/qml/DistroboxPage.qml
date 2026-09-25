@@ -125,6 +125,7 @@ Maui.Page {
                     const value = String(model.status).toLowerCase()
                     return value.indexOf("up") >= 0 || value.indexOf("running") >= 0
                 }
+                readonly property bool compactLayout: Maui.Handy.isMobile || width < Maui.Style.units.gridUnit * 30
 
                 Rectangle {
                     anchors.fill: parent
@@ -151,6 +152,7 @@ Maui.Page {
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        Layout.minimumWidth: 0
                         spacing: Maui.Style.space.medium
 
                         RowLayout {
@@ -164,40 +166,65 @@ Maui.Page {
                                 elide: Text.ElideRight
                             }
 
-                            Maui.Chip {
+                            AppFinderChip {
                                 text: containerCard.running ? qsTr("Running") : qsTr("Stopped")
-                                color: containerCard.running ? Maui.Theme.positiveBackgroundColor : Maui.Theme.backgroundColor
                             }
                         }
 
-                        Maui.Chip {
+                        AppFinderChip {
+                            Layout.minimumWidth: 0
                             Layout.maximumWidth: parent.width
-                            enabled: false
-                            hoverEnabled: false
-                            color: Qt.rgba(0, 0, 0, 0.3)
-                            implicitWidth: baseImageValue.implicitWidth + Maui.Style.space.medium * 2
-                            implicitHeight: baseImageValue.implicitHeight + Maui.Style.space.small * 2
+                            text: model.baseImage.length > 0 ? qsTr("Image: %1").arg(model.baseImage) : qsTr("Image: Unavailable")
+                        }
 
-                            contentItem: Maui.IconLabel {
-                                id: baseImageValue
-                                display: ToolButton.TextOnly
-                                text: model.baseImage.length > 0 ? model.baseImage : qsTr("Unavailable")
-                                alignment: Qt.AlignHCenter
-                                font.weight: Font.Medium
-                                color: Maui.Theme.textColor
-                                label.elide: Text.ElideRight
+                        Flow {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            visible: model.uptime.length > 0
+                                     || model.size.length > 0
+                                     || model.created.length > 0
+                                     || model.containerMode.length > 0
+                                     || model.architecture.length > 0
+                            spacing: Maui.Style.space.small
+
+                            AppFinderChip {
+                                visible: model.uptime.length > 0
+                                text: qsTr("Uptime: %1").arg(model.uptime)
+                            }
+
+                            AppFinderChip {
+                                visible: model.size.length > 0
+                                text: qsTr("Size: %1").arg(model.size)
+                            }
+
+                            AppFinderChip {
+                                visible: model.created.length > 0
+                                text: qsTr("Created: %1").arg(model.created)
+                            }
+
+                            AppFinderChip {
+                                visible: model.containerMode.length > 0
+                                text: qsTr("Mode: %1").arg(model.containerMode)
+                            }
+
+                            AppFinderChip {
+                                visible: model.architecture.length > 0
+                                text: qsTr("Architecture: %1").arg(model.architecture)
                             }
                         }
 
                         RowLayout {
+                            visible: !containerCard.compactLayout
                             Layout.fillWidth: true
                             Layout.topMargin: Maui.Style.space.medium
                             spacing: Maui.Style.space.medium
 
                             Button {
-                                text: qsTr("Open Container Environment")
+                                visible: !containerCard.running
+                                text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Start Container")
                                 enabled: !appHub.busy
-                                onClicked: appHub.openDistrobox(model.name)
+                                onClicked: appHub.startDistrobox(model.name)
                             }
 
                             Button {
@@ -208,7 +235,65 @@ Maui.Page {
                                 onClicked: appHub.stopDistrobox(model.name)
                             }
 
+                            Button {
+                                visible: containerCard.running
+                                text: qsTr("Open Container Environment")
+                                enabled: !appHub.busy
+                                onClicked: appHub.openDistrobox(model.name)
+                            }
+
                             Item { Layout.fillWidth: true }
+
+                            Button {
+                                text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Repair")
+                                enabled: !appHub.busy
+                                onClicked: appHub.repairDistrobox(model.name)
+                            }
+
+                            Button {
+                                text: qsTr("Clone")
+                                enabled: !appHub.busy && !containerCard.running
+                                onClicked: control.cloneRequested(model.name)
+                            }
+
+                            Button {
+                                text: appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Delete")
+                                enabled: !appHub.busy && !containerCard.running
+                                onClicked: appHub.removeDistrobox(model.name)
+                            }
+                        }
+
+                        Flow {
+                            visible: containerCard.compactLayout
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            Layout.topMargin: Maui.Style.space.medium
+                            spacing: Maui.Style.space.small
+
+                            Button {
+                                visible: !containerCard.running
+                                text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Start Container")
+                                enabled: !appHub.busy
+                                onClicked: appHub.startDistrobox(model.name)
+                            }
+
+                            Button {
+                                visible: containerCard.running
+                                text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
+                                      ? appHub.operationLabel : qsTr("Stop Container")
+                                enabled: !appHub.busy
+                                onClicked: appHub.stopDistrobox(model.name)
+                            }
+
+                            Button {
+                                visible: containerCard.running
+                                text: qsTr("Open Container Environment")
+                                enabled: !appHub.busy
+                                onClicked: appHub.openDistrobox(model.name)
+                            }
 
                             Button {
                                 text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name

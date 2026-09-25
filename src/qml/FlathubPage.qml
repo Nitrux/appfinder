@@ -445,13 +445,9 @@ Maui.Page {
                                                     elide: Text.ElideRight
                                                 }
 
-                                                Maui.Chip {
+                                                AppFinderChip {
                                                     Layout.alignment: Qt.AlignHCenter
                                                     text: model.category
-                                                    enabled: false
-                                                    hoverEnabled: false
-                                                    color: Qt.rgba(0, 0, 0, 0.3)
-                                                    label.font.weight: Font.Medium
                                                 }
 
                                             }
@@ -912,12 +908,9 @@ Maui.Page {
                                         elide: Text.ElideRight
                                     }
 
-                                    Maui.Chip {
+                                    AppFinderChip {
                                         Layout.alignment: Qt.AlignHCenter
                                         text: control.selectedCategoryInfo ? control.selectedCategoryInfo.title : model.category
-                                        enabled: false
-                                        hoverEnabled: false
-                                        color: Qt.rgba(0, 0, 0, 0.3)
                                     }
                                 }
 
@@ -985,13 +978,12 @@ Maui.Page {
                 Repeater {
                     model: control.selectedCategoryInfo ? control.selectedCategoryInfo.filters : []
 
-                    delegate: Maui.Chip {
+                    delegate: AppFinderChip {
                         required property var modelData
                         text: modelData.title
                         checkable: true
                         autoExclusive: true
                         checked: control.selectedSubcategory === modelData.value
-                        color: Maui.Theme.alternateBackgroundColor
                         onClicked: control.browseCategory(control.selectedCategory, modelData.value)
                     }
                 }

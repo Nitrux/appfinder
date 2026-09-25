@@ -1373,14 +1373,11 @@ Maui.Page {
                                                     elide: Text.ElideRight
                                                 }
 
-                                                Maui.Chip {
+                                                AppFinderChip {
                                                     Layout.alignment: Qt.AlignHCenter
                                                     text: control.appHubCategoryLabel(model.category)
                                                     visible: text.length > 0
-                                                    enabled: false
-                                                    hoverEnabled: false
-                                                    color: Qt.rgba(0, 0, 0, 0.3)
-                                                    label.font.weight: Font.Medium
+
                                                 }
                                             }
 

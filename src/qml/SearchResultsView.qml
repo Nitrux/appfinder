@@ -200,15 +200,9 @@ Maui.ScrollColumn {
                                     Layout.fillWidth: true
                                     spacing: Maui.Style.space.small
 
-                                    Maui.Chip {
+                                    AppFinderChip {
                                         visible: resultDelegate.itemStatus.length > 0 && resultDelegate.itemStatus.toLowerCase() !== "available"
                                         text: resultDelegate.itemStatus
-                                        color: resultDelegate.statusPositive
-                                               ? Maui.Theme.positiveBackgroundColor
-                                               : Maui.Theme.backgroundColor
-                                        hoverEnabled: false
-                                        focusPolicy: Qt.NoFocus
-                                        label.font.weight: Font.Medium
                                     }
 
                                     Item { Layout.fillWidth: true }

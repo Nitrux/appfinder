@@ -7,6 +7,7 @@
 
 #include <QColor>
 #include <QDate>
+#include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -17,6 +18,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
+#include <QLocale>
 #include <QImage>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -647,6 +650,8 @@ QVariantMap appItemVariantMap(const AppModel::Item &item)
     values.insert(QStringLiteral("osTarget"), item.osTarget);
     values.insert(QStringLiteral("screenshots"), item.screenshots);
     values.insert(QStringLiteral("releases"), item.releases);
+    values.insert(QStringLiteral("uptime"), item.uptime);
+    values.insert(QStringLiteral("containerMode"), item.containerMode);
     return values;
 }
 
@@ -960,6 +965,7 @@ QString AppHubBackend::operationAction() const
     case Operation::UserBundleGenerate: return QStringLiteral("apphub-generate");
     case Operation::UserBundleBuild: return QStringLiteral("apphub-build-bundle");
     case Operation::DistroboxCreate: return QStringLiteral("distrobox-create");
+    case Operation::DistroboxMount: return QStringLiteral("distrobox-start");
     case Operation::DistroboxStart: return QStringLiteral("distrobox-start");
     case Operation::DistroboxStop: return QStringLiteral("distrobox-stop");
     case Operation::DistroboxStopAll: return QStringLiteral("distrobox-stop-all");
@@ -1010,6 +1016,7 @@ QString AppHubBackend::operationLabel() const
     case Operation::UserBundleGenerate: return animate(tr("Generating…"));
     case Operation::UserBundleBuild: return animate(tr("Building…"));
     case Operation::DistroboxCreate: return animate(tr("Creating container…"));
+    case Operation::DistroboxMount: return animate(tr("Authorizing container start…"));
     case Operation::DistroboxStart: return animate(tr("Starting container…"));
     case Operation::DistroboxStop: return animate(tr("Stopping container…"));
     case Operation::DistroboxStopAll: return animate(tr("Stopping all containers…"));
@@ -1118,6 +1125,13 @@ QByteArray AppHubBackend::runCommand(const QString &program, const QStringList &
         return {};
 
     return output;
+}
+
+bool AppHubBackend::rootMountIsShared() const
+{
+    const QByteArray output = runCommand(QStringLiteral("findmnt"),
+                                         {QStringLiteral("--noheadings"), QStringLiteral("--output"), QStringLiteral("PROPAGATION"), QStringLiteral("/")});
+    return QString::fromLocal8Bit(output).trimmed() == QLatin1String("shared");
 }
 
 bool AppHubBackend::startOperation(const QString &program,
@@ -2341,6 +2355,23 @@ void AppHubBackend::createDistrobox(const QString &name, const QString &image, c
     setStatusMessage(QStringLiteral("Creating %1…").arg(normalizedName));
 }
 
+bool AppHubBackend::startDistroboxContainer(const QString &name)
+{
+    const QString executable = findExecutable(QStringLiteral("podman"));
+    if (executable.isEmpty()) {
+        setStatusMessage(QStringLiteral("podman is not installed."));
+        return false;
+    }
+    if (!startOperation(executable,
+                        {QStringLiteral("container"), QStringLiteral("start"), name},
+                        Operation::DistroboxStart,
+                        name)) {
+        return false;
+    }
+    setStatusMessage(QStringLiteral("Starting %1…").arg(name));
+    return true;
+}
+
 void AppHubBackend::startDistrobox(const QString &name)
 {
     if (!isSafeIdentifier(name)) {
@@ -2349,21 +2380,37 @@ void AppHubBackend::startDistrobox(const QString &name)
         emitDistroboxOperationResult(Operation::DistroboxStart, name, false, error);
         return;
     }
-    const QString executable = findExecutable(QStringLiteral("podman"));
-    if (executable.isEmpty()) {
+    if (findExecutable(QStringLiteral("podman")).isEmpty()) {
         const QString error = QStringLiteral("podman is not installed.");
         setStatusMessage(error);
         emitDistroboxOperationResult(Operation::DistroboxStart, name, false, error);
         return;
     }
-    if (!startOperation(executable,
-                        {QStringLiteral("container"), QStringLiteral("start"), name},
-                        Operation::DistroboxStart,
-                        name)) {
-        emitDistroboxOperationResult(Operation::DistroboxStart, name, false, statusMessage());
+
+    if (!rootMountIsShared()) {
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString mount = findExecutable(QStringLiteral("mount"));
+        if (pkexec.isEmpty() || mount.isEmpty()) {
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("mount is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxStart, name, false, error);
+            return;
+        }
+        if (!startOperation(pkexec,
+                            {mount, QStringLiteral("--make-rshared"), QStringLiteral("/")},
+                            Operation::DistroboxMount,
+                            name)) {
+            emitDistroboxOperationResult(Operation::DistroboxStart, name, false, statusMessage());
+            return;
+        }
+        setStatusMessage(QStringLiteral("Authorizing container start…"));
         return;
     }
-    setStatusMessage(QStringLiteral("Starting %1…").arg(name));
+
+    if (!startDistroboxContainer(name))
+        emitDistroboxOperationResult(Operation::DistroboxStart, name, false, statusMessage());
 }
 
 void AppHubBackend::stopDistrobox(const QString &name)
@@ -3435,12 +3482,24 @@ void AppHubBackend::refreshAppHubCatalog()
 
 void AppHubBackend::refreshDistrobox()
 {
+    const QString engine = containerEngine();
     m_allDistroboxItems = loadDistroboxItems(runCommand(QStringLiteral("distrobox"), {QStringLiteral("list"), QStringLiteral("--no-color")}));
 
-    if (m_allDistroboxItems.isEmpty() && !findExecutable(QStringLiteral("podman")).isEmpty()) {
+    if (m_allDistroboxItems.isEmpty() && !engine.isEmpty()) {
         const QString format = QStringLiteral("{{.ID}}|{{.Image}}|{{.Names}}|{{.Status}}|{{.Labels}}|{{.Mounts}}");
-        m_allDistroboxItems = loadDistroboxItems(runCommand(QStringLiteral("podman"), {QStringLiteral("container"), QStringLiteral("list"), QStringLiteral("--all"), QStringLiteral("--no-trunc"), QStringLiteral("--format"), format}));
+        m_allDistroboxItems = loadDistroboxItems(runCommand(engine, {QStringLiteral("container"), QStringLiteral("list"), QStringLiteral("--all"), QStringLiteral("--no-trunc"), QStringLiteral("--format"), format}));
     }
+
+    if (!m_allDistroboxItems.isEmpty() && !engine.isEmpty()) {
+        QStringList inspectArguments {QStringLiteral("container"), QStringLiteral("inspect"), QStringLiteral("--size")};
+        for (const AppModel::Item &item : m_allDistroboxItems)
+            inspectArguments.append(item.identifier);
+
+        enrichDistroboxItems(m_allDistroboxItems,
+                             runCommand(engine, inspectArguments),
+                             runCommand(engine, {QStringLiteral("info"), QStringLiteral("--format"), QStringLiteral("json")}));
+    }
+
     m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
 }
 
@@ -3793,6 +3852,115 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
     return items;
 }
 
+void AppHubBackend::enrichDistroboxItems(QList<AppModel::Item> &items, const QByteArray &inspectOutput, const QByteArray &infoOutput) const
+{
+    QHash<QString, QJsonObject> containers;
+    const auto addContainer = [&containers](const QJsonValue &value) {
+        if (!value.isObject())
+            return;
+
+        const QJsonObject object = value.toObject();
+        QString name = object.value(QStringLiteral("Name")).toString().trimmed();
+        while (name.startsWith(QLatin1Char('/')))
+            name.remove(0, 1);
+        if (!name.isEmpty())
+            containers.insert(name, object);
+    };
+
+    const QJsonDocument inspectDocument = QJsonDocument::fromJson(inspectOutput);
+    if (inspectDocument.isArray()) {
+        for (const QJsonValue &value : inspectDocument.array())
+            addContainer(value);
+    } else {
+        addContainer(inspectDocument.object());
+    }
+
+    QString containerMode;
+    const QJsonObject host = QJsonDocument::fromJson(infoOutput).object().value(QStringLiteral("host")).toObject();
+    const QJsonValue rootless = host.value(QStringLiteral("rootless")).isBool()
+        ? host.value(QStringLiteral("rootless"))
+        : host.value(QStringLiteral("security")).toObject().value(QStringLiteral("rootless"));
+    if (rootless.isBool())
+        containerMode = rootless.toBool() ? QStringLiteral("Rootless") : QStringLiteral("Rootful");
+    const QString hostArchitecture = host.value(QStringLiteral("arch")).toString().trimmed();
+
+    const auto parseDateTime = [](const QString &value) {
+        QString normalized = value;
+        const QRegularExpressionMatch fractional = QRegularExpression(QStringLiteral("(\\.\\d{3})\\d+")).match(normalized);
+        if (fractional.hasMatch())
+            normalized.remove(fractional.capturedStart(1) + fractional.capturedLength(1), fractional.capturedLength(0) - fractional.capturedLength(1));
+
+        QDateTime result = QDateTime::fromString(normalized, Qt::ISODateWithMs);
+        if (!result.isValid())
+            result = QDateTime::fromString(normalized, Qt::ISODate);
+        return result;
+    };
+    const auto formatUptime = [this](qint64 seconds) {
+        if (seconds < 60)
+            return tr("less than a minute");
+
+        const qint64 minutes = seconds / 60;
+        if (minutes < 60)
+            return QStringLiteral("%1m").arg(minutes);
+
+        const qint64 hours = minutes / 60;
+        if (hours < 24) {
+            const qint64 remainingMinutes = minutes % 60;
+            return remainingMinutes > 0
+                ? tr("%1h %2m").arg(hours).arg(remainingMinutes)
+                : tr("%1h").arg(hours);
+        }
+
+        const qint64 days = hours / 24;
+        const qint64 remainingHours = hours % 24;
+        return remainingHours > 0
+            ? tr("%1d %2h").arg(days).arg(remainingHours)
+            : tr("%1d").arg(days);
+    };
+
+    for (AppModel::Item &item : items) {
+        item.containerMode = containerMode;
+        const QJsonObject object = containers.value(item.identifier);
+        if (object.isEmpty()) {
+            if (item.architecture.isEmpty())
+                item.architecture = hostArchitecture.isEmpty() ? architecture() : hostArchitecture;
+            continue;
+        }
+
+        QString containerArchitecture = object.value(QStringLiteral("Architecture")).toString().trimmed();
+        if (containerArchitecture.isEmpty())
+            containerArchitecture = object.value(QStringLiteral("Platform")).toString().trimmed();
+        if (containerArchitecture.isEmpty())
+            containerArchitecture = object.value(QStringLiteral("Config")).toObject().value(QStringLiteral("Architecture")).toString().trimmed();
+        item.architecture = containerArchitecture.isEmpty()
+            ? (hostArchitecture.isEmpty() ? architecture() : hostArchitecture)
+            : containerArchitecture;
+
+        const QDateTime created = parseDateTime(object.value(QStringLiteral("Created")).toString());
+        if (created.isValid())
+            item.created = QLocale::system().toString(created.toLocalTime().date(), QLocale::ShortFormat);
+
+        bool sizeOk = false;
+        qint64 size = object.value(QStringLiteral("SizeRootFs")).toVariant().toLongLong(&sizeOk);
+        if (!sizeOk || size < 0)
+            size = object.value(QStringLiteral("SizeRw")).toVariant().toLongLong(&sizeOk);
+        if (sizeOk && size >= 0)
+            item.size = QLocale::system().formattedDataSize(size, 1, QLocale::DataSizeIecFormat);
+
+        const QJsonObject state = object.value(QStringLiteral("State")).toObject();
+        const bool running = state.value(QStringLiteral("Running")).isBool()
+            ? state.value(QStringLiteral("Running")).toBool()
+            : item.status.contains(QLatin1String("up"), Qt::CaseInsensitive)
+                || item.status.contains(QLatin1String("running"), Qt::CaseInsensitive);
+        const QDateTime started = parseDateTime(state.value(QStringLiteral("StartedAt")).toString());
+        if (running && started.isValid()) {
+            const qint64 seconds = started.toUTC().secsTo(QDateTime::currentDateTimeUtc());
+            if (seconds >= 0)
+                item.uptime = formatUptime(seconds);
+        }
+    }
+}
+
 QString AppHubBackend::appHubRepositoryPath() const
 {
     const QString overridePath = qEnvironmentVariable("NX_APPHUB_REPO");
@@ -4020,6 +4188,17 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
         return;
     }
 
+    if (operation == Operation::DistroboxMount) {
+        if (m_pendingDistroboxOpen == identifier)
+            m_pendingDistroboxOpen.clear();
+        emitDistroboxOperationResult(Operation::DistroboxStart, identifier, false, message);
+        m_operation = Operation::None;
+        emit operationStateChanged();
+        setBusy(false);
+        setStatusMessage(message);
+        return;
+    }
+
     if (operation == Operation::UserBundleGenerate) {
         m_userBundleGenerationDirectory.reset();
         emit userBundleGenerated(identifier, false, message);
@@ -4091,6 +4270,30 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const bool openDistroboxAfterStart = operation == Operation::DistroboxStart && m_pendingDistroboxOpen == identifier;
     const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
         && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
+    if (operation == Operation::DistroboxMount) {
+        QString failure;
+        if (m_processOutputTooLarge) {
+            failure = QStringLiteral("The operation produced too much output.");
+        } else if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+            failure = QString::fromLocal8Bit(processErrorOutput).trimmed();
+            if (failure.isEmpty())
+                failure = QStringLiteral("The operation failed.");
+        }
+
+        if (failure.isEmpty() && startDistroboxContainer(identifier))
+            return;
+        if (failure.isEmpty())
+            failure = statusMessage();
+        if (m_pendingDistroboxOpen == identifier)
+            m_pendingDistroboxOpen.clear();
+        m_operation = Operation::None;
+        emit operationStateChanged();
+        setBusy(false);
+        emitDistroboxOperationResult(Operation::DistroboxStart, identifier, false, failure);
+        setStatusMessage(failure);
+        return;
+    }
+
     if (operation == Operation::DistroboxRepair
         && m_distroboxRepairStep != DistroboxRepairStep::None
         && continueDistroboxRepair(exitCode, exitStatus)) {
@@ -4236,6 +4439,8 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         emit userBundleBuilt(identifier, true, m_userBundleOutputUrl, {});
         break;
     }
+    case Operation::DistroboxMount:
+        break;
     case Operation::DistroboxStart:
         refreshDistrobox();
         setStatusMessage(QStringLiteral("Started %1.").arg(identifier));

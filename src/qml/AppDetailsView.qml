@@ -257,24 +257,11 @@ Maui.ScrollColumn {
                             elide: Text.ElideRight
                         }
 
-                        Maui.Chip {
+                        AppFinderChip {
                             id: headerVersionChip
                             Layout.alignment: Qt.AlignVCenter
                             visible: control.itemVersion.length > 0
-                            enabled: false
-                            hoverEnabled: false
-                            color: Qt.rgba(0, 0, 0, 0.3)
-                            implicitWidth: headerVersionValue.implicitWidth + Maui.Style.space.medium * 2
-                            implicitHeight: headerVersionValue.implicitHeight + Maui.Style.space.small * 2
-
-                            contentItem: Maui.IconLabel {
-                                id: headerVersionValue
-                                display: ToolButton.TextOnly
-                                text: control.itemVersion
-                                alignment: Qt.AlignHCenter
-                                font.weight: Font.Medium
-                                color: Maui.Theme.textColor
-                            }
+                            text: control.itemVersion
                         }
 
                         Item { Layout.fillWidth: true }
@@ -349,26 +336,10 @@ Maui.ScrollColumn {
                     anchors.margins: Maui.Style.space.medium
                     spacing: Maui.Style.space.small
 
-                    Maui.Chip {
+                    AppFinderChip {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.maximumWidth: statColumn.width
-                        enabled: false
-                        hoverEnabled: false
-                        color: modelData.positive ? Maui.Theme.positiveBackgroundColor : Qt.rgba(0, 0, 0, 0.3)
-                        implicitWidth: statValue.implicitWidth + Maui.Style.space.medium * 2
-                        implicitHeight: statValue.implicitHeight + Maui.Style.space.small * 2
-
-                        contentItem: Maui.IconLabel {
-                            id: statValue
-                            display: ToolButton.TextOnly
-                            text: modelData.value
-                            alignment: Qt.AlignHCenter
-                            font.weight: Font.Medium
-                            color: Maui.Theme.textColor
-                            label.wrapMode: Text.WrapAnywhere
-                            label.maximumLineCount: 2
-                            label.elide: Text.ElideRight
-                        }
+                        text: modelData.value
                     }
 
                     Label {
@@ -866,15 +837,9 @@ Maui.ScrollColumn {
                                         Layout.fillWidth: true
                                         spacing: Maui.Style.space.small
 
-                                        Maui.Chip {
+                                        AppFinderChip {
                                             visible: similarDelegate.itemStatus.length > 0 && similarDelegate.itemStatus.toLowerCase() !== "available"
                                             text: similarDelegate.itemStatus
-                                            color: similarDelegate.statusPositive
-                                                   ? Maui.Theme.positiveBackgroundColor
-                                                   : Maui.Theme.backgroundColor
-                                            hoverEnabled: false
-                                            focusPolicy: Qt.NoFocus
-                                            label.font.weight: Font.Medium
                                         }
 
                                         Item { Layout.fillWidth: true }
