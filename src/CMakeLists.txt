@@ -8,6 +8,10 @@ set(APPFINDER_SOURCES
     controllers/userbundlestore.h
 )
 
+set(APPFINDER_DISTROBOX_HELPER_SOURCES
+    helpers/distroboxhelper.cpp
+)
+
 qt_add_executable(${PROJECT_NAME}
     MANUAL_FINALIZATION
     ${APPFINDER_SOURCES}
@@ -50,6 +54,28 @@ target_link_libraries(${PROJECT_NAME}
         ${APPFINDER_YAML_TARGET}
 )
 
+target_compile_definitions(${PROJECT_NAME}
+    PRIVATE
+        APPFINDER_DISTROBOX_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/appfinder-distrobox-helper"
+)
+
 install(TARGETS ${PROJECT_NAME} ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 
 qt_finalize_executable(${PROJECT_NAME})
+
+qt_add_executable(appfinder-distrobox-helper
+    MANUAL_FINALIZATION
+    ${APPFINDER_DISTROBOX_HELPER_SOURCES}
+)
+set_target_properties(appfinder-distrobox-helper PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+target_link_libraries(appfinder-distrobox-helper
+    PRIVATE
+        Qt6::Core
+)
+
+install(TARGETS appfinder-distrobox-helper
+        RUNTIME DESTINATION ${KDE_INSTALL_LIBEXECDIR})
+
+qt_finalize_executable(appfinder-distrobox-helper)

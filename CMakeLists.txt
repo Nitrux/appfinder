@@ -89,8 +89,16 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
+set(APPFINDER_DISTROBOX_HELPER_PATH "${CMAKE_INSTALL_FULL_LIBEXECDIR}/appfinder-distrobox-helper")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/org.nitrux.appfinder.distrobox.policy.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/org.nitrux.appfinder.distrobox.policy"
+    @ONLY)
+
 install(FILES org.nitrux.appfinder.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES org.nitrux.appfinder.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/org.nitrux.appfinder.distrobox.policy"
+        DESTINATION ${KDE_INSTALL_DATADIR}/polkit-1/actions)
 
 if(NOT TARGET uninstall)
     configure_file(

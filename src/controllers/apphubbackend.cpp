@@ -933,6 +933,11 @@ AppModel *AppHubBackend::distroboxModel()
     return m_distroboxModel;
 }
 
+bool AppHubBackend::rootfulDistroboxesLoaded() const
+{
+    return m_rootfulDistroboxesLoaded;
+}
+
 int AppHubBackend::currentSection() const
 {
     return m_currentSection;
@@ -985,6 +990,7 @@ QString AppHubBackend::operationAction() const
     case Operation::DistroboxRepair: return QStringLiteral("distrobox-repair");
     case Operation::DistroboxRemove: return QStringLiteral("distrobox-remove");
     case Operation::DistroboxRemoveAll: return QStringLiteral("distrobox-remove-all");
+    case Operation::DistroboxRootfulList: return QStringLiteral("distrobox-rootful-list");
     case Operation::None:
     case Operation::FlatpakSearch:
         return {};
@@ -1036,6 +1042,7 @@ QString AppHubBackend::operationLabel() const
     case Operation::DistroboxRepair: return animate(tr("Repairing…"));
     case Operation::DistroboxRemove: return animate(tr("Deleting container…"));
     case Operation::DistroboxRemoveAll: return animate(tr("Deleting all containers…"));
+    case Operation::DistroboxRootfulList: return animate(tr("Loading rootful containers…"));
     case Operation::None:
     case Operation::FlatpakSearch:
         return {};
@@ -1091,6 +1098,33 @@ QString AppHubBackend::findExecutable(const QString &program) const
                                        .filePath(QStringLiteral(".local/bin/%1").arg(program));
     const QFileInfo executableInfo(userExecutable);
     return executableInfo.isFile() && executableInfo.isExecutable() ? userExecutable : QString();
+}
+
+QString AppHubBackend::distroboxHelper() const
+{
+    const QString helper = findExecutable(QStringLiteral("appfinder-distrobox-helper"));
+    if (!helper.isEmpty())
+        return helper;
+
+#ifdef APPFINDER_DISTROBOX_HELPER_PATH
+    const QString installedHelper = QStringLiteral(APPFINDER_DISTROBOX_HELPER_PATH);
+    const QFileInfo installedHelperInfo(installedHelper);
+    if (installedHelperInfo.isFile() && installedHelperInfo.isExecutable())
+        return installedHelper;
+#endif
+
+    const QString adjacentHelper = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("appfinder-distrobox-helper"));
+    const QFileInfo adjacentHelperInfo(adjacentHelper);
+    return adjacentHelperInfo.isFile() && adjacentHelperInfo.isExecutable() ? adjacentHelper : QString();
+}
+
+bool AppHubBackend::isRootfulDistrobox(const QString &name) const
+{
+    for (const AppModel::Item &item : m_rootfulDistroboxItems) {
+        if (item.identifier == name)
+            return true;
+    }
+    return false;
 }
 
 QByteArray AppHubBackend::runCommand(const QString &program, const QStringList &arguments, int timeout) const
@@ -1341,6 +1375,9 @@ void AppHubBackend::emitDistroboxOperationResult(Operation operation,
                                                  bool success,
                                                  const QString &error)
 {
+    if (!success)
+        m_pendingRootfulDistroboxOperation = false;
+
     QString action;
     switch (operation) {
     case Operation::DistroboxCreate: action = QStringLiteral("create"); break;
@@ -2337,7 +2374,7 @@ bool AppHubBackend::isFlatpakInstalled(const QString &identifier) const
     return isSafeIdentifier(identifier) && m_installedFlatpaks.contains(identifier);
 }
 
-void AppHubBackend::createDistrobox(const QString &name, const QString &image, const QString &home)
+void AppHubBackend::createDistrobox(const QString &name, const QString &image, const QString &home, bool rootful)
 {
     const QString normalizedName = name.trimmed();
     const QString normalizedImage = image.trimmed();
@@ -2349,21 +2386,45 @@ void AppHubBackend::createDistrobox(const QString &name, const QString &image, c
         return;
     }
 
-    const QString executable = findExecutable(QStringLiteral("distrobox-create"));
-    if (executable.isEmpty()) {
-        setStatusMessage(QStringLiteral("distrobox-create is not installed."));
-        emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
-        return;
+    m_pendingRootfulDistroboxOperation = rootful;
+    if (rootful) {
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty()) {
+            setStatusMessage(QStringLiteral("PolicyKit is not installed."));
+            emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
+            return;
+        }
+        if (helper.isEmpty()) {
+            setStatusMessage(QStringLiteral("The rootful container helper is not installed."));
+            emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
+            return;
+        }
+
+        QStringList arguments {helper, QStringLiteral("create"), normalizedName, normalizedImage};
+        if (!normalizedHome.isEmpty())
+            arguments.append(normalizedHome);
+        if (!startOperation(pkexec, arguments, Operation::DistroboxCreate, normalizedName)) {
+            emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
+            return;
+        }
+    } else {
+        const QString executable = findExecutable(QStringLiteral("distrobox-create"));
+        if (executable.isEmpty()) {
+            setStatusMessage(QStringLiteral("distrobox-create is not installed."));
+            emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
+            return;
+        }
+
+        QStringList arguments {QStringLiteral("--yes"), QStringLiteral("--name"), normalizedName, QStringLiteral("--image"), normalizedImage};
+        if (!normalizedHome.isEmpty())
+            arguments << QStringLiteral("--home") << normalizedHome;
+        if (!startOperation(executable, arguments, Operation::DistroboxCreate, normalizedName)) {
+            emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
+            return;
+        }
     }
 
-    QStringList arguments {QStringLiteral("--yes"), QStringLiteral("--name"), normalizedName, QStringLiteral("--image"), normalizedImage};
-    if (!normalizedHome.isEmpty())
-        arguments << QStringLiteral("--home") << normalizedHome;
-
-    if (!startOperation(executable, arguments, Operation::DistroboxCreate, normalizedName)) {
-        emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
-        return;
-    }
     setStatusMessage(QStringLiteral("Creating %1…").arg(normalizedName));
 }
 
@@ -2399,19 +2460,43 @@ void AppHubBackend::startDistrobox(const QString &name)
         return;
     }
 
-    if (!rootMountIsShared()) {
+    const bool rootShared = rootMountIsShared();
+    if (isRootfulDistrobox(name)) {
+        m_pendingRootfulDistroboxOperation = true;
         const QString pkexec = findExecutable(QStringLiteral("pkexec"));
-        const QString mount = findExecutable(QStringLiteral("mount"));
-        if (pkexec.isEmpty() || mount.isEmpty()) {
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
             const QString error = pkexec.isEmpty()
                 ? QStringLiteral("PolicyKit is not installed.")
-                : QStringLiteral("mount is not installed.");
+                : QStringLiteral("The rootful container helper is not installed.");
             setStatusMessage(error);
             emitDistroboxOperationResult(Operation::DistroboxStart, name, false, error);
             return;
         }
         if (!startOperation(pkexec,
-                            {mount, QStringLiteral("--make-rshared"), QStringLiteral("/")},
+                            {helper, QStringLiteral("start"), name},
+                            Operation::DistroboxStart,
+                            name)) {
+            emitDistroboxOperationResult(Operation::DistroboxStart, name, false, statusMessage());
+            return;
+        }
+        setStatusMessage(QStringLiteral("Starting %1…").arg(name));
+        return;
+    }
+
+    if (!rootShared) {
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The Distrobox helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxStart, name, false, error);
+            return;
+        }
+        if (!startOperation(pkexec,
+                            {helper, QStringLiteral("make-rshared")},
                             Operation::DistroboxMount,
                             name)) {
             emitDistroboxOperationResult(Operation::DistroboxStart, name, false, statusMessage());
@@ -2438,7 +2523,26 @@ void AppHubBackend::stopDistrobox(const QString &name)
         emitDistroboxOperationResult(Operation::DistroboxStop, name, false, statusMessage());
         return;
     }
-    if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("kill"), name}, Operation::DistroboxStop, name)) {
+    if (isRootfulDistrobox(name)) {
+        m_pendingRootfulDistroboxOperation = true;
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The rootful container helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxStop, name, false, error);
+            return;
+        }
+        if (!startOperation(pkexec,
+                            {helper, QStringLiteral("stop"), name},
+                            Operation::DistroboxStop,
+                            name)) {
+            emitDistroboxOperationResult(Operation::DistroboxStop, name, false, statusMessage());
+            return;
+        }
+    } else if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("kill"), name}, Operation::DistroboxStop, name)) {
         emitDistroboxOperationResult(Operation::DistroboxStop, name, false, statusMessage());
         return;
     }
@@ -2448,22 +2552,58 @@ void AppHubBackend::stopDistrobox(const QString &name)
 void AppHubBackend::stopAllDistroboxes()
 {
     refreshDistrobox();
-    QStringList names;
+    QStringList rootfulNames;
+    QStringList rootlessNames;
     for (const AppModel::Item &item : m_allDistroboxItems) {
         const QString status = item.status.toLower();
-        if (isSafeIdentifier(item.identifier)
-            && (status.contains(QLatin1String("up")) || status.contains(QLatin1String("running"))))
-            names.append(item.identifier);
+        if (!isSafeIdentifier(item.identifier)
+            || (!status.contains(QLatin1String("up")) && !status.contains(QLatin1String("running"))))
+            continue;
+
+        if (isRootfulDistrobox(item.identifier))
+            rootfulNames.append(item.identifier);
+        else
+            rootlessNames.append(item.identifier);
     }
-    if (names.isEmpty()) {
+
+    if (rootfulNames.isEmpty() && rootlessNames.isEmpty()) {
         setStatusMessage(QStringLiteral("No running Distrobox containers."));
         return;
     }
 
-    QStringList arguments {QStringLiteral("container"), QStringLiteral("stop")};
-    arguments.append(names);
-    if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxStopAll))
-        emitDistroboxOperationResult(Operation::DistroboxStopAll, {}, false, statusMessage());
+    m_pendingDistroboxBulkNames = rootfulNames.isEmpty() ? QStringList() : rootlessNames;
+    m_pendingRootfulDistroboxOperation = !rootfulNames.isEmpty();
+    if (!rootfulNames.isEmpty()) {
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            m_pendingDistroboxBulkNames.clear();
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The rootful container helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxStopAll, {}, false, error);
+            return;
+        }
+
+        QStringList arguments {helper, QStringLiteral("stop-all")};
+        arguments.append(rootfulNames);
+        if (!startOperation(pkexec, arguments, Operation::DistroboxStopAll)) {
+            m_pendingDistroboxBulkNames.clear();
+            emitDistroboxOperationResult(Operation::DistroboxStopAll, {}, false, statusMessage());
+            return;
+        }
+    } else {
+        QStringList arguments {QStringLiteral("container"), QStringLiteral("stop")};
+        arguments.append(rootlessNames);
+        if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxStopAll)) {
+            m_pendingDistroboxBulkNames.clear();
+            emitDistroboxOperationResult(Operation::DistroboxStopAll, {}, false, statusMessage());
+            return;
+        }
+    }
+
+    setStatusMessage(QStringLiteral("Stopping containers…"));
 }
 
 void AppHubBackend::cloneDistrobox(const QString &source, const QString &name)
@@ -2473,16 +2613,39 @@ void AppHubBackend::cloneDistrobox(const QString &source, const QString &name)
         emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
         return;
     }
-    const QString executable = findExecutable(QStringLiteral("distrobox-create"));
-    if (executable.isEmpty()) {
-        setStatusMessage(QStringLiteral("distrobox-create is not installed."));
-        emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
-        return;
+
+    if (isRootfulDistrobox(source)) {
+        m_pendingRootfulDistroboxOperation = true;
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The rootful container helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxClone, name, false, error);
+            return;
+        }
+        if (!startOperation(pkexec,
+                            {helper, QStringLiteral("clone"), source, name},
+                            Operation::DistroboxClone,
+                            name)) {
+            emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
+            return;
+        }
+    } else {
+        const QString executable = findExecutable(QStringLiteral("distrobox-create"));
+        if (executable.isEmpty()) {
+            setStatusMessage(QStringLiteral("distrobox-create is not installed."));
+            emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
+            return;
+        }
+        if (!startOperation(executable, {QStringLiteral("--clone"), source, QStringLiteral("--name"), name}, Operation::DistroboxClone, name)) {
+            emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
+            return;
+        }
     }
-    if (!startOperation(executable, {QStringLiteral("--clone"), source, QStringLiteral("--name"), name}, Operation::DistroboxClone, name)) {
-        emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
-        return;
-    }
+
     setStatusMessage(QStringLiteral("Cloning %1 as %2…").arg(source, name));
 }
 
@@ -2497,6 +2660,29 @@ void AppHubBackend::repairDistrobox(const QString &name)
     if (executable.isEmpty()) {
         setStatusMessage(QStringLiteral("podman is not installed."));
         emitDistroboxOperationResult(Operation::DistroboxRepair, name, false, statusMessage());
+        return;
+    }
+
+    if (isRootfulDistrobox(name)) {
+        m_pendingRootfulDistroboxOperation = true;
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The rootful container helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxRepair, name, false, error);
+            return;
+        }
+        if (!startOperation(pkexec,
+                            {helper, QStringLiteral("repair"), name},
+                            Operation::DistroboxRepair,
+                            name)) {
+            emitDistroboxOperationResult(Operation::DistroboxRepair, name, false, statusMessage());
+            return;
+        }
+        setStatusMessage(QStringLiteral("Repairing %1…").arg(name));
         return;
     }
 
@@ -2527,7 +2713,26 @@ void AppHubBackend::removeDistrobox(const QString &name)
         emitDistroboxOperationResult(Operation::DistroboxRemove, name, false, statusMessage());
         return;
     }
-    if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("rm"), name}, Operation::DistroboxRemove, name)) {
+    if (isRootfulDistrobox(name)) {
+        m_pendingRootfulDistroboxOperation = true;
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The rootful container helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxRemove, name, false, error);
+            return;
+        }
+        if (!startOperation(pkexec,
+                            {helper, QStringLiteral("remove"), name},
+                            Operation::DistroboxRemove,
+                            name)) {
+            emitDistroboxOperationResult(Operation::DistroboxRemove, name, false, statusMessage());
+            return;
+        }
+    } else if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("rm"), name}, Operation::DistroboxRemove, name)) {
         emitDistroboxOperationResult(Operation::DistroboxRemove, name, false, statusMessage());
         return;
     }
@@ -2537,20 +2742,56 @@ void AppHubBackend::removeDistrobox(const QString &name)
 void AppHubBackend::removeAllDistroboxes()
 {
     refreshDistrobox();
-    QStringList names;
+    QStringList rootfulNames;
+    QStringList rootlessNames;
     for (const AppModel::Item &item : m_allDistroboxItems) {
-        if (isSafeIdentifier(item.identifier))
-            names.append(item.identifier);
+        if (!isSafeIdentifier(item.identifier))
+            continue;
+
+        if (isRootfulDistrobox(item.identifier))
+            rootfulNames.append(item.identifier);
+        else
+            rootlessNames.append(item.identifier);
     }
-    if (names.isEmpty()) {
+
+    if (rootfulNames.isEmpty() && rootlessNames.isEmpty()) {
         setStatusMessage(QStringLiteral("No Distrobox containers to delete."));
         return;
     }
 
-    QStringList arguments {QStringLiteral("container"), QStringLiteral("rm"), QStringLiteral("--force")};
-    arguments.append(names);
-    if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxRemoveAll))
-        emitDistroboxOperationResult(Operation::DistroboxRemoveAll, {}, false, statusMessage());
+    m_pendingDistroboxBulkNames = rootfulNames.isEmpty() ? QStringList() : rootlessNames;
+    m_pendingRootfulDistroboxOperation = !rootfulNames.isEmpty();
+    if (!rootfulNames.isEmpty()) {
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            m_pendingDistroboxBulkNames.clear();
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The rootful container helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxRemoveAll, {}, false, error);
+            return;
+        }
+
+        QStringList arguments {helper, QStringLiteral("remove-all")};
+        arguments.append(rootfulNames);
+        if (!startOperation(pkexec, arguments, Operation::DistroboxRemoveAll)) {
+            m_pendingDistroboxBulkNames.clear();
+            emitDistroboxOperationResult(Operation::DistroboxRemoveAll, {}, false, statusMessage());
+            return;
+        }
+    } else {
+        QStringList arguments {QStringLiteral("container"), QStringLiteral("rm"), QStringLiteral("--force")};
+        arguments.append(rootlessNames);
+        if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxRemoveAll)) {
+            m_pendingDistroboxBulkNames.clear();
+            emitDistroboxOperationResult(Operation::DistroboxRemoveAll, {}, false, statusMessage());
+            return;
+        }
+    }
+
+    setStatusMessage(QStringLiteral("Deleting containers…"));
 }
 
 void AppHubBackend::openDistrobox(const QString &name)
@@ -2600,12 +2841,14 @@ void AppHubBackend::openDistroboxInStation(const QString &name)
         return;
     }
 
-    const QStringList arguments {
+    QStringList arguments {
         QStringLiteral("--command"), executable,
-        QStringLiteral("--argument"), QStringLiteral("enter"),
-        QStringLiteral("--argument"), name,
-        QStringLiteral("--working-directory"), QDir::homePath()
+        QStringLiteral("--argument"), QStringLiteral("enter")
     };
+    if (isRootfulDistrobox(name))
+        arguments << QStringLiteral("--argument") << QStringLiteral("--root");
+    arguments << QStringLiteral("--argument") << name
+              << QStringLiteral("--working-directory") << QDir::homePath();
     if (QProcess::startDetached(terminal, arguments)) {
         setStatusMessage(QStringLiteral("Opening a Station terminal in %1.").arg(name));
         return;
@@ -3495,24 +3738,112 @@ void AppHubBackend::refreshAppHubCatalog()
 void AppHubBackend::refreshDistrobox()
 {
     const QString engine = containerEngine();
-    m_allDistroboxItems = loadDistroboxItems(runCommand(QStringLiteral("distrobox"), {QStringLiteral("list"), QStringLiteral("--no-color")}));
+    const QString format = QStringLiteral("{{.ID}}|{{.Image}}|{{.Names}}|{{.Status}}|{{.Labels}}|{{.Mounts}}");
 
-    if (m_allDistroboxItems.isEmpty() && !engine.isEmpty()) {
-        const QString format = QStringLiteral("{{.ID}}|{{.Image}}|{{.Names}}|{{.Status}}|{{.Labels}}|{{.Mounts}}");
-        m_allDistroboxItems = loadDistroboxItems(runCommand(engine, {QStringLiteral("container"), QStringLiteral("list"), QStringLiteral("--all"), QStringLiteral("--no-trunc"), QStringLiteral("--format"), format}));
-    }
+    QList<AppModel::Item> rootlessItems = loadDistroboxItems(runCommand(QStringLiteral("distrobox"), {QStringLiteral("list"), QStringLiteral("--no-color")}));
+    if (rootlessItems.isEmpty() && !engine.isEmpty())
+        rootlessItems = loadDistroboxItems(runCommand(engine, {QStringLiteral("container"), QStringLiteral("list"), QStringLiteral("--all"), QStringLiteral("--no-trunc"), QStringLiteral("--format"), format}));
 
-    if (!m_allDistroboxItems.isEmpty() && !engine.isEmpty()) {
+    if (!rootlessItems.isEmpty() && !engine.isEmpty()) {
         QStringList inspectArguments {QStringLiteral("container"), QStringLiteral("inspect"), QStringLiteral("--size")};
-        for (const AppModel::Item &item : m_allDistroboxItems)
+        for (const AppModel::Item &item : rootlessItems)
             inspectArguments.append(item.identifier);
 
-        enrichDistroboxItems(m_allDistroboxItems,
+        enrichDistroboxItems(rootlessItems,
                              runCommand(engine, inspectArguments),
                              runCommand(engine, {QStringLiteral("info"), QStringLiteral("--format"), QStringLiteral("json")}));
     }
 
+    m_allDistroboxItems = rootlessItems;
+    mergeDistroboxItems();
+}
+
+void AppHubBackend::mergeDistroboxItems()
+{
+    QSet<QString> identifiers;
+    for (const AppModel::Item &item : m_allDistroboxItems)
+        identifiers.insert(item.identifier);
+
+    for (const AppModel::Item &item : m_rootfulDistroboxItems) {
+        if (!identifiers.contains(item.identifier))
+            m_allDistroboxItems.append(item);
+    }
+
     m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
+}
+
+void AppHubBackend::loadRootfulDistroboxes()
+{
+    if (m_process->state() != QProcess::NotRunning) {
+        setStatusMessage(QStringLiteral("Another operation is still running."));
+        return;
+    }
+
+    const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+    if (pkexec.isEmpty()) {
+        setStatusMessage(QStringLiteral("PolicyKit is not installed."));
+        return;
+    }
+
+    const QString helper = distroboxHelper();
+    if (helper.isEmpty()) {
+        setStatusMessage(QStringLiteral("The rootful container helper is not installed."));
+        return;
+    }
+
+    if (!startOperation(pkexec,
+                        {helper, QStringLiteral("list-rootful")},
+                        Operation::DistroboxRootfulList))
+        return;
+
+    setStatusMessage(QStringLiteral("Loading rootful containers…"));
+}
+
+bool AppHubBackend::applyRootfulDistroboxSnapshot(const QByteArray &output, QString *error)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(output, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        if (error)
+            *error = QStringLiteral("The rootful container helper returned invalid data.");
+        return false;
+    }
+
+    const QJsonObject snapshot = document.object();
+    const QString helperError = snapshot.value(QStringLiteral("error")).toString().trimmed();
+    if (!helperError.isEmpty()) {
+        if (error)
+            *error = helperError;
+        return false;
+    }
+
+    QList<AppModel::Item> items = loadDistroboxItems(snapshot.value(QStringLiteral("list")).toString().toUtf8());
+    enrichDistroboxItems(items,
+                         snapshot.value(QStringLiteral("inspect")).toString().toUtf8(),
+                         snapshot.value(QStringLiteral("info")).toString().toUtf8());
+    const QJsonObject launcherIcons = snapshot.value(QStringLiteral("launcherIcons")).toObject();
+    for (AppModel::Item &item : items) {
+        const QJsonObject launcherIcon = launcherIcons.value(item.identifier).toObject();
+        const QString iconName = launcherIcon.value(QStringLiteral("name")).toString().trimmed();
+        const QString iconUrl = launcherIcon.value(QStringLiteral("url")).toString().trimmed();
+        if (!iconUrl.isEmpty()) {
+            item.icon = QStringLiteral("utilities-terminal");
+            item.iconUrl = iconUrl;
+        } else if (!iconName.isEmpty()) {
+            item.icon = iconName;
+            item.iconUrl.clear();
+        }
+    }
+    for (AppModel::Item &item : items)
+        item.containerMode = QStringLiteral("Rootful");
+
+    m_rootfulDistroboxItems = items;
+    if (!m_rootfulDistroboxesLoaded) {
+        m_rootfulDistroboxesLoaded = true;
+        emit rootfulDistroboxesLoadedChanged();
+    }
+    mergeDistroboxItems();
+    return true;
 }
 
 void AppHubBackend::parseFlatpakSearch(const QByteArray &output)
@@ -4221,7 +4552,10 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
 
     const Operation operation = m_operation;
     const QString identifier = m_operationIdentifier;
+    m_pendingRootfulDistroboxOperation = false;
     const QString message = QStringLiteral("Could not start the requested operation.");
+    if (operation == Operation::DistroboxRootfulList)
+        emit rootfulDistroboxesLoadFinished(false, message);
     const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
         && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
 
@@ -4314,6 +4648,9 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     const Operation operation = m_operation;
     const QString identifier = m_operationIdentifier;
     const bool openDistroboxAfterStart = operation == Operation::DistroboxStart && m_pendingDistroboxOpen == identifier;
+    const bool rootfulDistroboxOperation = m_pendingRootfulDistroboxOperation;
+    if (operation != Operation::DistroboxRootfulList)
+        m_pendingRootfulDistroboxOperation = false;
     const bool supersededFlatpakSearch = operation == Operation::FlatpakSearch
         && (m_currentSection != Flathub || m_flatpakSearchQuery != m_query);
     if (operation == Operation::DistroboxMount) {
@@ -4375,6 +4712,10 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             failure = QStringLiteral("The operation failed.");
     }
     if (!failure.isEmpty()) {
+        if (operation == Operation::DistroboxRootfulList)
+            emit rootfulDistroboxesLoadFinished(false, failure);
+        if (operation == Operation::DistroboxStopAll || operation == Operation::DistroboxRemoveAll)
+            m_pendingDistroboxBulkNames.clear();
         if (openDistroboxAfterStart)
             m_pendingDistroboxOpen.clear();
         if (operation == Operation::UserBundleGenerate) {
@@ -4434,6 +4775,18 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         setStatusMessage(QStringLiteral("NX AppHub operation completed."));
         emitAppHubOperationResult(operation, identifier, true);
         break;
+    case Operation::DistroboxRootfulList: {
+        QString error;
+        if (!applyRootfulDistroboxSnapshot(processOutput, &error)) {
+            setStatusMessage(error);
+            emit rootfulDistroboxesLoadFinished(false, error);
+            break;
+        }
+        setStatusMessage(QStringLiteral("Rootful containers loaded."));
+        emit rootfulDistroboxesLoadFinished(true, {});
+
+        break;
+    }
     case Operation::UserBundleGenerate: {
         const QString staging = m_userBundleGenerationDirectory ? m_userBundleGenerationDirectory->path() : QString();
         const QFileInfo generatedRecipe(QDir(staging).filePath(QStringLiteral("app.yml")));
@@ -4495,21 +4848,63 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             m_pendingDistroboxOpen.clear();
             openDistroboxInStation(identifier);
         }
+        if (rootfulDistroboxOperation) {
+            loadRootfulDistroboxes();
+            return;
+        }
         break;
     case Operation::DistroboxRepair:
         refreshDistrobox();
         setStatusMessage(QStringLiteral("Repaired %1.").arg(identifier));
         emitDistroboxOperationResult(Operation::DistroboxRepair, identifier, true);
+        if (rootfulDistroboxOperation) {
+            loadRootfulDistroboxes();
+            return;
+        }
         break;
     case Operation::DistroboxStopAll:
+        if (!m_pendingDistroboxBulkNames.isEmpty()) {
+            const QStringList names = m_pendingDistroboxBulkNames;
+            m_pendingDistroboxBulkNames.clear();
+            m_pendingRootfulDistroboxOperation = rootfulDistroboxOperation;
+            QStringList arguments {QStringLiteral("container"), QStringLiteral("stop")};
+            arguments.append(names);
+            if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxStopAll)) {
+                emitDistroboxOperationResult(operation, identifier, false, statusMessage());
+                break;
+            }
+            setStatusMessage(QStringLiteral("Stopping containers…"));
+            return;
+        }
         refreshDistrobox();
         emitDistroboxOperationResult(operation, identifier, true);
+        if (rootfulDistroboxOperation) {
+            loadRootfulDistroboxes();
+            return;
+        }
         break;
     case Operation::DistroboxRemoveAll:
+        if (!m_pendingDistroboxBulkNames.isEmpty()) {
+            const QStringList names = m_pendingDistroboxBulkNames;
+            m_pendingDistroboxBulkNames.clear();
+            m_pendingRootfulDistroboxOperation = rootfulDistroboxOperation;
+            QStringList arguments {QStringLiteral("container"), QStringLiteral("rm"), QStringLiteral("--force")};
+            arguments.append(names);
+            if (!startOperation(QStringLiteral("podman"), arguments, Operation::DistroboxRemoveAll)) {
+                emitDistroboxOperationResult(operation, identifier, false, statusMessage());
+                break;
+            }
+            setStatusMessage(QStringLiteral("Deleting containers…"));
+            return;
+        }
         for (const AppModel::Item &item : m_allDistroboxItems)
             removeDistroboxLauncher(item.identifier);
         refreshDistrobox();
         emitDistroboxOperationResult(operation, identifier, true);
+        if (rootfulDistroboxOperation) {
+            loadRootfulDistroboxes();
+            return;
+        }
         break;
     case Operation::DistroboxCreate:
     case Operation::DistroboxStop:
@@ -4517,12 +4912,20 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         refreshDistrobox();
         setStatusMessage(QStringLiteral("Distrobox operation completed."));
         emitDistroboxOperationResult(operation, identifier, true);
+        if (rootfulDistroboxOperation) {
+            loadRootfulDistroboxes();
+            return;
+        }
         break;
     case Operation::DistroboxRemove:
         removeDistroboxLauncher(identifier);
         refreshDistrobox();
         setStatusMessage(QStringLiteral("Distrobox operation completed."));
         emitDistroboxOperationResult(operation, identifier, true);
+        if (rootfulDistroboxOperation) {
+            loadRootfulDistroboxes();
+            return;
+        }
         break;
     case Operation::None:
         break;

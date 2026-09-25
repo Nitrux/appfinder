@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+        "https://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <action id="org.nitrux.appfinder.distrobox">
+    <description>Manage rootful Distrobox containers</description>
+    <message>Authentication is required to manage rootful Distrobox containers.</message>
+    <icon_name>nx-software-center</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@APPFINDER_DISTROBOX_HELPER_PATH@</annotate>
+  </action>
+</policyconfig>

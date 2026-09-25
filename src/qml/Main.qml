@@ -47,6 +47,7 @@ Maui.ApplicationWindow {
         appHubRefreshAction,
         appHubRevealAction,
         distroboxCreateAction,
+        distroboxLoadRootfulAction,
         distroboxStopAllAction,
         distroboxDeleteAllAction
     ]
@@ -59,6 +60,16 @@ Maui.ApplicationWindow {
         icon.name: "list-add"
         enabled: root.currentSection === 2 && contentLoader.item !== null && !appHub.busy
         onTriggered: contentLoader.item.createContainerRequested()
+    }
+
+    Action {
+        id: distroboxLoadRootfulAction
+        property bool actionVisible: root.currentSection === 2 && contentLoader.item !== null
+
+        text: appHub.rootfulDistroboxesLoaded ? qsTr("Refresh Rootful Containers") : qsTr("Load Rootful Containers")
+        icon.name: "view-refresh"
+        enabled: actionVisible && !appHub.busy
+        onTriggered: appHub.loadRootfulDistroboxes()
     }
 
     Action {
@@ -684,6 +695,7 @@ Maui.ApplicationWindow {
     Maui.InfoDialog {
         id: createDialog
         property bool customHomeEnabled: false
+        property bool rootfulEnabled: false
         implicitWidth: Math.min(root.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 30)
         title: qsTr("New Container")
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -713,6 +725,28 @@ Maui.ApplicationWindow {
         }
 
         Maui.FlexSectionItem {
+            label1.text: qsTr("Create rootful container")
+            label2.text: qsTr("Create the container with real root privileges.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.rootfulEnabled
+                onToggled: createDialog.rootfulEnabled = checked
+            }
+        }
+
+        Label {
+            visible: createDialog.rootfulEnabled
+            Layout.fillWidth: true
+            Layout.leftMargin: Maui.Style.contentMargins
+            Layout.rightMargin: Maui.Style.contentMargins
+            text: qsTr("Warning: Rootful containers can modify host-owned resources. Enable this only when required.")
+            color: Maui.Theme.negativeBackgroundColor
+            font.pointSize: Maui.Style.fontSizes.small
+            wrapMode: Text.Wrap
+        }
+
+        Maui.FlexSectionItem {
             label1.text: qsTr("Use custom home directory")
             label2.text: qsTr("Mount a host directory as the container home.")
             label2.wrapMode: Text.Wrap
@@ -737,16 +771,18 @@ Maui.ApplicationWindow {
         }
 
         onAccepted: {
-            appHub.createDistrobox(containerNameField.text, containerImageField.text, customHomeEnabled ? containerHomeField.text : "")
+            appHub.createDistrobox(containerNameField.text, containerImageField.text, customHomeEnabled ? containerHomeField.text : "", rootfulEnabled)
             containerNameField.clear()
             containerImageField.clear()
             containerHomeField.clear()
             customHomeEnabled = false
+            rootfulEnabled = false
             close()
         }
         onRejected: {
             containerHomeField.clear()
             customHomeEnabled = false
+            rootfulEnabled = false
             close()
         }
     }

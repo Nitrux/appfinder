@@ -58,6 +58,7 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(QString appHubCategory READ appHubCategory WRITE setAppHubCategory NOTIFY appHubCategoryChanged)
     Q_PROPERTY(bool appHubInstalledOnly READ appHubInstalledOnly WRITE setAppHubInstalledOnly NOTIFY appHubInstalledOnlyChanged)
     Q_PROPERTY(AppModel *distroboxModel READ distroboxModel CONSTANT)
+    Q_PROPERTY(bool rootfulDistroboxesLoaded READ rootfulDistroboxesLoaded NOTIFY rootfulDistroboxesLoadedChanged)
     Q_PROPERTY(int flathubCollection READ flathubCollection WRITE setFlathubCollection NOTIFY flathubCollectionChanged)
     Q_PROPERTY(bool flathubCollectionLoading READ flathubCollectionLoading NOTIFY flathubCollectionLoadingChanged)
     Q_PROPERTY(bool flathubCollectionHasMore READ flathubCollectionHasMore NOTIFY flathubCollectionHasMoreChanged)
@@ -109,6 +110,7 @@ public:
     QString userBundleArchitecture() const;
     AppModel *appHubBackupsModel();
     AppModel *distroboxModel();
+    bool rootfulDistroboxesLoaded() const;
 
     int flathubCollection() const;
     void setFlathubCollection(int collection);
@@ -176,7 +178,7 @@ public:
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
     Q_INVOKABLE void restoreAppHubBackup(const QString &identifier, const QString &backup);
     Q_INVOKABLE void openDistrobox(const QString &name);
-    Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {});
+    Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {}, bool rootful = false);
     Q_INVOKABLE void startDistrobox(const QString &name);
     Q_INVOKABLE void stopDistrobox(const QString &name);
     Q_INVOKABLE void stopAllDistroboxes();
@@ -184,6 +186,7 @@ public:
     Q_INVOKABLE void repairDistrobox(const QString &name);
     Q_INVOKABLE void removeDistrobox(const QString &name);
     Q_INVOKABLE void removeAllDistroboxes();
+    Q_INVOKABLE void loadRootfulDistroboxes();
     Q_INVOKABLE bool isFlatpakInstalled(const QString &identifier) const;
 
 signals:
@@ -199,6 +202,8 @@ signals:
     void flatpakOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
     void appHubOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
     void distroboxOperationFinished(const QString &identifier, const QString &action, bool success, const QString &error);
+    void rootfulDistroboxesLoadedChanged();
+    void rootfulDistroboxesLoadFinished(bool success, const QString &error);
     void userBundleOutputUrlChanged();
     void userBundleGenerated(const QString &projectId, bool success, const QString &error);
     void userBundleSaved(const QString &projectId, bool success, const QString &error);
@@ -240,7 +245,8 @@ private:
         DistroboxClone,
         DistroboxRepair,
         DistroboxRemove,
-        DistroboxRemoveAll
+        DistroboxRemoveAll,
+        DistroboxRootfulList
     };
 
     enum class DistroboxRepairStep
@@ -305,6 +311,10 @@ private:
     void cancelFlathubBrowseRequests(bool cancelFeatured);
     void refreshAppHubCatalog();
     void refreshDistrobox();
+    QString distroboxHelper() const;
+    bool isRootfulDistrobox(const QString &name) const;
+    void mergeDistroboxItems();
+    bool applyRootfulDistroboxSnapshot(const QByteArray &output, QString *error = nullptr);
     void openDistroboxInStation(const QString &name);
     void parseFlatpakSearch(const QByteArray &output);
 
@@ -384,6 +394,7 @@ private:
     QHash<QString, int> m_flathubBrowseTotalPagesCache;
     QHash<QString, AppModel::Item> m_flathubBrowseFeaturedCache;
     QList<AppModel::Item> m_allDistroboxItems;
+    QList<AppModel::Item> m_rootfulDistroboxItems;
     QSet<QString> m_installedFlatpaks;
     QSet<QString> m_userInstalledFlatpaks;
     QSet<QString> m_systemInstalledFlatpaks;
@@ -399,6 +410,9 @@ private:
     Operation m_operation = Operation::None;
     DistroboxRepairStep m_distroboxRepairStep = DistroboxRepairStep::None;
     bool m_distroboxRepairWasRunning = false;
+    bool m_rootfulDistroboxesLoaded = false;
+    bool m_pendingRootfulDistroboxOperation = false;
+    QStringList m_pendingDistroboxBulkNames;
     int m_operationAnimationStep = 0;
     int m_currentSection = AppHub;
     int m_flathubCollection = TrendingCollection;

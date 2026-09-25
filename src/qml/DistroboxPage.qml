@@ -59,6 +59,18 @@ Maui.Page {
                 : (body.length > 0 ? body : qsTr("The container operation failed."))
             Maui.App.rootComponent.notify("dialog-error", title, message)
         }
+
+        function onRootfulDistroboxesLoadFinished(success, error) {
+            if (success)
+                return
+
+            const body = String(error || "").trim()
+            Maui.App.rootComponent.notify(
+                "dialog-error",
+                qsTr("Could not load rootful containers"),
+                body.length > 0 ? body : qsTr("The rootful container inventory could not be loaded.")
+            )
+        }
     }
 
     SearchResultsView {
