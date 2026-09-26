@@ -367,7 +367,7 @@ Maui.Page {
                                 implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Repair")
-                                enabled: !appHub.busy
+                                enabled: !appHub.busy && containerCard.running
                                 onClicked: appHub.repairDistrobox(model.name)
                             }
 
@@ -418,7 +418,7 @@ Maui.Page {
                                 implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Repair")
-                                enabled: !appHub.busy
+                                enabled: !appHub.busy && containerCard.running
                                 onClicked: appHub.repairDistrobox(model.name)
                             }
 
