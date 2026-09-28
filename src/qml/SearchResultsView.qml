@@ -20,6 +20,8 @@ Maui.ScrollColumn {
     property bool previewEnabled: false
     property bool busy: false
     property string operationPrefix: ""
+    property Component delegateComponent: null
+    readonly property bool searching: control.busy && (!control.sourceModel || control.sourceModel.count === 0)
     readonly property real targetItemSize: Maui.Style.units.gridUnit * 18
     readonly property real minimumItemSize: Maui.Style.units.gridUnit * 14
     readonly property real maximumItemSize: Maui.Style.units.gridUnit * 24
@@ -27,13 +29,28 @@ Maui.ScrollColumn {
     property var detailHandler: null
     property var secondaryActionHandler: null
     property var actionTextResolver: function(item) { return item && item.actionText ? String(item.actionText) : "" }
-    property var actionIconResolver: function(item) { return item && item.actionIcon ? String(item.actionIcon) : "" }
     property var secondaryActionVisibleResolver: function(item) { return false }
     property var secondaryActionTextResolver: function(item) { return "" }
     property var secondaryActionIconResolver: function(item) { return "" }
 
     padding: Maui.Style.contentMargins
     spacing: Maui.Style.space.small
+
+    function forwardGridWheel(wheel) {
+        const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
+        const horizontalDelta = usePixelDelta ? wheel.pixelDelta.x : wheel.angleDelta.x
+        const verticalDelta = usePixelDelta ? wheel.pixelDelta.y : wheel.angleDelta.y
+
+        if (Math.abs(verticalDelta) < Math.abs(horizontalDelta)) {
+            wheel.accepted = false
+            return
+        }
+
+        const pageFlickable = control.flickable
+        const maximumContentY = Math.max(0, pageFlickable.contentHeight - pageFlickable.height)
+        pageFlickable.contentY = Math.max(0, Math.min(maximumContentY, pageFlickable.contentY - verticalDelta))
+        wheel.accepted = true
+    }
 
     Maui.SectionHeader {
         Layout.fillWidth: true
@@ -46,21 +63,40 @@ Maui.ScrollColumn {
 
     Maui.GridBrowser {
                 id: resultsGrid
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.preferredHeight: Math.max(implicitHeight, control.availableHeight - y)
+                readonly property real availableLayoutWidth: control.availableWidth
+                readonly property int fittedColumns: Math.max(1, Math.min(count, Math.floor(availableLayoutWidth / control.targetItemSize)))
+                readonly property real fittedItemSize: Math.max(control.minimumItemSize,
+                                                                 Math.min(control.maximumItemSize,
+                                                                          availableLayoutWidth / fittedColumns))
+
+                Layout.fillWidth: holder.visible
+                Layout.preferredWidth: holder.visible ? availableLayoutWidth : Math.min(availableLayoutWidth, fittedItemSize * fittedColumns)
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredHeight: holder.visible ? Math.max(holder.implicitHeight, control.availableHeight - y) : contentHeight
                 padding: 0
-                itemSize: Math.max(control.minimumItemSize,
-                                   Math.min(control.maximumItemSize,
-                                            width / Math.max(1, Math.floor(width / control.targetItemSize))))
+                itemSize: fittedItemSize
                 itemHeight: control.previewEnabled ? itemSize + Maui.Style.rowHeight : itemSize * 9 / 20
                 adaptContent: true
+                wheelResizeEnabled: false
+                pinchEnabled: false
+                verticalScrollBarPolicy: ScrollBar.AlwaysOff
                 model: control.sourceModel
-                holder.visible: !control.sourceModel || control.sourceModel.count === 0
-                holder.title: control.emptyTitle
-                holder.body: control.emptyBody
+                flickable.interactive: false
 
-                delegate: Item {
+                holder.visible: control.searching || !control.sourceModel || control.sourceModel.count === 0
+                holder.title: control.searching ? qsTr("Searching…") : control.emptyTitle
+                holder.body: control.searching ? qsTr("Fetching search results.") : control.emptyBody
+                holder.content: Maui.ProgressIndicator {
+                    visible: control.searching
+                    width: control.width * 0.7
+                }
+
+                delegate: control.delegateComponent ? control.delegateComponent : defaultDelegate
+
+                Component {
+                    id: defaultDelegate
+
+                    Item {
                     id: resultDelegate
                     width: GridView.view.cellWidth
                     height: GridView.view.cellHeight
@@ -84,11 +120,6 @@ Maui.ScrollColumn {
                                                                 && control.operationPrefix.length > 0
                                                                 && appHub.operationIdentifier === itemIdentifier
                                                                 ? appHub.operationLabel : primaryActionText
-                    readonly property string primaryActionIcon: control.actionIconResolver(model)
-                    readonly property bool primaryActionIconVisible: {
-                        const actionText = resultDelegate.primaryActionText.toLowerCase()
-                        return actionText !== "install" && actionText !== "remove"
-                    }
                     readonly property bool secondaryActionVisible: control.secondaryActionVisibleResolver(model)
                     readonly property bool statusPositive: resultDelegate.itemStatus === "Installed" || resultDelegate.itemStatus === "Active"
                                                        || resultDelegate.itemStatus.toLowerCase().indexOf("up") >= 0
@@ -106,7 +137,7 @@ Maui.ScrollColumn {
                         flat: false
                         selectedBackgroundColor: Maui.Theme.alternateBackgroundColor
                         selectedForegroundColor: Maui.Theme.textColor
-                        isCurrentItem: parent.GridView.isCurrentItem
+                        isCurrentItem: false
                         onClicked: {
                             if (control.detailHandler)
                                 control.detailHandler(resultDelegate.itemIdentifier, model)
@@ -124,8 +155,8 @@ Maui.ScrollColumn {
                             Item {
                                 visible: control.previewEnabled
                                 Layout.fillWidth: true
+                                Layout.fillHeight: true
                                 Layout.preferredHeight: Math.min(width * 3 / 5, Maui.Style.units.gridUnit * 12)
-                                Layout.maximumHeight: Maui.Style.units.gridUnit * 12
                                 clip: true
 
                                 Rectangle {
@@ -176,6 +207,7 @@ Maui.ScrollColumn {
 
                                     ColumnLayout {
                                         Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                         spacing: Maui.Style.space.small
 
                                         Label {
@@ -183,6 +215,7 @@ Maui.ScrollColumn {
                                             text: resultDelegate.itemName
                                             font: Maui.Style.h2Font
                                             elide: Text.ElideRight
+                                            maximumLineCount: 1
                                         }
 
                                         Label {
@@ -207,12 +240,18 @@ Maui.ScrollColumn {
 
                                     Item { Layout.fillWidth: true }
 
-                                    ToolButton {
+                                    Button {
                                         visible: resultDelegate.primaryActionText.length > 0
+                                        Layout.minimumWidth: Maui.Style.units.gridUnit * 5
                                         text: resultDelegate.displayActionText
-                                        icon.name: resultDelegate.primaryActionIconVisible ? resultDelegate.primaryActionIcon : ""
-                                        display: resultDelegate.primaryActionIconVisible ? ToolButton.TextBesideIcon : ToolButton.TextOnly
+                                        display: Button.TextOnly
                                         flat: false
+                                        Maui.Controls.status: {
+                                            const action = resultDelegate.primaryActionText.toLowerCase()
+                                            return action === "install" || action === "build" || action === "activate" ? Maui.Controls.Positive
+                                                   : action === "remove" ? Maui.Controls.Negative
+                                                                         : Maui.Controls.Normal
+                                        }
                                         enabled: !control.busy
                                         onClicked: {
                                             if (control.actionHandler)
@@ -247,6 +286,16 @@ Maui.ScrollColumn {
                             }
                         }
                     }
+                }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    propagateComposedEvents: true
+                    scrollGestureEnabled: true
+                    z: 100
+                    onWheel: (wheel) => control.forwardGridWheel(wheel)
                 }
             }
 }

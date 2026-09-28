@@ -1143,6 +1143,7 @@ Maui.Page {
             sourceDescription: qsTr("Search AppBox recipes in NX AppHub.")
             emptyTitle: qsTr("No NX AppHub results")
             emptyBody: qsTr("Try a different recipe name or category.")
+            previewEnabled: true
             busy: appHub.busy
             actionHandler: function(identifier) { appHub.appHubAction(identifier) }
             detailHandler: function(identifier, item) { control.openDetails(item) }

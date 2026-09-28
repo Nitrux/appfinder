@@ -309,6 +309,7 @@ private:
     void requestFlathubBrowseFeatured(const AppModel::Item &item);
     void parseFlathubBrowseFeatured(const QByteArray &output);
     void cancelFlathubBrowseRequests(bool cancelFeatured);
+    void initializeFlathub();
     void refreshAppHubCatalog();
     void refreshDistrobox();
     QString distroboxHelper() const;
@@ -437,6 +438,7 @@ private:
     bool m_appHubInstalledOnly = false;
     int m_flathubCategoryRevision = 0;
     bool m_flathubCollectionLoading = false;
+    bool m_flathubInitialized = false;
     quint64 m_flathubFeaturedGeneration = 0;
     int m_featuredDetailPending = 0;
     quint64 m_flathubSearchGeneration = 0;

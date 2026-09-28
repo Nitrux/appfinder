@@ -16,18 +16,6 @@ Maui.Page {
 
     property string query: ""
     readonly property bool searchActive: query.trim().length > 0
-    property bool detailVisible: false
-    property var detailItem: null
-
-    function openDetails(item) {
-        control.detailItem = item
-        control.detailVisible = true
-    }
-
-    function closeDetails() {
-        control.detailVisible = false
-        control.detailItem = null
-    }
 
     background: null
     headBar.visible: false
@@ -75,31 +63,136 @@ Maui.Page {
 
     SearchResultsView {
         anchors.fill: parent
-        visible: control.searchActive && !control.detailVisible
+        visible: control.searchActive
         sourceModel: appHub.distroboxModel
-        operationPrefix: "distrobox-"
         query: control.query
         sourceTitle: qsTr("Distrobox")
         sourceDescription: qsTr("Search development containers.")
         emptyTitle: qsTr("No Distrobox results")
         emptyBody: qsTr("Try a different container name or image.")
         busy: appHub.busy
-        actionTextResolver: function(item) {
-            return qsTr("Open Container Environment")
+        delegateComponent: Component {
+            Item {
+                id: distroboxResult
+                width: GridView.view.cellWidth
+                height: GridView.view.cellHeight
+
+                readonly property bool running: {
+                    const value = String(model.status).toLowerCase()
+                    return value.indexOf("up") >= 0 || value.indexOf("running") >= 0
+                }
+
+                Maui.GridBrowserDelegate {
+                    id: resultCard
+                    width: parent.width - Maui.Style.space.small * 2
+                    height: implicitHeight
+                    anchors.centerIn: parent
+                    flat: false
+                    selectedBackgroundColor: Maui.Theme.alternateBackgroundColor
+                    selectedForegroundColor: Maui.Theme.textColor
+                    isCurrentItem: false
+                    template.labelsVisible: false
+                    template.iconComponent: Component {
+                        Item {
+                            id: resultContent
+                            anchors.fill: parent
+                            implicitHeight: resultLayout.implicitHeight + Maui.Style.space.small * 2
+                            clip: true
+
+                            ColumnLayout {
+                                id: resultLayout
+                                anchors.fill: parent
+                                anchors.leftMargin: Maui.Style.space.medium
+                                anchors.rightMargin: Maui.Style.space.medium
+                                anchors.topMargin: Maui.Style.space.small
+                                anchors.bottomMargin: Maui.Style.space.small
+                                spacing: Maui.Style.space.medium
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Maui.Style.space.medium
+
+                                    Maui.IconItem {
+                                        Layout.alignment: Qt.AlignTop
+                                        Layout.preferredWidth: Maui.Style.iconSizes.big
+                                        Layout.preferredHeight: Maui.Style.iconSizes.big
+                                        iconSizeHint: Maui.Style.iconSizes.big
+                                        imageSource: model.iconUrl
+                                        iconSource: model.icon
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
+                                        spacing: Maui.Style.space.small
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: model.name
+                                            font: Maui.Style.h2Font
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            Layout.minimumWidth: 0
+                                            visible: text.length > 0
+                                            text: model.containerMode === "Rootless"
+                                                  ? qsTr("Runs without root privileges.")
+                                                  : model.containerMode === "Rootful"
+                                                    ? qsTr("Runs with root privileges.")
+                                                    : ""
+                                            color: Maui.Theme.disabledTextColor
+                                            maximumLineCount: 2
+                                            wrapMode: Text.WordWrap
+                                            elide: Text.ElideRight
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Layout.topMargin: Maui.Style.space.medium
+                                            spacing: Maui.Style.space.small
+
+                                            Button {
+                                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
+                                                visible: !distroboxResult.running
+                                                text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
+                                                      ? appHub.operationLabel : qsTr("Start")
+                                                Maui.Controls.status: Maui.Controls.Positive
+                                                enabled: !appHub.busy
+                                                onClicked: appHub.startDistrobox(model.name)
+                                            }
+
+                                            Button {
+                                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
+                                                visible: distroboxResult.running
+                                                text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
+                                                      ? appHub.operationLabel : qsTr("Stop")
+                                                Maui.Controls.status: Maui.Controls.Negative
+                                                enabled: !appHub.busy
+                                                onClicked: appHub.stopDistrobox(model.name)
+                                            }
+                                        }
+                                    }
+
+                                    AppFinderChip {
+                                        Layout.alignment: Qt.AlignTop
+                                        text: distroboxResult.running ? qsTr("Running") : qsTr("Stopped")
+                                        color: distroboxResult.running ? Maui.Theme.positiveBackgroundColor : Maui.Theme.negativeBackgroundColor
+                                        textOpacity: 1.00
+                                    }
+                                }
+
+                            }
+                        }
+                    }
+                }
+            }
         }
-        actionIconResolver: function(item) {
-            return "utilities-terminal"
-        }
-        actionHandler: function(identifier, item) { appHub.openDistrobox(identifier) }
-        secondaryActionVisibleResolver: function(item) { return true }
-        secondaryActionTextResolver: function(item) { return qsTr("Delete") }
-        secondaryActionIconResolver: function(item) { return "edit-delete" }
-        secondaryActionHandler: function(identifier, item) { appHub.removeDistrobox(identifier) }
-        detailHandler: function(identifier, item) { control.openDetails(item) }
     }
 
     ColumnLayout {
-        visible: !control.searchActive && !control.detailVisible
+        visible: !control.searchActive
         anchors.fill: parent
         anchors.margins: Maui.Style.contentMargins
         spacing: Maui.Style.space.small
@@ -443,18 +536,4 @@ Maui.Page {
         }
     }
 
-    AppDetailsView {
-        anchors.fill: parent
-        visible: control.detailVisible
-        z: 2
-        itemData: control.detailItem
-        sourceTitle: qsTr("Distrobox")
-        operationPrefix: "distrobox-"
-        busy: appHub.busy
-        actionTextResolver: function(item) {
-            return qsTr("Open Container Environment")
-        }
-        actionHandler: function(identifier, item) { appHub.openDistrobox(identifier) }
-        onBackRequested: control.closeDetails()
-    }
 }

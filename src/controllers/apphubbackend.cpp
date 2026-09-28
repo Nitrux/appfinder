@@ -48,7 +48,6 @@ constexpr qint64 MaxMetadataBytes = 2 * 1024 * 1024;
 constexpr qsizetype MaxQueryLength = 256;
 constexpr int MaxCatalogItems = 10000;
 constexpr int MaxFeaturedItems = 8;
-constexpr int MaxSearchDetailRequests = 12;
 constexpr int FlathubCollectionPageSize = 12;
 constexpr qsizetype MaxFeaturedResponseBytes = 8 * 1024 * 1024;
 constexpr qsizetype MaxFeaturedIconBytes = 2 * 1024 * 1024;
@@ -958,8 +957,11 @@ void AppHubBackend::setCurrentSection(int section)
     emit currentSectionChanged();
     if (m_currentSection == Distrobox)
         refreshDistrobox();
-    else
+    else {
+        if (m_currentSection == Flathub)
+            initializeFlathub();
         search(m_query);
+    }
 }
 
 bool AppHubBackend::busy() const
@@ -1536,19 +1538,27 @@ void AppHubBackend::showOperationNotification(Operation operation, const QString
     QProcess::startDetached(executable, arguments);
 }
 
-void AppHubBackend::refresh()
+void AppHubBackend::initializeFlathub()
 {
-    refreshFlatpakInstalled();
+    if (m_flathubInitialized)
+        return;
+
+    m_flathubInitialized = true;
     refreshFlathubFeatured();
     m_flathubCollectionCache.clear();
     m_flathubCollectionNextPage.clear();
     m_flathubCollectionTotalPages.clear();
     refreshFlathubCollection();
     refreshFlathubCategories();
-    refreshAppHubRepository();
-    refreshUserBundles();
-    refreshDistrobox();
-    setStatusMessage(QStringLiteral("Sources refreshed."));
+}
+
+void AppHubBackend::refresh()
+{
+    QTimer::singleShot(0, this, [this] {
+        refreshAppHubRepository();
+        refreshUserBundles();
+        setStatusMessage(QStringLiteral("Sources refreshed."));
+    });
 }
 
 void AppHubBackend::loadMoreFlathubCollection()
@@ -3379,7 +3389,7 @@ void AppHubBackend::cancelFlathubSearchRequests()
 void AppHubBackend::requestFlathubSearchDetails()
 {
     const QList<AppModel::Item> items = m_flathubModel->items();
-    const int requestCount = qMin(static_cast<int>(items.size()), MaxSearchDetailRequests);
+    const int requestCount = static_cast<int>(items.size());
     const quint64 generation = m_flathubSearchGeneration;
     for (int index = 0; index < requestCount; ++index) {
         const QString identifier = items.at(index).identifier;
@@ -3931,7 +3941,7 @@ QList<AppModel::Item> AppHubBackend::filterAppHubItems(const QList<AppModel::Ite
             continue;
         if (m_appHubInstalledOnly && item.status != QLatin1String("Active"))
             continue;
-        if (m_appHubInstalledOnly || m_appHubCategory.isEmpty() || normalizedAppHubCategory(item) == m_appHubCategory)
+        if (!m_query.isEmpty() || m_appHubInstalledOnly || m_appHubCategory.isEmpty() || normalizedAppHubCategory(item) == m_appHubCategory)
             filtered.append(item);
     }
     return filtered;

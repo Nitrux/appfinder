@@ -402,18 +402,6 @@ Maui.ApplicationWindow {
                     onClicked: contentLoader.item.closeDetails()
                 },
 
-                ToolSeparator {
-                    visible: (root.currentSection === 0
-                              && contentLoader.item !== null
-                              && !page.detailsVisible
-                              && typeof contentLoader.item.categoriesView !== "undefined"
-                              && contentLoader.item.categoriesView
-                              && !contentLoader.item.searchActive
-                              && contentLoader.item.selectedCategory.length > 0)
-                    bottomPadding: 10
-                    topPadding: 10
-                },
-
                 ToolButton {
                     visible: root.currentSection === 0
                              && contentLoader.item !== null
