@@ -73,6 +73,7 @@ Maui.ScrollColumn {
                                                 && appHub.operationIdentifier === control.itemIdentifier
     readonly property string actionText: control.itemOperationActive ? appHub.operationLabel : control.resolvedActionText
     readonly property bool actionEnabled: control.actionEnabledResolver(control.itemData)
+    readonly property bool compactLayout: Maui.Handy.isMobile || control.availableWidth < Maui.Style.units.gridUnit * 30
     readonly property int actionStatus: {
         const action = control.resolvedActionText.toLowerCase()
         return action === "install" || action === "build" || action === "activate" ? Maui.Controls.Positive
@@ -280,7 +281,8 @@ Maui.ScrollColumn {
                     Layout.alignment: Qt.AlignVCenter
                     Layout.minimumWidth: Maui.Style.units.gridUnit * 6
                     Layout.minimumHeight: Maui.Style.rowHeight
-                    visible: control.openHandler !== null && control.openVisibleResolver(control.itemData)
+                    visible: !control.compactLayout
+                             && control.openHandler !== null && control.openVisibleResolver(control.itemData)
                     text: qsTr("Open")
                     display: Button.TextOnly
                     enabled: !control.busy
@@ -291,7 +293,8 @@ Maui.ScrollColumn {
                     Layout.alignment: Qt.AlignVCenter
                     Layout.minimumWidth: Maui.Style.units.gridUnit * 6
                     Layout.minimumHeight: Maui.Style.rowHeight
-                    visible: control.actionText.length > 0 && control.actionHandler !== null
+                    visible: !control.compactLayout
+                             && control.actionText.length > 0 && control.actionHandler !== null
                     text: control.actionText
                     display: Button.TextOnly
                     enabled: control.actionEnabled && !control.busy
@@ -299,6 +302,44 @@ Maui.ScrollColumn {
                     onClicked: control.actionHandler(control.itemIdentifier, control.itemData)
                 }
             }
+        }
+    }
+
+    GridLayout {
+        id: compactActionGrid
+        Layout.fillWidth: true
+        visible: control.compactLayout
+                 && (control.openHandler !== null && control.openVisibleResolver(control.itemData)
+                     || control.actionText.length > 0 && control.actionHandler !== null)
+        columns: (control.openHandler !== null && control.openVisibleResolver(control.itemData)
+                   && control.actionText.length > 0 && control.actionHandler !== null) ? 2 : 1
+        columnSpacing: Maui.Style.space.small
+
+        Button {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.preferredWidth: (compactActionGrid.width - compactActionGrid.columnSpacing * (compactActionGrid.columns - 1))
+                                   / compactActionGrid.columns
+            Layout.minimumHeight: Maui.Style.rowHeight
+            visible: control.openHandler !== null && control.openVisibleResolver(control.itemData)
+            text: qsTr("Open")
+            display: Button.TextOnly
+            enabled: !control.busy
+            onClicked: control.openHandler(control.itemIdentifier, control.itemData)
+        }
+
+        Button {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.preferredWidth: (compactActionGrid.width - compactActionGrid.columnSpacing * (compactActionGrid.columns - 1))
+                                   / compactActionGrid.columns
+            Layout.minimumHeight: Maui.Style.rowHeight
+            visible: control.actionText.length > 0 && control.actionHandler !== null
+            text: control.actionText
+            display: Button.TextOnly
+            enabled: control.actionEnabled && !control.busy
+            Maui.Controls.status: control.actionStatus
+            onClicked: control.actionHandler(control.itemIdentifier, control.itemData)
         }
     }
 
