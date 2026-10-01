@@ -1889,14 +1889,17 @@ void AppHubBackend::installFlatpak(const QString &identifier)
         emitFlatpakOperationResult(Operation::FlatpakInstall, identifier, false, error);
         return;
     }
+    const bool hadPendingFlatpakRemote = m_flatpakInstallNeedsRemote;
+    m_flatpakInstallNeedsRemote = true;
     if (!startOperation(QStringLiteral("flatpak"),
-                       {QStringLiteral("install"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), QStringLiteral("flathub"), identifier},
+                       {QStringLiteral("remote-add"), QStringLiteral("--user"), QStringLiteral("--if-not-exists"), QStringLiteral("flathub"), QStringLiteral("https://dl.flathub.org/repo/flathub.flatpakrepo")},
                        Operation::FlatpakInstall,
                        identifier)) {
+        m_flatpakInstallNeedsRemote = hadPendingFlatpakRemote;
         emitFlatpakOperationResult(Operation::FlatpakInstall, identifier, false, statusMessage());
         return;
     }
-    setStatusMessage(QStringLiteral("Installing %1 from Flathub…").arg(identifier));
+    setStatusMessage(QStringLiteral("Preparing Flathub for %1…").arg(identifier));
 }
 
 void AppHubBackend::launchFlatpak(const QString &identifier)
@@ -4562,6 +4565,8 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
 
     const Operation operation = m_operation;
     const QString identifier = m_operationIdentifier;
+    if (operation == Operation::FlatpakInstall)
+        m_flatpakInstallNeedsRemote = false;
     m_pendingRootfulDistroboxOperation = false;
     const QString message = QStringLiteral("Could not start the requested operation.");
     if (operation == Operation::DistroboxRootfulList)
@@ -4722,6 +4727,8 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             failure = QStringLiteral("The operation failed.");
     }
     if (!failure.isEmpty()) {
+        if (operation == Operation::FlatpakInstall)
+            m_flatpakInstallNeedsRemote = false;
         if (operation == Operation::DistroboxRootfulList)
             emit rootfulDistroboxesLoadFinished(false, failure);
         if (operation == Operation::DistroboxStopAll || operation == Operation::DistroboxRemoveAll)
@@ -4752,6 +4759,19 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             });
         }
         setStatusMessage(failure);
+        return;
+    }
+
+    if (operation == Operation::FlatpakInstall && m_flatpakInstallNeedsRemote) {
+        m_flatpakInstallNeedsRemote = false;
+        if (!startOperation(QStringLiteral("flatpak"),
+                            {QStringLiteral("install"), QStringLiteral("--user"), QStringLiteral("-y"), QStringLiteral("--app"), QStringLiteral("flathub"), identifier},
+                            Operation::FlatpakInstall,
+                            identifier)) {
+            emitFlatpakOperationResult(Operation::FlatpakInstall, identifier, false, statusMessage());
+            return;
+        }
+        setStatusMessage(QStringLiteral("Installing %1 from Flathub…").arg(identifier));
         return;
     }
 

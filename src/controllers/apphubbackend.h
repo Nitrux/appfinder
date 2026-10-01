@@ -406,6 +406,7 @@ private:
     QString m_pendingDistroboxOpen;
     QString m_flatpakAddonsApplication;
     bool m_flatpakAddonsSystemWide = false;
+    bool m_flatpakInstallNeedsRemote = false;
     QString m_flatpakUpdateIdentifier;
     int m_flatpakUpdateProgress = -1;
     Operation m_operation = Operation::None;
