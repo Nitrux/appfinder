@@ -112,17 +112,6 @@ Loader {
                                             iconName: modelData.icon
                                             isCurrentItem: modelData.section === control.currentSection
 
-                                            Binding {
-                                                target: sidebarDelegate.template.iconItem
-                                                property: "color"
-                                                value: sidebarDelegate.selected || sidebarDelegate.containsPress
-                                                       ? (Maui.ColorUtils.brightnessForColor(sidebarDelegate.effectiveBackgroundColor) === Maui.ColorUtils.Light
-                                                          ? "#333333"
-                                                          : "#fafafa")
-                                                       : sidebarDelegate.effectiveForegroundColor
-                                                when: sidebarDelegate.template.iconItem !== null
-                                            }
-
                                             onClicked: control.sectionSelected(modelData.section)
                                         }
                                     }
