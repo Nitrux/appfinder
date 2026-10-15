@@ -26,13 +26,13 @@ $APT_COMMAND install -y --no-install-recommends \
     automake \
     autotools-dev \
     build-essential \
-    checkinstall \
     clang \
-    cmake \
+    meson \
+    ninja-build \
+    pkg-config \
     curl \
     devscripts \
     equivs \
-    extra-cmake-modules \
     gettext \
     git \
     gnupg \
@@ -43,8 +43,8 @@ $APT_COMMAND install -y --no-install-recommends \
     libkf6windowsystem-dev \
     libyaml-cpp-dev \
     lintian \
-    pkg-config \
     qt6-base-dev \
+    qt6-base-dev-tools \
     qt6-declarative-dev \
     qt6-declarative-dev-tools \
     qt6-svg-dev \

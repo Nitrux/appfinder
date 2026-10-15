@@ -26,7 +26,7 @@ const QByteArray Recipe = R"YAML(buildinfo:
   distrorepo:
     base:
       - distro: debian-snapshot
-        snapshot: 20260725T202958Z
+        snapshot: 20261013T082854Z
         release: testing
         arch: amd64
         components: [main]

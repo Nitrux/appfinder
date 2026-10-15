@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/org/nitrux/appfinder/qml">
+        <file>qml/AppFinderChip.qml</file>
+        <file>qml/Main.qml</file>
+        <file>qml/SourcePage.qml</file>
+        <file>qml/SearchResultsView.qml</file>
+        <file>qml/AppDetailsView.qml</file>
+        <file>qml/NavigationSidebar.qml</file>
+        <file>qml/SettingsDialog.qml</file>
+        <file>qml/AppFinderActionBar.qml</file>
+        <file>qml/FlathubPage.qml</file>
+        <file>qml/AppHubPage.qml</file>
+        <file>qml/DistroboxPage.qml</file>
+    </qresource>
+</RCC>

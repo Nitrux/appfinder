@@ -1,11 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
-mkdir -p build
-cd build
-PACKAGE_VERSION="${PACKAGE_VERSION:-0.1.0}"
+PACKAGE_VERSION="${PACKAGE_VERSION:-0.0.1}"
 TARGET_ARCH="${TARGET_ARCH:-$(dpkg --print-architecture)}"
-cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_BUILD_TYPE=Release -DCPACK_PACKAGE_VERSION="${PACKAGE_VERSION}" -DCPACK_DEBIAN_PACKAGE_ARCHITECTURE="${TARGET_ARCH}" ..
-cmake --build . --parallel "$(nproc)"
-cpack -G DEB -C Release
+
+build_dir="$repo_root/build"
+meson_dir="$build_dir/meson"
+stage_dir="$build_dir/package"
+rm -rf "$meson_dir" "$stage_dir"
+mkdir -p "$build_dir"
+
+meson_args=(--prefix=/usr --buildtype=release)
+if [ "$(dpkg-architecture -qDEB_HOST_ARCH)" = "amd64" ]; then
+    meson_args+=("-Dcpp_args=-march=x86-64-v3")
+fi
+
+meson setup "$meson_dir" "$repo_root" "${meson_args[@]}"
+meson compile -C "$meson_dir" -j "$(nproc)"
+DESTDIR="$stage_dir" meson install -C "$meson_dir"
+
+mkdir -p "$stage_dir/DEBIAN"
+cat > "$stage_dir/DEBIAN/control" <<CONTROL
+Package: appfinder
+Version: ${PACKAGE_VERSION}
+Section: utils
+Priority: optional
+Architecture: ${TARGET_ARCH}
+Maintainer: uri_herrera@nxos.org
+Provides: appfinder
+Depends: distrobox,libnotify-bin,libyaml-cpp0.9,mauikit (>= 4.0.5),flatpak,libpolkit-agent-1-0
+Description: AppFinder application launcher.
+ AppFinder application launcher.
+CONTROL
+
+dpkg-deb --build --root-owner-group "$stage_dir" "$build_dir/appfinder_${PACKAGE_VERSION}_${TARGET_ARCH}.deb"

@@ -45,6 +45,7 @@ target_link_libraries(${PROJECT_NAME}
         MauiKit4
         KF6::CoreAddons
         KF6::I18n
+        KF6::I18nQml
         Qt6::Core
         Qt6::Gui
         Qt6::Network

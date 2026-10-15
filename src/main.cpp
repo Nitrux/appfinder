@@ -21,7 +21,7 @@
 #include <MauiKit4/Core/mauiapp.h>
 #include <KAboutData>
 #include <KLocalizedString>
-#include <KLocalizedContext>
+#include <KLocalizedQmlContext>
 
 #include "controllers/apphubbackend.h"
 
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
     CachedNetworkAccessManagerFactory networkAccessManagerFactory;
     QQmlApplicationEngine engine;
     engine.setNetworkAccessManagerFactory(&networkAccessManagerFactory);
-    engine.rootContext()->setContextObject(new KLocalizedContext(&engine));
+    engine.rootContext()->setContextObject(new KLocalizedQmlContext(&engine));
     engine.rootContext()->setContextProperty(QStringLiteral("appHub"), &backend);
     const QUrl url(QStringLiteral("qrc:/org/nitrux/appfinder/qml/Main.qml"));
     engine.load(url);
