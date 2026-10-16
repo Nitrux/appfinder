@@ -47,8 +47,11 @@ $APT_COMMAND install -y --no-install-recommends \
     qt6-base-dev-tools \
     qt6-declarative-dev \
     qt6-declarative-dev-tools \
+    qt6-multimedia-dev \
     qt6-svg-dev \
-    qt6-wayland-dev
+    qt6-wayland-dev \
+    libxcb-icccm4-dev \
+    libxcb-shape0-dev
 
 
 # -- Add package from our repository.
