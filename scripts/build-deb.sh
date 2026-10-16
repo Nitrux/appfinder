@@ -30,7 +30,7 @@ Priority: optional
 Architecture: ${TARGET_ARCH}
 Maintainer: uri_herrera@nxos.org
 Provides: appfinder
-Depends: distrobox,libnotify-bin,libyaml-cpp0.9,mauikit (>= 4.0.5),flatpak,libpolkit-agent-1-0
+Depends: distrobox,libnotify-bin,libyaml-cpp0.9,mauikit (>= 4.0.5),qml6-module-qtquick,qml6-module-qtquick-controls,qml6-module-qtquick-layouts,qml6-module-qtquick-effects,flatpak,libpolkit-agent-1-0
 Description: AppFinder application launcher.
  AppFinder application launcher.
 CONTROL
