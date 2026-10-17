@@ -68,6 +68,9 @@ endif()
 add_definitions(-DGIT_COMMIT_HASH="${GIT_COMMIT_HASH}")
 add_definitions(-DGIT_BRANCH="${GIT_BRANCH}")
 
+set(QT_NO_PRIVATE_MODULE_WARNING ON CACHE BOOL
+    "MauiKit uses Qt's private WaylandClient API" FORCE)
+
 find_package(Qt6 6.9 REQUIRED COMPONENTS Core Gui Network Qml Quick Widgets)
 find_package(KF6 6.13.0 REQUIRED COMPONENTS CoreAddons I18n)
 find_package(MauiKit4 4.0.5 REQUIRED)
