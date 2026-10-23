@@ -144,6 +144,7 @@ Item {
                         visible: modelData && (typeof modelData.actionVisible === "undefined" || modelData.actionVisible)
 
                         readonly property bool destructive: modelData && modelData.Maui.Controls.status === Maui.Controls.Negative
+                        readonly property bool positive: modelData && modelData.Maui.Controls.status === Maui.Controls.Positive
 
                         Maui.Theme.colorSet: Maui.Theme.Complementary
                         Maui.Controls.status: modelData && modelData.Maui.Controls.status ? modelData.Maui.Controls.status : Maui.Controls.Normal
@@ -152,7 +153,7 @@ Item {
                         display: ToolButton.IconOnly
                         autoExclusive: modelData && modelData.checkable
                         flat: false
-                        icon.color: destructive ? "#fafafa" : actionButton.color
+                        icon.color: destructive || positive ? "#fafafa" : actionButton.color
 
                         background: Rectangle {
                             radius: Maui.Style.radiusV
@@ -162,6 +163,12 @@ Item {
                                    : (actionButton.hovered
                                       ? Qt.lighter(Maui.Theme.negativeBackgroundColor, 1.05)
                                       : Maui.Theme.negativeBackgroundColor))
+                                : actionButton.positive
+                                ? (actionButton.pressed || actionButton.down || actionButton.checked
+                                   ? Qt.darker(actionButton.Maui.Theme.positiveBackgroundColor, 1.12)
+                                   : (actionButton.hovered
+                                      ? Qt.lighter(actionButton.Maui.Theme.positiveBackgroundColor, 1.05)
+                                      : actionButton.Maui.Theme.positiveBackgroundColor))
                                 : (actionButton.pressed || actionButton.down || actionButton.checked
                                    ? actionButton.Maui.Theme.highlightColor
                                    : (actionButton.highlighted || actionButton.hovered

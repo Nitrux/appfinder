@@ -279,8 +279,6 @@ Maui.ScrollColumn {
 
                 Button {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.minimumWidth: Maui.Style.units.gridUnit * 6
-                    Layout.minimumHeight: Maui.Style.rowHeight
                     visible: !control.compactLayout
                              && control.openHandler !== null && control.openVisibleResolver(control.itemData)
                     text: qsTr("Open")
@@ -289,10 +287,17 @@ Maui.ScrollColumn {
                     onClicked: control.openHandler(control.itemIdentifier, control.itemData)
                 }
 
+                ToolSeparator {
+                    Layout.alignment: Qt.AlignVCenter
+                    orientation: Qt.Vertical
+                    Layout.preferredHeight: 8
+                    visible: !control.compactLayout
+                             && control.openHandler !== null && control.openVisibleResolver(control.itemData)
+                             && control.actionText.length > 0 && control.actionHandler !== null
+                }
+
                 Button {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.minimumWidth: Maui.Style.units.gridUnit * 6
-                    Layout.minimumHeight: Maui.Style.rowHeight
                     visible: !control.compactLayout
                              && control.actionText.length > 0 && control.actionHandler !== null
                     text: control.actionText
@@ -300,6 +305,12 @@ Maui.ScrollColumn {
                     enabled: control.actionEnabled && !control.busy
                     Maui.Controls.status: control.actionStatus
                     onClicked: control.actionHandler(control.itemIdentifier, control.itemData)
+                    contentItem: ActionOperationLabel {
+                        text: parent.text
+                        textFont: parent.font
+                        textColor: parent.enabled ? Maui.Theme.textColor : Maui.Theme.disabledTextColor
+                        busy: control.itemOperationActive
+                    }
                 }
             }
         }
@@ -340,6 +351,12 @@ Maui.ScrollColumn {
             enabled: control.actionEnabled && !control.busy
             Maui.Controls.status: control.actionStatus
             onClicked: control.actionHandler(control.itemIdentifier, control.itemData)
+            contentItem: ActionOperationLabel {
+                text: parent.text
+                textFont: parent.font
+                textColor: parent.enabled ? Maui.Theme.textColor : Maui.Theme.disabledTextColor
+                busy: control.itemOperationActive
+            }
         }
     }
 
@@ -886,11 +903,10 @@ Maui.ScrollColumn {
                                         Item { Layout.fillWidth: true }
 
                                         Button {
+                                            Layout.alignment: Qt.AlignVCenter
                                             visible: similarDelegate.primaryActionText.length > 0
-                                            Layout.minimumWidth: Maui.Style.units.gridUnit * 5
                                             text: similarDelegate.displayActionText
                                             display: Button.TextOnly
-                                            flat: false
                                             Maui.Controls.status: {
                                                 const action = similarDelegate.primaryActionText.toLowerCase()
                                                 return action === "install" || action === "build" || action === "activate" ? Maui.Controls.Positive
@@ -901,6 +917,12 @@ Maui.ScrollColumn {
                                             onClicked: {
                                                 if (control.actionHandler)
                                                     control.actionHandler(similarDelegate.itemIdentifier, modelData)
+                                            }
+                                            contentItem: ActionOperationLabel {
+                                                text: parent.text
+                        textFont: parent.font
+                        textColor: parent.enabled ? Maui.Theme.textColor : Maui.Theme.disabledTextColor
+                                                busy: appHub.busy && appHub.operationAction.startsWith(control.operationPrefix) && control.operationPrefix.length > 0 && appHub.operationIdentifier === similarDelegate.itemIdentifier
                                             }
                                         }
                                     }

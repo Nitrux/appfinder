@@ -157,6 +157,7 @@ public:
     Q_INVOKABLE void launchFlatpak(const QString &identifier);
     Q_INVOKABLE void updateFlatpak(const QString &identifier);
     Q_INVOKABLE void updateFlatpakRuntime(const QString &identifier, bool systemWide);
+    Q_INVOKABLE void updateAllFlatpaks();
     Q_INVOKABLE void removeFlatpak(const QString &identifier);
     Q_INVOKABLE void removeInstalledFlatpak(const QString &identifier, bool systemWide);
     Q_INVOKABLE void loadFlatpakAddons(const QString &identifier, bool systemWide);
@@ -173,12 +174,13 @@ public:
     Q_INVOKABLE bool removeUserBundle(const QString &projectId);
     Q_INVOKABLE void buildUserBundle(const QString &projectId);
     Q_INVOKABLE void cancelUserBundleBuild();
-    Q_INVOKABLE bool copyUserBundlePath(const QString &projectId);
+    Q_INVOKABLE bool moveUserBundleToApplications(const QString &projectId);
+    Q_INVOKABLE bool removeUserBundleArtifact(const QString &projectId);
     Q_INVOKABLE bool appHubHasBackups(const QString &identifier) const;
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
     Q_INVOKABLE void restoreAppHubBackup(const QString &identifier, const QString &backup);
     Q_INVOKABLE void openDistrobox(const QString &name);
-    Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {}, bool rootful = false);
+    Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {}, bool rootful = false, const QVariantMap &options = {});
     Q_INVOKABLE void startDistrobox(const QString &name);
     Q_INVOKABLE void stopDistrobox(const QString &name);
     Q_INVOKABLE void stopAllDistroboxes();
@@ -365,7 +367,6 @@ private:
     AppModel *m_appHubBackupsModel;
     AppModel *m_distroboxModel;
     QProcess *m_process;
-    QTimer *m_operationAnimationTimer;
     QFileSystemWatcher *m_appHubInstallWatcher;
     QFileSystemWatcher *m_userBundleWatcher;
     QNetworkAccessManager *m_network;
@@ -415,7 +416,6 @@ private:
     bool m_rootfulDistroboxesLoaded = false;
     bool m_pendingRootfulDistroboxOperation = false;
     QStringList m_pendingDistroboxBulkNames;
-    int m_operationAnimationStep = 0;
     int m_currentSection = AppHub;
     int m_flathubCollection = TrendingCollection;
     QString m_flatpakSortMode = QStringLiteral("name");

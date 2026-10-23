@@ -161,6 +161,7 @@ Maui.Page {
                                                 Maui.Controls.status: Maui.Controls.Positive
                                                 enabled: !appHub.busy
                                                 onClicked: appHub.startDistrobox(model.name)
+                                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name }
                                             }
 
                                             Button {
@@ -171,6 +172,7 @@ Maui.Page {
                                                 Maui.Controls.status: Maui.Controls.Negative
                                                 enabled: !appHub.busy
                                                 onClicked: appHub.stopDistrobox(model.name)
+                                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name }
                                             }
                                         }
                                     }
@@ -442,6 +444,7 @@ Maui.Page {
                                 Maui.Controls.status: Maui.Controls.Positive
                                 enabled: !appHub.busy
                                 onClicked: appHub.startDistrobox(model.name)
+                                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name }
                             }
 
                             Button {
@@ -452,6 +455,7 @@ Maui.Page {
                                 Maui.Controls.status: Maui.Controls.Negative
                                 enabled: !appHub.busy
                                 onClicked: appHub.stopDistrobox(model.name)
+                                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name }
                             }
 
                             Item { Layout.fillWidth: true }
@@ -462,13 +466,15 @@ Maui.Page {
                                       ? appHub.operationLabel : qsTr("Repair")
                                 enabled: !appHub.busy && containerCard.running
                                 onClicked: appHub.repairDistrobox(model.name)
+                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name }
                             }
 
                             Button {
                                 implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
-                                text: qsTr("Clone")
+                                text: appHub.operationAction === "distrobox-clone" && appHub.operationIdentifier === model.name ? appHub.operationLabel : qsTr("Clone")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: control.cloneRequested(model.name)
+                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-clone" && appHub.operationIdentifier === model.name }
                             }
 
                             Button {
@@ -477,6 +483,7 @@ Maui.Page {
                                       ? appHub.operationLabel : qsTr("Delete")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: appHub.removeDistrobox(model.name)
+                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name }
                             }
                         }
 
@@ -495,6 +502,7 @@ Maui.Page {
                                 Maui.Controls.status: Maui.Controls.Positive
                                 enabled: !appHub.busy
                                 onClicked: appHub.startDistrobox(model.name)
+                                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name }
                             }
 
                             Button {
@@ -505,6 +513,7 @@ Maui.Page {
                                 Maui.Controls.status: Maui.Controls.Negative
                                 enabled: !appHub.busy
                                 onClicked: appHub.stopDistrobox(model.name)
+                                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name }
                             }
 
                             Button {
@@ -513,13 +522,15 @@ Maui.Page {
                                       ? appHub.operationLabel : qsTr("Repair")
                                 enabled: !appHub.busy && containerCard.running
                                 onClicked: appHub.repairDistrobox(model.name)
+                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name }
                             }
 
                             Button {
                                 implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
-                                text: qsTr("Clone")
+                                text: appHub.operationAction === "distrobox-clone" && appHub.operationIdentifier === model.name ? appHub.operationLabel : qsTr("Clone")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: control.cloneRequested(model.name)
+                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-clone" && appHub.operationIdentifier === model.name }
                             }
 
                             Button {
@@ -528,6 +539,7 @@ Maui.Page {
                                       ? appHub.operationLabel : qsTr("Delete")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: appHub.removeDistrobox(model.name)
+                                contentItem: ActionOperationLabel { text: parent.text; busy: appHub.busy && appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name }
                             }
                         }
                     }

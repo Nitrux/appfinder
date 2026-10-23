@@ -38,6 +38,8 @@ qt_add_qml_module(${PROJECT_NAME}
         qml/FlathubPage.qml
         qml/AppHubPage.qml
         qml/DistroboxPage.qml
+        qml/ActionBusyIndicator.qml
+        qml/ActionOperationLabel.qml
 )
 
 target_link_libraries(${PROJECT_NAME}

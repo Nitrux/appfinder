@@ -40,6 +40,7 @@ Maui.ApplicationWindow {
         flathubExploreAction,
         flathubCategoriesAction,
         flathubInstalledAction,
+        flathubUpdateAllAction,
         appHubExploreAction,
         appHubBuilderAction,
         appHubInstalledAction,
@@ -67,7 +68,7 @@ Maui.ApplicationWindow {
         property bool actionVisible: root.currentSection === 2 && contentLoader.item !== null
 
         text: appHub.rootfulDistroboxesLoaded ? qsTr("Refresh Rootful Containers") : qsTr("Load Rootful Containers")
-        icon.name: "view-refresh"
+        icon.name: "lock"
         enabled: actionVisible && !appHub.busy
         onTriggered: appHub.loadRootfulDistroboxes()
     }
@@ -91,6 +92,18 @@ Maui.ApplicationWindow {
         Maui.Controls.status: Maui.Controls.Negative
         enabled: actionVisible && appHub.distroboxModel.count > 0 && !appHub.busy
         onTriggered: deleteAllContainersDialog.open()
+    }
+
+    Action {
+        id: flathubUpdateAllAction
+        property bool actionVisible: root.currentSection === 0 && contentLoader.item !== null && contentLoader.item.installedView === true
+
+        text: qsTr("Update All Flatpaks")
+        icon.name: "appfinder-update-all"
+        Maui.Controls.status: Maui.Controls.Positive
+        enabled: actionVisible && !appHub.busy
+                 && (appHub.flathubUpdatesModel.count > 0 || appHub.flathubRuntimeUpdatesModel.count > 0)
+        onTriggered: appHub.updateAllFlatpaks()
     }
 
     Action {
@@ -535,8 +548,8 @@ Maui.ApplicationWindow {
                 ToolSeparator {
                     id: toolbarSeparator
                     visible: root.currentSection === 0 && !page.detailsVisible && !page.compactSearch
-                    bottomPadding: 10
-                    topPadding: 10
+                    bottomPadding: Maui.Style.space.small + Maui.Style.space.tiny
+                    topPadding: Maui.Style.space.small + Maui.Style.space.tiny
                 },
 
                 Maui.ToolButtonMenu {
@@ -683,7 +696,10 @@ Maui.ApplicationWindow {
     Maui.InfoDialog {
         id: createDialog
         property bool customHomeEnabled: false
+        property bool advancedOptionsEnabled: false
         property bool rootfulEnabled: false
+        property bool initEnabled: false
+        property bool nvidiaEnabled: false
         implicitWidth: Math.min(root.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 30)
         title: qsTr("New Container")
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -735,6 +751,18 @@ Maui.ApplicationWindow {
         }
 
         Maui.FlexSectionItem {
+            label1.text: qsTr("Show advanced options")
+            label2.text: qsTr("Configure additional container creation options.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.advancedOptionsEnabled
+                onToggled: createDialog.advancedOptionsEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
             label1.text: qsTr("Use custom home directory")
             label2.text: qsTr("Mount a host directory as the container home.")
             label2.wrapMode: Text.Wrap
@@ -746,7 +774,7 @@ Maui.ApplicationWindow {
         }
 
         Maui.FlexSectionItem {
-            visible: createDialog.customHomeEnabled
+            visible: createDialog.advancedOptionsEnabled && createDialog.customHomeEnabled
             label1.text: qsTr("Home directory")
             label2.text: qsTr("Host directory used as the container home.")
             label2.wrapMode: Text.Wrap
@@ -757,20 +785,148 @@ Maui.ApplicationWindow {
                 placeholderText: qsTr("/path/to/container-home")
             }
         }
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Additional flags")
+            label2.text: qsTr("Extra flags passed to the container manager command.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: additionalFlagsField
+                Layout.fillWidth: true
+                placeholderText: qsTr("--pids-limit -1")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Additional packages")
+            label2.text: qsTr("Packages installed during initial container setup.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: additionalPackagesField
+                Layout.fillWidth: true
+                placeholderText: qsTr("git vim tmux")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Pre-init hooks")
+            label2.text: qsTr("Commands executed at the start of container initialization.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: preInitHooksField
+                Layout.fillWidth: true
+                placeholderText: qsTr("command")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Init hooks")
+            label2.text: qsTr("Commands executed at the end of container initialization.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: initHooksField
+                Layout.fillWidth: true
+                placeholderText: qsTr("command")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Use init system")
+            label2.text: qsTr("Use a separate init system inside the container.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.initEnabled
+                onToggled: createDialog.initEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled && createDialog.initEnabled
+            label1.text: qsTr("Init packages")
+            label2.text: qsTr("Packages required by the container image for its init system.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: initPackagesField
+                Layout.fillWidth: true
+                placeholderText: qsTr("init-package init-package-extra")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("NVIDIA integration")
+            label2.text: qsTr("Try to integrate the host NVIDIA drivers in the container.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.nvidiaEnabled
+                onToggled: createDialog.nvidiaEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Platform")
+            label2.text: qsTr("Platform to use for the container image, e.g., as linux/amd64.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: platformField
+                Layout.fillWidth: true
+                placeholderText: qsTr("linux/amd64")
+            }
+        }
 
         onAccepted: {
-            appHub.createDistrobox(containerNameField.text, containerImageField.text, customHomeEnabled ? containerHomeField.text : "", rootfulEnabled)
+            appHub.createDistrobox(containerNameField.text, containerImageField.text, advancedOptionsEnabled && customHomeEnabled ? containerHomeField.text : "", rootfulEnabled, {
+                additionalFlags: advancedOptionsEnabled ? additionalFlagsField.text : "",
+                additionalPackages: advancedOptionsEnabled ? additionalPackagesField.text : "",
+                initPackages: advancedOptionsEnabled && initEnabled ? initPackagesField.text : "",
+                initHooks: advancedOptionsEnabled ? initHooksField.text : "",
+                preInitHooks: advancedOptionsEnabled ? preInitHooksField.text : "",
+                init: advancedOptionsEnabled && createDialog.initEnabled,
+                nvidia: advancedOptionsEnabled && createDialog.nvidiaEnabled,
+                platform: advancedOptionsEnabled ? platformField.text : ""
+            })
             containerNameField.clear()
             containerImageField.clear()
             containerHomeField.clear()
+            additionalFlagsField.clear()
+            additionalPackagesField.clear()
+            initPackagesField.clear()
+            initHooksField.clear()
+            preInitHooksField.clear()
+            platformField.clear()
             customHomeEnabled = false
             rootfulEnabled = false
+            advancedOptionsEnabled = false
+            initEnabled = false
+            nvidiaEnabled = false
             close()
         }
         onRejected: {
             containerHomeField.clear()
+            additionalFlagsField.clear()
+            additionalPackagesField.clear()
+            initPackagesField.clear()
+            initHooksField.clear()
+            preInitHooksField.clear()
+            platformField.clear()
             customHomeEnabled = false
             rootfulEnabled = false
+            advancedOptionsEnabled = false
+            initEnabled = false
+            nvidiaEnabled = false
             close()
         }
     }

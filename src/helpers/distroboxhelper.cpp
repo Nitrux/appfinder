@@ -52,8 +52,8 @@ bool runCommand(const QString &program, const QStringList &arguments, QByteArray
 {
     QProcess process;
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
-    environment.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
-    environment.insert(QStringLiteral("LANG"), QStringLiteral("C"));
+    environment.insert(QStringLiteral("LC_ALL"), QStringLiteral("C.UTF-8"));
+    environment.insert(QStringLiteral("LANG"), QStringLiteral("C.UTF-8"));
     for (const QString &variable : environmentOverrides.keys())
         environment.insert(variable, environmentOverrides.value(variable));
     process.setProcessEnvironment(environment);
@@ -370,12 +370,22 @@ bool runRootfulAction(const QStringList &arguments, QString &error)
     };
 
     if (action == QLatin1String("create")) {
-        if (distroboxCreate.isEmpty() || arguments.size() < 3 || arguments.size() > 4
+        if (distroboxCreate.isEmpty() || arguments.size() < 3 || arguments.size() > 5
             || !validNameArgument(1) || arguments.at(2).isEmpty() || arguments.at(2).startsWith(QLatin1Char(45))
-            || (arguments.size() == 4 && arguments.at(3).startsWith(QLatin1Char(45)))) {
+            || (arguments.size() >= 4 && arguments.at(3).startsWith(QLatin1Char(45)))) {
             if (error.isEmpty())
                 error = QStringLiteral("Invalid rootful container details.");
             return false;
+        }
+
+        QJsonObject options;
+        if (arguments.size() == 5) {
+            const QJsonDocument document = QJsonDocument::fromJson(arguments.at(4).toUtf8());
+            if (!document.isObject()) {
+                error = QStringLiteral("Invalid rootful Distrobox options.");
+                return false;
+            }
+            options = document.object();
         }
 
         QStringList createArguments {
@@ -386,8 +396,30 @@ bool runRootfulAction(const QStringList &arguments, QString &error)
             QStringLiteral("--image"),
             arguments.at(2)
         };
-        if (arguments.size() == 4)
+        if (arguments.size() >= 4 && !arguments.at(3).isEmpty())
             createArguments << QStringLiteral("--home") << arguments.at(3);
+        const auto optionString = [&options](const char *key) {
+            return options.value(QString::fromLatin1(key)).toString().trimmed();
+        };
+        const QString additionalFlags = optionString("additionalFlags");
+        const QString additionalPackages = optionString("additionalPackages");
+        const QString initHooks = optionString("initHooks");
+        const QString preInitHooks = optionString("preInitHooks");
+        const QString platform = optionString("platform");
+        if (!additionalFlags.isEmpty())
+            createArguments << QStringLiteral("--additional-flags") << additionalFlags;
+        if (!additionalPackages.isEmpty())
+            createArguments << QStringLiteral("--additional-packages") << additionalPackages;
+        if (!initHooks.isEmpty())
+            createArguments << QStringLiteral("--init-hooks") << initHooks;
+        if (!preInitHooks.isEmpty())
+            createArguments << QStringLiteral("--pre-init-hooks") << preInitHooks;
+        if (options.value(QStringLiteral("init")).toBool())
+            createArguments << QStringLiteral("--init");
+        if (options.value(QStringLiteral("nvidia")).toBool())
+            createArguments << QStringLiteral("--nvidia");
+        if (!platform.isEmpty())
+            createArguments << QStringLiteral("--platform") << platform;
         if (!runAndForward(distroboxCreate, createArguments, error, LongCommandTimeoutMs))
             return false;
 

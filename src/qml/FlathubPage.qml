@@ -208,6 +208,12 @@ Maui.Page {
                             else
                                 appHub.installFlatpakAddon(model.identifier)
                         }
+                        ActionBusyIndicator {
+                            anchors.right: parent.right
+                            anchors.rightMargin: Maui.Style.space.tiny
+                            anchors.verticalCenter: parent.verticalCenter
+                            running: appHub.busy && appHub.operationIdentifier === model.identifier && (appHub.operationAction === "flatpak-addon-install" || appHub.operationAction === "flatpak-addon-remove")
+                        }
                     }
                 }
             }
@@ -1138,6 +1144,12 @@ Maui.Page {
                             Button {
                                 text: updateDelegate.updating ? appHub.operationLabel : qsTr("Update")
                                 enabled: !appHub.busy
+                                contentItem: ActionOperationLabel {
+                                    text: parent.text
+                        textFont: parent.font
+                        textColor: parent.enabled ? Maui.Theme.textColor : Maui.Theme.disabledTextColor
+                                    busy: updateDelegate.updating
+                                }
                                 onClicked: appHub.updateFlatpak(model.identifier)
                             }
                         }
@@ -1191,6 +1203,12 @@ Maui.Page {
                             Button {
                                 text: runtimeUpdateDelegate.updating ? appHub.operationLabel : qsTr("Update")
                                 enabled: !appHub.busy
+                                contentItem: ActionOperationLabel {
+                                    text: parent.text
+                        textFont: parent.font
+                        textColor: parent.enabled ? Maui.Theme.textColor : Maui.Theme.disabledTextColor
+                                    busy: runtimeUpdateDelegate.updating
+                                }
                                 onClicked: appHub.updateFlatpakRuntime(model.identifier, model.integration === "system")
                             }
                         }

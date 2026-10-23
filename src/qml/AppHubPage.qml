@@ -1715,6 +1715,26 @@ Maui.Page {
                                 label2.elide: Text.ElideRight
 
                                 ToolButton {
+                                    text: qsTr("Move to Applications")
+                                    icon.name: "document-export"
+                                    icon.color: control.contrastingForeground(down || checked
+                                                                                  ? Maui.Theme.highlightColor
+                                                                                  : (hovered
+                                                                                     ? Maui.Theme.hoverColor
+                                                                                     : builtBundleDelegate.effectiveBackgroundColor))
+                                    display: ToolButton.IconOnly
+                                    enabled: !appHub.busy
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: text
+                                    onClicked: appHub.moveUserBundleToApplications(model.identifier)
+                                }
+
+                                ToolSeparator {
+                                    topPadding: Maui.Style.space.small + Maui.Style.space.tiny
+                                    bottomPadding: Maui.Style.space.small + Maui.Style.space.tiny
+                                }
+
+                                ToolButton {
                                     text: qsTr("Edit")
                                     icon.name: "document-edit"
                                     icon.color: control.contrastingForeground(down || checked
@@ -1730,37 +1750,6 @@ Maui.Page {
                                 }
 
                                 ToolButton {
-                                    text: qsTr("Copy Path")
-                                    icon.name: "edit-copy"
-                                    icon.color: control.contrastingForeground(down || checked
-                                                                                  ? Maui.Theme.highlightColor
-                                                                                  : (hovered
-                                                                                     ? Maui.Theme.hoverColor
-                                                                                     : builtBundleDelegate.effectiveBackgroundColor))
-                                    display: ToolButton.IconOnly
-                                    enabled: !appHub.busy
-                                    ToolTip.visible: hovered
-                                    ToolTip.text: text
-                                    onClicked: appHub.copyUserBundlePath(model.identifier)
-                                }
-
-                                ToolButton {
-                                    visible: String(model.integration).toLowerCase() === "gui"
-                                    text: qsTr("Open")
-                                    icon.name: "go-next"
-                                    icon.color: control.contrastingForeground(down || checked
-                                                                                  ? Maui.Theme.highlightColor
-                                                                                  : (hovered
-                                                                                     ? Maui.Theme.hoverColor
-                                                                                     : builtBundleDelegate.effectiveBackgroundColor))
-                                    display: ToolButton.IconOnly
-                                    enabled: !appHub.busy
-                                    ToolTip.visible: hovered
-                                    ToolTip.text: text
-                                    onClicked: appHub.launchUserBundle(model.identifier)
-                                }
-
-                                ToolButton {
                                     text: qsTr("Remove")
                                     icon.name: "edit-delete"
                                     icon.color: control.contrastingForeground(down || checked
@@ -1772,10 +1761,9 @@ Maui.Page {
                                     enabled: !appHub.busy
                                     ToolTip.visible: hovered
                                     ToolTip.text: text
-                                    onClicked: appHub.removeUserBundle(model.identifier)
+                                    onClicked: appHub.removeUserBundleArtifact(model.identifier)
                                 }
                             }
-
                             MouseArea {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.NoButton
@@ -1909,6 +1897,12 @@ Maui.Page {
                                 ToolTip.visible: hovered
                                 ToolTip.text: text
                                 onClicked: appHub.appHubAction(model.identifier)
+                                ActionBusyIndicator {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: Maui.Style.space.tiny
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    running: appHub.busy && appHub.operationAction === "apphub-remove" && appHub.operationIdentifier === model.identifier
+                                }
                             }
                         }
 

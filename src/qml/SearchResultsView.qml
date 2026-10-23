@@ -257,6 +257,12 @@ Maui.ScrollColumn {
                                             if (control.actionHandler)
                                                 control.actionHandler(resultDelegate.itemIdentifier, model)
                                         }
+                                        contentItem: ActionOperationLabel {
+                                            text: parent.text
+                        textFont: parent.font
+                        textColor: parent.enabled ? Maui.Theme.textColor : Maui.Theme.disabledTextColor
+                                            busy: appHub.busy && appHub.operationAction.startsWith(control.operationPrefix) && control.operationPrefix.length > 0 && appHub.operationIdentifier === resultDelegate.itemIdentifier
+                                        }
                                     }
 
                                     ToolButton {
