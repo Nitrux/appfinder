@@ -383,8 +383,14 @@ Maui.ApplicationWindow {
 
             headBar.visible: true
             headBar.forceCenterMiddleContent: !page.compactSearch
+            headBar.preferredHeight: Maui.Style.rowHeightAlt
+            headBar.topPadding: Maui.Style.defaultPadding
+            headBar.bottomPadding: Maui.Style.defaultPadding
             headerMargins: Maui.Handy.isMobile ? 0 : Maui.Style.contentMargins
             footerMargins: headerMargins
+            footBar.preferredHeight: Maui.Style.rowHeightAlt
+            footBar.topPadding: Maui.Style.defaultPadding
+            footBar.bottomPadding: Maui.Style.defaultPadding
 
             Maui.Theme.colorSet: Maui.Theme.View
 
