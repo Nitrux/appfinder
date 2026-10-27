@@ -709,6 +709,7 @@ Maui.ApplicationWindow {
         implicitWidth: Math.min(root.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 30)
         title: qsTr("New Container")
         standardButtons: Dialog.Ok | Dialog.Cancel
+        Component.onCompleted: standardButton(Dialog.Ok).text = qsTr("Create")
 
         Maui.FlexSectionItem {
             label1.text: qsTr("Container name")
@@ -1010,8 +1011,9 @@ Maui.ApplicationWindow {
         title: qsTr("Delete All Containers")
         message: qsTr("This will stop and permanently delete all Distrobox containers. Container data may be lost.")
         template.iconSource: "dialog-warning"
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        onAccepted: {
+        standardButtons: Dialog.Discard | Dialog.Cancel
+        Component.onCompleted: standardButton(Dialog.Discard).text = qsTr("Delete")
+        onDiscarded: {
             appHub.removeAllDistroboxes()
             close()
         }
