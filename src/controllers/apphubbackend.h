@@ -165,6 +165,7 @@ public:
     Q_INVOKABLE void removeFlatpakAddon(const QString &ref);
     Q_INVOKABLE void appHubAction(const QString &identifier);
     Q_INVOKABLE void launchAppHub(const QString &identifier);
+    Q_INVOKABLE void initializeUserBundles();
     Q_INVOKABLE void refreshUserBundles();
     Q_INVOKABLE void generateUserBundle(const QString &projectId, const QVariantMap &options);
     Q_INVOKABLE QVariantMap loadUserBundle(const QString &projectId) const;
@@ -440,6 +441,10 @@ private:
     int m_flathubCategoryRevision = 0;
     bool m_flathubCollectionLoading = false;
     bool m_flathubInitialized = false;
+    bool m_flathubSearchLoaded = false;
+    QString m_flathubLoadedQuery;
+    bool m_distroboxInitialized = false;
+    bool m_userBundlesInitialized = false;
     quint64 m_flathubFeaturedGeneration = 0;
     int m_featuredDetailPending = 0;
     quint64 m_flathubSearchGeneration = 0;

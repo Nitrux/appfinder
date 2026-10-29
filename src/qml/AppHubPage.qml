@@ -675,7 +675,7 @@ Maui.Page {
 
     Component.onCompleted: {
         appHub.appHubInstalledOnly = viewMode === AppHubPage.Installed
-        appHub.refreshUserBundles()
+        appHub.initializeUserBundles()
     }
     Component.onDestruction: appHub.appHubInstalledOnly = false
 
@@ -1130,6 +1130,21 @@ Maui.Page {
                          : control.viewMode === AppHubPage.Recipes ? recipesComponent
                          : control.viewMode === AppHubPage.Builder ? builderComponent
                                                                     : installedComponent
+        onLoaded: {
+            if (item) {
+                item.opacity = 0
+                viewTransition.target = item
+                viewTransition.start()
+            }
+        }
+
+        OpacityAnimator {
+            id: viewTransition
+            from: 0
+            to: 1
+            duration: Maui.Style.units.longDuration
+            easing.type: Easing.InOutQuad
+        }
     }
 
     Component {

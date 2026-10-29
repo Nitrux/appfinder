@@ -237,6 +237,21 @@ Maui.Page {
         anchors.topMargin: 0
         visible: !control.detailVisible
         sourceComponent: control.searchActive ? searchView : control.installedView ? installedViewComponent : control.categoriesView ? categoryBrowserView : exploreView
+        onLoaded: {
+            if (item) {
+                item.opacity = 0
+                viewTransition.target = item
+                viewTransition.start()
+            }
+        }
+
+        OpacityAnimator {
+            id: viewTransition
+            from: 0
+            to: 1
+            duration: Maui.Style.units.longDuration
+            easing.type: Easing.InOutQuad
+        }
     }
 
     AppDetailsView {

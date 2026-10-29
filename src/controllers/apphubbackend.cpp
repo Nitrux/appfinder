@@ -946,12 +946,21 @@ void AppHubBackend::setCurrentSection(int section)
 
     m_currentSection = section;
     emit currentSectionChanged();
-    if (m_currentSection == Distrobox)
-        refreshDistrobox();
-    else {
-        if (m_currentSection == Flathub)
+    if (m_currentSection == Distrobox) {
+        if (!m_distroboxInitialized) {
+            refreshDistrobox();
+            m_distroboxInitialized = true;
+        } else {
+            m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
+        }
+    } else {
+        if (m_currentSection == Flathub) {
             initializeFlathub();
-        search(m_query);
+            if (!m_flathubSearchLoaded || m_flathubLoadedQuery != m_query)
+                search(m_query);
+        } else {
+            search(m_query);
+        }
     }
 }
 
@@ -1650,7 +1659,10 @@ void AppHubBackend::search(const QString &query)
     case Flathub:
         if (m_query.isEmpty()) {
             refreshFlatpakInstalled();
+            m_flathubLoadedQuery = m_query;
+            m_flathubSearchLoaded = true;
         } else {
+            m_flathubSearchLoaded = false;
             m_flathubModel->setItems({});
             startOperation(QStringLiteral("flatpak"),
                            {QStringLiteral("search"), QStringLiteral("--columns=application,name,description,version,remotes"), QStringLiteral("--arch=%1").arg(architecture()), QStringLiteral("--"), m_query},
@@ -2044,8 +2056,15 @@ void AppHubBackend::launchAppHub(const QString &identifier)
         setStatusMessage(QStringLiteral("Could not open %1.").arg(identifier));
 }
 
+void AppHubBackend::initializeUserBundles()
+{
+    if (!m_userBundlesInitialized)
+        refreshUserBundles();
+}
+
 void AppHubBackend::refreshUserBundles()
 {
+    m_userBundlesInitialized = true;
     QString error;
     if (!m_userBundleStore.ensureRoot(&error)) {
         m_userBundleModel->setItems({});
@@ -2941,6 +2960,9 @@ void AppHubBackend::openDistroboxInStation(const QString &name)
 
 void AppHubBackend::refreshFlatpakInstalled()
 {
+    m_flathubSearchLoaded = m_query.isEmpty();
+    if (m_flathubSearchLoaded)
+        m_flathubLoadedQuery = m_query;
     m_installedFlatpaks.clear();
     m_userInstalledFlatpaks.clear();
     m_systemInstalledFlatpaks.clear();
@@ -4846,6 +4868,8 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     switch (operation) {
     case Operation::FlatpakSearch:
         m_flatpakSearchRetryAttempt = 0;
+        m_flathubLoadedQuery = m_flatpakSearchQuery;
+        m_flathubSearchLoaded = true;
         parseFlatpakSearch(processOutput);
         setStatusMessage(QStringLiteral("Flathub search completed."));
         break;

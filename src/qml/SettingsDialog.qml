@@ -15,8 +15,8 @@ Maui.SettingsDialog {
         description: qsTr("Configure how AppFinder starts and reports operations.")
 
         Maui.FlexSectionItem {
-            label1.text: qsTr("Refresh sources on startup")
-            label2.text: qsTr("Update Flathub, NX AppHub, and Distrobox data when AppFinder opens.")
+            label1.text: qsTr("Refresh NX AppHub and personal bundles on startup")
+            label2.text: qsTr("Reload the NX AppHub catalog and personal bundle list when AppFinder opens.")
             label2.wrapMode: Text.WordWrap
 
             Switch {
