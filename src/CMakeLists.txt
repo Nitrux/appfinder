@@ -82,3 +82,18 @@ install(TARGETS appfinder-distrobox-helper
         RUNTIME DESTINATION ${KDE_INSTALL_LIBEXECDIR})
 
 qt_finalize_executable(appfinder-distrobox-helper)
+
+target_precompile_headers(${PROJECT_NAME} PRIVATE
+    <QDebug>
+    <QFileInfo>
+    <QGuiApplication>
+    <QQmlEngine>
+    <QQuickWindow>
+)
+
+target_precompile_headers(appfinder-distrobox-helper PRIVATE
+    <QDebug>
+    <QFileInfo>
+    <QObject>
+    <QString>
+)

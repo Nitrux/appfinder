@@ -18,3 +18,10 @@ target_link_libraries(userbundlestoretest
 )
 
 add_test(NAME userbundlestoretest COMMAND userbundlestoretest)
+
+target_precompile_headers(userbundlestoretest PRIVATE
+    <QDebug>
+    <QFileInfo>
+    <QObject>
+    <QString>
+)
