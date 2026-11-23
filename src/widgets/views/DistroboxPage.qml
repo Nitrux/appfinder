@@ -8,11 +8,23 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
 
+import ".."
+
 Maui.Page {
     id: control
 
     signal createContainerRequested()
     signal cloneRequested(string source)
+
+    onCreateContainerRequested: createDialog.open()
+    onCloneRequested: function(source) {
+        cloneDialog.sourceName = source
+        cloneDialog.open()
+    }
+
+    function openDeleteAllContainersDialog() {
+        deleteAllContainersDialog.open()
+    }
 
     property string query: ""
     readonly property bool searchActive: query.trim().length > 0
@@ -548,4 +560,335 @@ Maui.Page {
         }
     }
 
+    Maui.InfoDialog {
+        id: createDialog
+        property bool customHomeEnabled: false
+        property bool advancedOptionsEnabled: false
+        property bool rootfulEnabled: false
+        property bool initEnabled: false
+        property bool nvidiaEnabled: false
+        implicitWidth: Math.min(control.Window.window.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 30)
+        title: qsTr("New Container")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        Component.onCompleted: standardButton(Dialog.Ok).text = qsTr("Create")
+
+        Maui.FlexSectionItem {
+            label1.text: qsTr("Container name")
+            label2.text: qsTr("Name used to identify the container.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: containerNameField
+                Layout.fillWidth: true
+                placeholderText: qsTr("my-container")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            label1.text: qsTr("Base image")
+            label2.text: qsTr("Image used as the container's operating system and package base.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: containerImageField
+                Layout.fillWidth: true
+                placeholderText: qsTr("ubuntu:24.04")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            label1.text: qsTr("Create rootful container")
+            label2.text: qsTr("Create the container with real root privileges.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.rootfulEnabled
+                onToggled: createDialog.rootfulEnabled = checked
+            }
+        }
+
+        Label {
+            visible: createDialog.rootfulEnabled
+            Layout.fillWidth: true
+            Layout.leftMargin: Maui.Style.contentMargins
+            Layout.rightMargin: Maui.Style.contentMargins
+            text: qsTr("Warning: Rootful containers can modify host-owned resources. Enable this only when required.")
+            color: Maui.Theme.negativeBackgroundColor
+            font.pointSize: Maui.Style.fontSizes.small
+            wrapMode: Text.Wrap
+        }
+
+        Maui.FlexSectionItem {
+            label1.text: qsTr("Show advanced options")
+            label2.text: qsTr("Configure additional container creation options.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.advancedOptionsEnabled
+                onToggled: createDialog.advancedOptionsEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Use custom home directory")
+            label2.text: qsTr("Mount a host directory as the container home.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.customHomeEnabled
+                onToggled: createDialog.customHomeEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled && createDialog.customHomeEnabled
+            label1.text: qsTr("Home directory")
+            label2.text: qsTr("Host directory used as the container home.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: containerHomeField
+                Layout.fillWidth: true
+                placeholderText: qsTr("/path/to/container-home")
+            }
+        }
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Additional flags")
+            label2.text: qsTr("Extra flags passed to the container manager command.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: additionalFlagsField
+                Layout.fillWidth: true
+                placeholderText: qsTr("--pids-limit -1")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Additional packages")
+            label2.text: qsTr("Packages installed during initial container setup.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: additionalPackagesField
+                Layout.fillWidth: true
+                placeholderText: qsTr("git vim tmux")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Pre-init hooks")
+            label2.text: qsTr("Commands executed at the start of container initialization.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: preInitHooksField
+                Layout.fillWidth: true
+                placeholderText: qsTr("command")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Init hooks")
+            label2.text: qsTr("Commands executed at the end of container initialization.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: initHooksField
+                Layout.fillWidth: true
+                placeholderText: qsTr("command")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Use init system")
+            label2.text: qsTr("Use a separate init system inside the container.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.initEnabled
+                onToggled: createDialog.initEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled && createDialog.initEnabled
+            label1.text: qsTr("Init packages")
+            label2.text: qsTr("Packages required by the container image for its init system.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: initPackagesField
+                Layout.fillWidth: true
+                placeholderText: qsTr("init-package init-package-extra")
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("NVIDIA integration")
+            label2.text: qsTr("Try to integrate the host NVIDIA drivers in the container.")
+            label2.wrapMode: Text.Wrap
+            template.content: Switch {
+                checkable: true
+                checked: createDialog.nvidiaEnabled
+                onToggled: createDialog.nvidiaEnabled = checked
+            }
+        }
+
+        Maui.FlexSectionItem {
+            visible: createDialog.advancedOptionsEnabled
+            label1.text: qsTr("Platform")
+            label2.text: qsTr("Platform to use for the container image, e.g., as linux/amd64.")
+            label2.wrapMode: Text.Wrap
+
+            Maui.TextField {
+                id: platformField
+                Layout.fillWidth: true
+                placeholderText: qsTr("linux/amd64")
+            }
+        }
+
+        onAccepted: {
+            appHub.createDistrobox(containerNameField.text, containerImageField.text, advancedOptionsEnabled && customHomeEnabled ? containerHomeField.text : "", rootfulEnabled, {
+                additionalFlags: advancedOptionsEnabled ? additionalFlagsField.text : "",
+                additionalPackages: advancedOptionsEnabled ? additionalPackagesField.text : "",
+                initPackages: advancedOptionsEnabled && initEnabled ? initPackagesField.text : "",
+                initHooks: advancedOptionsEnabled ? initHooksField.text : "",
+                preInitHooks: advancedOptionsEnabled ? preInitHooksField.text : "",
+                init: advancedOptionsEnabled && createDialog.initEnabled,
+                nvidia: advancedOptionsEnabled && createDialog.nvidiaEnabled,
+                platform: advancedOptionsEnabled ? platformField.text : ""
+            })
+            containerNameField.clear()
+            containerImageField.clear()
+            containerHomeField.clear()
+            additionalFlagsField.clear()
+            additionalPackagesField.clear()
+            initPackagesField.clear()
+            initHooksField.clear()
+            preInitHooksField.clear()
+            platformField.clear()
+            customHomeEnabled = false
+            rootfulEnabled = false
+            advancedOptionsEnabled = false
+            initEnabled = false
+            nvidiaEnabled = false
+            close()
+        }
+        onRejected: {
+            containerHomeField.clear()
+            additionalFlagsField.clear()
+            additionalPackagesField.clear()
+            initPackagesField.clear()
+            initHooksField.clear()
+            preInitHooksField.clear()
+            platformField.clear()
+            customHomeEnabled = false
+            rootfulEnabled = false
+            advancedOptionsEnabled = false
+            initEnabled = false
+            nvidiaEnabled = false
+            close()
+        }
+    }
+
+    Connections {
+        target: appHub
+
+        function onBusyChanged() {
+            if (!appHub.busy || appHub.operationAction !== "distrobox-create")
+                return
+
+            createOutputDialog.operationFinished = false
+            createOutputDialog.operationSucceeded = false
+            createOutputDialog.operationError = ""
+            createOutputDialog.open()
+        }
+
+        function onDistroboxOperationFinished(identifier, action, success, error) {
+            if (action !== "create" || !createOutputDialog.visible)
+                return
+
+            createOutputDialog.operationFinished = true
+            createOutputDialog.operationSucceeded = success
+            createOutputDialog.operationError = String(error || "").trim()
+        }
+    }
+
+    Maui.InfoDialog {
+        id: createOutputDialog
+        property bool operationFinished: false
+        property bool operationSucceeded: false
+        property string operationError: ""
+
+        implicitWidth: Math.min(control.Window.window.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 40)
+        title: operationFinished
+               ? (operationSucceeded ? qsTr("Container Created") : qsTr("Container Creation Failed"))
+               : qsTr("Creating Container")
+        message: operationFinished
+                 ? (operationSucceeded
+                    ? qsTr("The container was created successfully.")
+                    : (operationError.length > 0 ? operationError : qsTr("The container could not be created.")))
+                 : qsTr("distrobox-create is still running.")
+        template.iconSource: "utilities-terminal"
+        standardButtons: Dialog.Close
+
+        Maui.SectionHeader {
+            Layout.fillWidth: true
+            text1: qsTr("Command Output")
+            text2: createOutputDialog.operationFinished
+                   ? qsTr("The operation has finished.")
+                   : qsTr("distrobox-create is still running.")
+            label2.wrapMode: Text.Wrap
+        }
+
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Maui.Style.units.gridUnit * 18
+            clip: true
+
+            TextArea {
+                width: parent.width
+                readOnly: true
+                selectByMouse: true
+                textFormat: TextEdit.PlainText
+                wrapMode: TextEdit.WrapAnywhere
+                text: appHub.operationLog.length > 0
+                      ? appHub.operationLog
+                      : qsTr("Waiting for distrobox-create output…")
+            }
+        }
+    }
+
+    Maui.InfoDialog {
+        id: deleteAllContainersDialog
+        title: qsTr("Delete All Containers")
+        message: qsTr("This will stop and permanently delete all Distrobox containers. Container data may be lost.")
+        template.iconSource: "dialog-warning"
+        standardButtons: Dialog.Discard | Dialog.Cancel
+        Component.onCompleted: standardButton(Dialog.Discard).text = qsTr("Delete")
+        onDiscarded: {
+            appHub.removeAllDistroboxes()
+            close()
+        }
+        onRejected: close()
+    }
+
+    Maui.InputDialog {
+        id: cloneDialog
+        property string sourceName: ""
+        title: qsTr("Clone Container")
+        message: qsTr("Choose a name for the cloned Distrobox container.")
+        textEntry.placeholderText: qsTr("New container name")
+        onFinished: function(text) {
+            appHub.cloneDistrobox(sourceName, text)
+        }
+    }
 }

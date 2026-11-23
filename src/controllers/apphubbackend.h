@@ -44,6 +44,7 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(AppModel *flathubCollectionModel READ flathubCollectionModel CONSTANT)
     Q_PROPERTY(QString flatpakSortMode READ flatpakSortMode WRITE setFlatpakSortMode NOTIFY flatpakSortModeChanged)
     Q_PROPERTY(QString flatpakUpdateIdentifier READ flatpakUpdateIdentifier NOTIFY flatpakUpdateStateChanged)
+    Q_PROPERTY(bool flatpakUpdateSystemWide READ flatpakUpdateSystemWide NOTIFY flatpakUpdateStateChanged)
     Q_PROPERTY(int flatpakUpdateProgress READ flatpakUpdateProgress NOTIFY flatpakUpdateStateChanged)
     Q_PROPERTY(AppModel *appHubModel READ appHubModel CONSTANT)
     Q_PROPERTY(AppModel *appHubFeaturedModel READ appHubFeaturedModel CONSTANT)
@@ -122,6 +123,7 @@ public:
     QString flatpakSortMode() const;
     void setFlatpakSortMode(const QString &mode);
     QString flatpakUpdateIdentifier() const;
+    bool flatpakUpdateSystemWide() const;
     int flatpakUpdateProgress() const;
 
     QStringList appHubCategories() const;
@@ -252,6 +254,13 @@ private:
         DistroboxRootfulList
     };
 
+    struct FlatpakUpdateRequest
+    {
+        QString identifier;
+        bool runtime = false;
+        bool systemWide = false;
+    };
+
     enum class DistroboxRepairStep
     {
         None,
@@ -346,6 +355,7 @@ private:
     QString containerEngine() const;
     void appendOperationLog(const QByteArray &output);
     void clearFlatpakUpdateState();
+    void startNextFlatpakUpdate();
     void restoreUserBundleArtifact();
 
     void setBusy(bool busy);
@@ -410,6 +420,9 @@ private:
     bool m_flatpakAddonsSystemWide = false;
     bool m_flatpakInstallNeedsRemote = false;
     QString m_flatpakUpdateIdentifier;
+    bool m_flatpakUpdateSystemWide = false;
+    QList<FlatpakUpdateRequest> m_pendingFlatpakUpdates;
+    bool m_flatpakUpdateAllActive = false;
     int m_flatpakUpdateProgress = -1;
     Operation m_operation = Operation::None;
     DistroboxRepairStep m_distroboxRepairStep = DistroboxRepairStep::None;

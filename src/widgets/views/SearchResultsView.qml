@@ -8,6 +8,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
 
+import ".."
+
 Maui.ScrollColumn {
     id: control
 
@@ -252,7 +254,6 @@ Maui.ScrollColumn {
                                                    : action === "remove" ? Maui.Controls.Negative
                                                                          : Maui.Controls.Normal
                                         }
-                                        enabled: !control.busy
                                         onClicked: {
                                             if (control.actionHandler)
                                                 control.actionHandler(resultDelegate.itemIdentifier, model)
@@ -270,7 +271,7 @@ Maui.ScrollColumn {
                                         icon.name: control.secondaryActionIconResolver(model)
                                         display: ToolButton.IconOnly
                                         flat: false
-                                        enabled: !control.busy && !resultDelegate.itemRunning
+                                        enabled: !resultDelegate.itemRunning
                                         ToolTip.visible: hovered
                                         ToolTip.text: control.secondaryActionTextResolver(model)
                                         onClicked: {

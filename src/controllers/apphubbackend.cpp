@@ -833,6 +833,11 @@ QString AppHubBackend::flatpakUpdateIdentifier() const
     return m_flatpakUpdateIdentifier;
 }
 
+bool AppHubBackend::flatpakUpdateSystemWide() const
+{
+    return m_flatpakUpdateSystemWide;
+}
+
 int AppHubBackend::flatpakUpdateProgress() const
 {
     return m_flatpakUpdateProgress;
@@ -1902,6 +1907,7 @@ void AppHubBackend::launchFlatpak(const QString &identifier)
 
 void AppHubBackend::updateFlatpak(const QString &identifier)
 {
+    m_flatpakUpdateSystemWide = false;
     if (!isSafeIdentifier(identifier)) {
         const QString error = QStringLiteral("Invalid Flatpak identifier.");
         setStatusMessage(error);
@@ -1920,6 +1926,7 @@ void AppHubBackend::updateFlatpak(const QString &identifier)
 
 void AppHubBackend::updateFlatpakRuntime(const QString &identifier, bool systemWide)
 {
+    m_flatpakUpdateSystemWide = systemWide;
     if (!isSafeIdentifier(identifier)) {
         const QString error = QStringLiteral("Invalid Flatpak runtime identifier.");
         setStatusMessage(error);
@@ -1938,14 +1945,37 @@ void AppHubBackend::updateFlatpakRuntime(const QString &identifier, bool systemW
 
 void AppHubBackend::updateAllFlatpaks()
 {
-    if (!startOperation(QStringLiteral("flatpak"),
-                        {QStringLiteral("update"), QStringLiteral("-y")},
-                        Operation::FlatpakUpdate,
-                        QStringLiteral("all-flatpaks"))) {
-        emitFlatpakOperationResult(Operation::FlatpakUpdate, QStringLiteral("all-flatpaks"), false, statusMessage());
+    if (m_busy) {
+        setStatusMessage(QStringLiteral("Another operation is still running."));
         return;
     }
+
+    m_pendingFlatpakUpdates.clear();
+    for (const AppModel::Item &item : m_flathubUpdatesModel->items())
+        m_pendingFlatpakUpdates.append({item.identifier, false, false});
+
+    const QByteArray systemAppUpdates = runCommand(
+        QStringLiteral("flatpak"),
+        {QStringLiteral("remote-ls"), QStringLiteral("--system"), QStringLiteral("--app"),
+         QStringLiteral("--updates"), QStringLiteral("--arch=%1").arg(architecture()),
+         QStringLiteral("--columns=application"), QStringLiteral("flathub")});
+    for (const QByteArray &line : systemAppUpdates.split('\n')) {
+        const QString identifier = QString::fromLocal8Bit(line).trimmed();
+        if (isSafeIdentifier(identifier))
+            m_pendingFlatpakUpdates.append({identifier, false, true});
+    }
+
+    for (const AppModel::Item &item : m_flathubRuntimeUpdatesModel->items())
+        m_pendingFlatpakUpdates.append({item.identifier, true, item.integration == QStringLiteral("system")});
+
+    if (m_pendingFlatpakUpdates.isEmpty()) {
+        setStatusMessage(QStringLiteral("No Flatpak updates are available."));
+        return;
+    }
+
+    m_flatpakUpdateAllActive = true;
     setStatusMessage(QStringLiteral("Updating Flatpaks and runtimes…"));
+    startNextFlatpakUpdate();
 }
 
 void AppHubBackend::removeFlatpak(const QString &identifier)
@@ -4604,12 +4634,38 @@ void AppHubBackend::appendOperationLog(const QByteArray &output)
 
 void AppHubBackend::clearFlatpakUpdateState()
 {
-    if (m_flatpakUpdateIdentifier.isEmpty() && m_flatpakUpdateProgress < 0)
+    if (m_flatpakUpdateIdentifier.isEmpty() && m_flatpakUpdateProgress < 0 && !m_flatpakUpdateSystemWide)
         return;
 
     m_flatpakUpdateIdentifier.clear();
+    m_flatpakUpdateSystemWide = false;
     m_flatpakUpdateProgress = -1;
     emit flatpakUpdateStateChanged();
+}
+
+void AppHubBackend::startNextFlatpakUpdate()
+{
+    while (!m_pendingFlatpakUpdates.isEmpty()) {
+        const FlatpakUpdateRequest request = m_pendingFlatpakUpdates.takeFirst();
+        m_flatpakUpdateSystemWide = request.systemWide;
+        QStringList arguments {QStringLiteral("update"), request.systemWide ? QStringLiteral("--system") : QStringLiteral("--user"), QStringLiteral("-y")};
+        arguments.append(request.runtime ? QStringLiteral("--runtime") : QStringLiteral("--app"));
+        arguments.append(request.identifier);
+        if (!startOperation(QStringLiteral("flatpak"), arguments, Operation::FlatpakUpdate, request.identifier)) {
+            const QString error = statusMessage();
+            emitFlatpakOperationResult(Operation::FlatpakUpdate, request.identifier, false, error);
+            continue;
+        }
+        setStatusMessage(request.runtime
+                             ? QStringLiteral("Updating runtime %1 from Flathub…").arg(request.identifier)
+                             : QStringLiteral("Updating %1 from Flathub…").arg(request.identifier));
+        return;
+    }
+
+    m_flatpakUpdateAllActive = false;
+    refreshFlatpakInstalled();
+    setBusy(false);
+    setStatusMessage(QStringLiteral("Flatpak updates completed."));
 }
 
 void AppHubBackend::restoreUserBundleArtifact()
@@ -4699,13 +4755,18 @@ void AppHubBackend::processErrorOccurred(QProcess::ProcessError error)
     if (operation == Operation::DistroboxRepair)
         m_distroboxRepairStep = DistroboxRepairStep::None;
 
-    emitFlatpakOperationResult(operation, identifier, false, message);
+    if (!(m_flatpakUpdateAllActive && operation == Operation::FlatpakUpdate))
+        emitFlatpakOperationResult(operation, identifier, false, message);
     emitAppHubOperationResult(operation, identifier, false, message);
     emitDistroboxOperationResult(operation, identifier, false, message);
 
     m_operation = Operation::None;
     emit operationStateChanged();
     clearFlatpakUpdateState();
+    if (m_flatpakUpdateAllActive && operation == Operation::FlatpakUpdate) {
+        startNextFlatpakUpdate();
+        return;
+    }
     setBusy(false);
     setStatusMessage(message);
 }
@@ -4800,7 +4861,8 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     m_operation = Operation::None;
     emit operationStateChanged();
     clearFlatpakUpdateState();
-    setBusy(false);
+    if (!m_flatpakUpdateAllActive)
+        setBusy(false);
 
     if (supersededFlatpakSearch) {
         if (m_currentSection == Flathub)
@@ -4849,6 +4911,8 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             });
         }
         setStatusMessage(failure);
+        if (m_flatpakUpdateAllActive && operation == Operation::FlatpakUpdate)
+            startNextFlatpakUpdate();
         return;
     }
 
@@ -4878,8 +4942,12 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
         setStatusMessage(QStringLiteral("NX AppHub metadata refreshed."));
         break;
     case Operation::FlatpakInstall:
-    case Operation::FlatpakUpdate:
     case Operation::FlatpakRemove:
+        refreshFlatpakInstalled();
+        setStatusMessage(QStringLiteral("Flathub operation completed."));
+        emitFlatpakOperationResult(operation, identifier, true);
+        break;
+    case Operation::FlatpakUpdate:
         refreshFlatpakInstalled();
         setStatusMessage(QStringLiteral("Flathub operation completed."));
         emitFlatpakOperationResult(operation, identifier, true);
@@ -5052,4 +5120,6 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
     case Operation::None:
         break;
     }
+    if (m_flatpakUpdateAllActive && operation == Operation::FlatpakUpdate)
+        startNextFlatpakUpdate();
 }

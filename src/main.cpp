@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
     engine.setNetworkAccessManagerFactory(&networkAccessManagerFactory);
     engine.rootContext()->setContextObject(new KLocalizedQmlContext(&engine));
     engine.rootContext()->setContextProperty(QStringLiteral("appHub"), &backend);
-    const QUrl url(QStringLiteral("qrc:/org/nitrux/appfinder/qml/Main.qml"));
+    const QUrl url(QStringLiteral("qrc:/org/nitrux/appfinder/main.qml"));
     engine.load(url);
 
     if (engine.rootObjects().isEmpty())

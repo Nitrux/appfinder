@@ -9,6 +9,8 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
 
+import ".."
+
 Maui.Page {
     id: control
 
@@ -239,6 +241,7 @@ Maui.Page {
         sourceComponent: control.searchActive ? searchView : control.installedView ? installedViewComponent : control.categoriesView ? categoryBrowserView : exploreView
         onLoaded: {
             if (item) {
+                viewTransition.stop()
                 item.opacity = 0
                 viewTransition.target = item
                 viewTransition.start()
@@ -1142,7 +1145,7 @@ Maui.Page {
                         delegate: Maui.ListBrowserDelegate {
                             id: updateDelegate
 
-                            readonly property bool updating: appHub.flatpakUpdateIdentifier === model.identifier
+                            readonly property bool updating: appHub.flatpakUpdateIdentifier === model.identifier && !appHub.flatpakUpdateSystemWide
 
                             Layout.fillWidth: true
                             iconSource: model.icon
@@ -1158,7 +1161,6 @@ Maui.Page {
 
                             Button {
                                 text: updateDelegate.updating ? appHub.operationLabel : qsTr("Update")
-                                enabled: !appHub.busy
                                 contentItem: ActionOperationLabel {
                                     text: parent.text
                         textFont: parent.font
@@ -1202,6 +1204,7 @@ Maui.Page {
                             id: runtimeUpdateDelegate
 
                             readonly property bool updating: appHub.flatpakUpdateIdentifier === model.identifier
+                                                            && appHub.flatpakUpdateSystemWide === (model.integration === "system")
 
                             Layout.fillWidth: true
                             iconSource: model.icon
@@ -1217,7 +1220,6 @@ Maui.Page {
 
                             Button {
                                 text: runtimeUpdateDelegate.updating ? appHub.operationLabel : qsTr("Update")
-                                enabled: !appHub.busy
                                 contentItem: ActionOperationLabel {
                                     text: parent.text
                         textFont: parent.font

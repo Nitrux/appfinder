@@ -8,6 +8,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.mauikit.controls as Maui
 
+import ".."
+
 Maui.ScrollColumn {
     id: control
 
@@ -282,8 +284,8 @@ Maui.ScrollColumn {
                     visible: !control.compactLayout
                              && control.openHandler !== null && control.openVisibleResolver(control.itemData)
                     text: qsTr("Open")
+                    palette.buttonText: Maui.Theme.textColor
                     display: Button.TextOnly
-                    enabled: !control.busy
                     onClicked: control.openHandler(control.itemIdentifier, control.itemData)
                 }
 
@@ -302,7 +304,7 @@ Maui.ScrollColumn {
                              && control.actionText.length > 0 && control.actionHandler !== null
                     text: control.actionText
                     display: Button.TextOnly
-                    enabled: control.actionEnabled && !control.busy
+                    enabled: control.actionEnabled
                     Maui.Controls.status: control.actionStatus
                     onClicked: control.actionHandler(control.itemIdentifier, control.itemData)
                     contentItem: ActionOperationLabel {
@@ -334,8 +336,8 @@ Maui.ScrollColumn {
             Layout.minimumHeight: Maui.Style.rowHeight
             visible: control.openHandler !== null && control.openVisibleResolver(control.itemData)
             text: qsTr("Open")
+            palette.buttonText: Maui.Theme.textColor
             display: Button.TextOnly
-            enabled: !control.busy
             onClicked: control.openHandler(control.itemIdentifier, control.itemData)
         }
 
@@ -348,7 +350,7 @@ Maui.ScrollColumn {
             visible: control.actionText.length > 0 && control.actionHandler !== null
             text: control.actionText
             display: Button.TextOnly
-            enabled: control.actionEnabled && !control.busy
+            enabled: control.actionEnabled
             Maui.Controls.status: control.actionStatus
             onClicked: control.actionHandler(control.itemIdentifier, control.itemData)
             contentItem: ActionOperationLabel {
@@ -528,6 +530,8 @@ Maui.ScrollColumn {
         title: control.itemName
         filling: true
         persistent: true
+        page.headerMargins: Maui.Style.defaultPadding
+        page.floatingHeader: true
 
         stack: Item {
             Layout.fillWidth: true
@@ -913,7 +917,6 @@ Maui.ScrollColumn {
                                                        : action === "remove" ? Maui.Controls.Negative
                                                                              : Maui.Controls.Normal
                                             }
-                                            enabled: !control.busy
                                             onClicked: {
                                                 if (control.actionHandler)
                                                     control.actionHandler(similarDelegate.itemIdentifier, modelData)

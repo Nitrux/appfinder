@@ -27,19 +27,20 @@ qt_add_qml_module(${PROJECT_NAME}
     RESOURCE_PREFIX /
     VERSION 1.0
     QML_FILES
-        qml/AppFinderChip.qml
-        qml/Main.qml
-        qml/SourcePage.qml
-        qml/SearchResultsView.qml
-        qml/AppDetailsView.qml
-        qml/NavigationSidebar.qml
-        qml/SettingsDialog.qml
-        qml/AppFinderActionBar.qml
-        qml/FlathubPage.qml
-        qml/AppHubPage.qml
-        qml/DistroboxPage.qml
-        qml/ActionBusyIndicator.qml
-        qml/ActionOperationLabel.qml
+        main.qml
+        widgets/ActionBusyIndicator.qml
+        widgets/ActionOperationLabel.qml
+        widgets/AppFinderActionBar.qml
+        widgets/AppFinderChip.qml
+        widgets/NavigationSidebar.qml
+        widgets/SettingsDialog.qml
+        widgets/views/AppDetailsView.qml
+        widgets/views/AppHubPage.qml
+        widgets/views/DistroboxPage.qml
+        widgets/views/FlathubPage.qml
+        widgets/views/PersonalBundleBuilder.qml
+        widgets/views/SearchResultsView.qml
+        widgets/views/SourcePage.qml
 )
 
 target_link_libraries(${PROJECT_NAME}
