@@ -1127,7 +1127,9 @@ Maui.Page {
 
     Loader {
         anchors.fill: parent
-        visible: !control.detailVisible
+        visible: !control.detailVisible || opacity > 0
+        enabled: !control.detailVisible
+        opacity: control.detailVisible ? 0 : 1
         sourceComponent: control.searchActive ? searchComponent
                          : control.viewMode === AppHubPage.Recipes ? recipesComponent
                          : control.viewMode === AppHubPage.Builder ? builderComponent
@@ -1170,7 +1172,9 @@ Maui.Page {
     AppDetailsView {
         id: appHubDetailsView
         anchors.fill: parent
-        visible: control.detailVisible
+        visible: control.detailVisible || opacity > 0
+        enabled: control.detailVisible
+        opacity: control.detailVisible ? 1 : 0
         z: 2
         itemData: control.detailItem
         sourceTitle: qsTr("NX AppHub")
@@ -1200,6 +1204,13 @@ Maui.Page {
         actionHandler: function(identifier) { appHub.appHubAction(identifier) }
         onBackRequested: control.closeDetails()
         onSimilarRequested: function(item) { control.openDetails(item) }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Maui.Style.units.longDuration
+                easing.type: Easing.InOutQuad
+            }
+        }
     }
 
     Component {

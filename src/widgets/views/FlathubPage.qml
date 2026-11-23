@@ -237,7 +237,9 @@ Maui.Page {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.topMargin: 0
-        visible: !control.detailVisible
+        visible: !control.detailVisible || opacity > 0
+        enabled: !control.detailVisible
+        opacity: control.detailVisible ? 0 : 1
         sourceComponent: control.searchActive ? searchView : control.installedView ? installedViewComponent : control.categoriesView ? categoryBrowserView : exploreView
         onLoaded: {
             if (item) {
@@ -255,12 +257,21 @@ Maui.Page {
             duration: Maui.Style.units.longDuration
             easing.type: Easing.InOutQuad
         }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Maui.Style.units.longDuration
+                easing.type: Easing.InOutQuad
+            }
+        }
     }
 
     AppDetailsView {
         id: flathubDetailsView
         anchors.fill: parent
-        visible: control.detailVisible
+        visible: control.detailVisible || opacity > 0
+        enabled: control.detailVisible
+        opacity: control.detailVisible ? 1 : 0
         z: 2
         itemData: control.detailItem
         sourceTitle: qsTr("Flathub")
@@ -272,6 +283,13 @@ Maui.Page {
         actionHandler: function(identifier) { control.flatpakAction(identifier) }
         onBackRequested: control.closeDetails()
         onSimilarRequested: function(item) { control.openDetails(item) }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Maui.Style.units.longDuration
+                easing.type: Easing.InOutQuad
+            }
+        }
     }
 
     Connections {

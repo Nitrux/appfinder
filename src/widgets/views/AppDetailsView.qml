@@ -30,6 +30,7 @@ Maui.ScrollColumn {
     property bool releasesExpanded: false
     property int screenshotIndex: 0
     property var loadedScreenshotIndexes: []
+    property int pendingPreviewScreenshotIndex: -1
     signal backRequested()
     signal similarRequested(var item)
 
@@ -179,7 +180,12 @@ Maui.ScrollColumn {
 
         const index = (control.screenshotIndex + offset + count) % count
         control.ensureScreenshotLoaded(index)
-        control.screenshotIndex = index
+        if (screenshotPreview.opened) {
+            control.pendingPreviewScreenshotIndex = index
+            previewImageTransition.restart()
+        } else {
+            control.screenshotIndex = index
+        }
     }
 
     function ensureScreenshotLoaded(index) {
@@ -533,17 +539,67 @@ Maui.ScrollColumn {
         page.headerMargins: Maui.Style.defaultPadding
         page.floatingHeader: true
 
+        enter: Transition {
+            NumberAnimation {
+                property: "opacity"
+                from: 0
+                to: 1
+                duration: Maui.Style.units.longDuration
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        exit: Transition {
+            NumberAnimation {
+                property: "opacity"
+                from: 1
+                to: 0
+                duration: Maui.Style.units.longDuration
+                easing.type: Easing.InCubic
+            }
+        }
+
         stack: Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
             Maui.ImageViewer {
+                id: previewImageViewer
                 anchors.fill: parent
                 anchors.margins: Maui.Style.contentMargins
                 source: control.itemScreenshots.length > 0 ? control.itemScreenshots[control.screenshotIndex] : ""
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 cache: true
+            }
+
+            SequentialAnimation {
+                id: previewImageTransition
+
+                NumberAnimation {
+                    target: previewImageViewer
+                    property: "opacity"
+                    to: 0
+                    duration: Maui.Style.units.shortDuration
+                    easing.type: Easing.InOutQuad
+                }
+
+                ScriptAction {
+                    script: {
+                        if (control.pendingPreviewScreenshotIndex >= 0) {
+                            control.screenshotIndex = control.pendingPreviewScreenshotIndex
+                            control.pendingPreviewScreenshotIndex = -1
+                        }
+                    }
+                }
+
+                NumberAnimation {
+                    target: previewImageViewer
+                    property: "opacity"
+                    to: 1
+                    duration: Maui.Style.units.shortDuration
+                    easing.type: Easing.InOutQuad
+                }
             }
 
             ToolButton {

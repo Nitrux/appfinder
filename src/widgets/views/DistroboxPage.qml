@@ -254,10 +254,9 @@ Maui.Page {
                     border.width: 1
                 }
 
-                Maui.SettingsDialog {
+                Maui.InfoDialog {
                     id: containerInformationPopup
                     title: qsTr("Container Information")
-                    persistent: true
 
                     ColumnLayout {
                         Layout.fillWidth: true
