@@ -42,6 +42,13 @@ QString findExecutable(const QString &program)
     return {};
 }
 
+QString shellQuote(const QString &value)
+{
+    QString quoted = value;
+    quoted.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
+    return QStringLiteral("'") + quoted + QLatin1Char('\'');
+}
+
 void writeOutput(const QByteArray &output)
 {
     if (!output.isEmpty())
@@ -93,6 +100,27 @@ bool runAndForward(const QString &program, const QStringList &arguments, QString
 
     writeOutput(output);
     return true;
+}
+
+bool runAndForwardWithPseudoTerminal(const QString &program,
+                                     const QStringList &arguments,
+                                     QString &error,
+                                     int timeout = CommandTimeoutMs)
+{
+    const QString script = findExecutable(QStringLiteral("script"));
+    if (script.isEmpty()) {
+        error = QStringLiteral("The script utility is required to create a Distrobox.");
+        return false;
+    }
+
+    QStringList command {shellQuote(program)};
+    for (const QString &argument : arguments)
+        command.append(shellQuote(argument));
+    return runAndForward(script,
+                         {QStringLiteral("--quiet"), QStringLiteral("--return"), QStringLiteral("--command"),
+                          command.join(QLatin1Char(' ')), QStringLiteral("/dev/null")},
+                         error,
+                         timeout);
 }
 
 bool makeRootShared(QString &error)
@@ -420,7 +448,7 @@ bool runRootfulAction(const QStringList &arguments, QString &error)
             createArguments << QStringLiteral("--nvidia");
         if (!platform.isEmpty())
             createArguments << QStringLiteral("--platform") << platform;
-        if (!runAndForward(distroboxCreate, createArguments, error, LongCommandTimeoutMs))
+        if (!runAndForwardWithPseudoTerminal(distroboxCreate, createArguments, error, LongCommandTimeoutMs))
             return false;
 
         QString entryError;
@@ -434,10 +462,11 @@ bool runRootfulAction(const QStringList &arguments, QString &error)
             || !validNameArgument(1) || !validNameArgument(2))
             return false;
 
-        if (!runAndForward(distroboxCreate,
-                           {QStringLiteral("--yes"), QStringLiteral("--root"), QStringLiteral("--clone"), arguments.at(1),
-                            QStringLiteral("--name"), arguments.at(2)},
-                           error, LongCommandTimeoutMs))
+        if (!runAndForwardWithPseudoTerminal(distroboxCreate,
+                                             {QStringLiteral("--yes"), QStringLiteral("--root"), QStringLiteral("--clone"), arguments.at(1),
+                                              QStringLiteral("--name"), arguments.at(2)},
+                                             error,
+                                             LongCommandTimeoutMs))
             return false;
 
         QString entryError;
@@ -521,8 +550,11 @@ bool runRootfulAction(const QStringList &arguments, QString &error)
         if (arguments.size() != 2 || !validNameArgument(1))
             return false;
 
-        const QString subcommand = action == QLatin1String("stop") ? QStringLiteral("kill") : QStringLiteral("rm");
-        return runAndForward(engine, {QStringLiteral("container"), subcommand, arguments.at(1)}, error);
+        if (action == QLatin1String("stop"))
+            return runAndForward(engine, {QStringLiteral("container"), QStringLiteral("kill"), arguments.at(1)}, error);
+        return runAndForward(engine,
+                             {QStringLiteral("container"), QStringLiteral("rm"), QStringLiteral("--force"), arguments.at(1)},
+                             error);
     }
 
     if (action == QLatin1String("stop-all") || action == QLatin1String("remove-all")) {

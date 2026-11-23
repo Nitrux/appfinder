@@ -192,6 +192,7 @@ public:
     Q_INVOKABLE void removeDistrobox(const QString &name);
     Q_INVOKABLE void removeAllDistroboxes();
     Q_INVOKABLE void loadRootfulDistroboxes();
+    Q_INVOKABLE void refreshDistroboxes();
     Q_INVOKABLE bool isFlatpakInstalled(const QString &identifier) const;
 
 signals:
@@ -280,7 +281,8 @@ private:
                         const QStringList &arguments,
                         Operation operation,
                         const QString &identifier = {},
-                        const QString &workingDirectory = {});
+                        const QString &workingDirectory = {},
+                        bool usePseudoTerminal = false);
     bool startDistroboxContainer(const QString &name);
     void startDistroboxRepairStep(const QStringList &arguments);
     bool continueDistroboxRepair(int exitCode, QProcess::ExitStatus exitStatus);
@@ -456,7 +458,6 @@ private:
     bool m_flathubInitialized = false;
     bool m_flathubSearchLoaded = false;
     QString m_flathubLoadedQuery;
-    bool m_distroboxInitialized = false;
     bool m_userBundlesInitialized = false;
     quint64 m_flathubFeaturedGeneration = 0;
     int m_featuredDetailPending = 0;

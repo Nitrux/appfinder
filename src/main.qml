@@ -15,6 +15,11 @@ import "widgets/views"
 Maui.ApplicationWindow {
     id: root
 
+    onActiveChanged: {
+        if (active && currentSection === 2)
+            appHub.refreshDistroboxes()
+    }
+
     title: currentTitle
     color: "transparent"
     background: null

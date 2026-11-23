@@ -59,6 +59,21 @@ int networkRetryDelay(int attempt)
     return NetworkRetryBaseDelayMs * (1 << attempt);
 }
 
+QString shellQuote(const QString &value)
+{
+    QString quoted = value;
+    quoted.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
+    return QStringLiteral("'") + quoted + QLatin1Char('\'');
+}
+
+QString pseudoTerminalCommand(const QString &program, const QStringList &arguments)
+{
+    QStringList command {shellQuote(program)};
+    for (const QString &argument : arguments)
+        command.append(shellQuote(argument));
+    return command.join(QLatin1Char(' '));
+}
+
 bool isRetryableNetworkError(QNetworkReply::NetworkError error)
 {
     switch (error) {
@@ -952,12 +967,8 @@ void AppHubBackend::setCurrentSection(int section)
     m_currentSection = section;
     emit currentSectionChanged();
     if (m_currentSection == Distrobox) {
-        if (!m_distroboxInitialized) {
+        if (m_operation == Operation::None && m_process->state() == QProcess::NotRunning)
             refreshDistrobox();
-            m_distroboxInitialized = true;
-        } else {
-            m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
-        }
     } else {
         if (m_currentSection == Flathub) {
             initializeFlathub();
@@ -967,6 +978,14 @@ void AppHubBackend::setCurrentSection(int section)
             search(m_query);
         }
     }
+}
+
+void AppHubBackend::refreshDistroboxes()
+{
+    if (m_currentSection != Distrobox || m_operation != Operation::None || m_process->state() != QProcess::NotRunning)
+        return;
+
+    refreshDistrobox();
 }
 
 bool AppHubBackend::busy() const
@@ -1169,7 +1188,8 @@ bool AppHubBackend::startOperation(const QString &program,
                                    const QStringList &arguments,
                                    Operation operation,
                                    const QString &identifier,
-                                   const QString &workingDirectory)
+                                   const QString &workingDirectory,
+                                   bool usePseudoTerminal)
 {
     if (m_process->state() != QProcess::NotRunning) {
         setStatusMessage(QStringLiteral("Another operation is still running."));
@@ -1180,6 +1200,18 @@ bool AppHubBackend::startOperation(const QString &program,
     if (executable.isEmpty()) {
         setStatusMessage(QStringLiteral("%1 is not installed.").arg(program));
         return false;
+    }
+
+    QStringList processArguments = arguments;
+    if (usePseudoTerminal) {
+        const QString script = findExecutable(QStringLiteral("script"));
+        if (script.isEmpty()) {
+            setStatusMessage(QStringLiteral("The script utility is required to create a Distrobox."));
+            return false;
+        }
+        processArguments = {QStringLiteral("--quiet"), QStringLiteral("--return"), QStringLiteral("--command"),
+                            pseudoTerminalCommand(executable, arguments), QStringLiteral("/dev/null")};
+        executable = script;
     }
 
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
@@ -1208,7 +1240,7 @@ bool AppHubBackend::startOperation(const QString &program,
     m_operationLog = QStringLiteral("Starting %1…").arg(program);
     emit operationLogChanged();
     setBusy(true);
-    m_process->start(executable, arguments);
+    m_process->start(executable, processArguments);
     return true;
 }
 
@@ -2549,7 +2581,7 @@ void AppHubBackend::createDistrobox(const QString &name, const QString &image, c
             arguments << QStringLiteral("--nvidia");
         if (!platform.isEmpty())
             arguments << QStringLiteral("--platform") << platform;
-        if (!startOperation(executable, arguments, Operation::DistroboxCreate, normalizedName)) {
+        if (!startOperation(executable, arguments, Operation::DistroboxCreate, normalizedName, {}, true)) {
             emitDistroboxOperationResult(Operation::DistroboxCreate, normalizedName, false, statusMessage());
             return;
         }
@@ -2770,7 +2802,12 @@ void AppHubBackend::cloneDistrobox(const QString &source, const QString &name)
             emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
             return;
         }
-        if (!startOperation(executable, {QStringLiteral("--clone"), source, QStringLiteral("--name"), name}, Operation::DistroboxClone, name)) {
+        if (!startOperation(executable,
+                            {QStringLiteral("--clone"), source, QStringLiteral("--name"), name},
+                            Operation::DistroboxClone,
+                            name,
+                            {},
+                            true)) {
             emitDistroboxOperationResult(Operation::DistroboxClone, name, false, statusMessage());
             return;
         }
@@ -2862,7 +2899,10 @@ void AppHubBackend::removeDistrobox(const QString &name)
             emitDistroboxOperationResult(Operation::DistroboxRemove, name, false, statusMessage());
             return;
         }
-    } else if (!startOperation(executable, {QStringLiteral("container"), QStringLiteral("rm"), name}, Operation::DistroboxRemove, name)) {
+    } else if (!startOperation(executable,
+                               {QStringLiteral("container"), QStringLiteral("rm"), QStringLiteral("--force"), name},
+                               Operation::DistroboxRemove,
+                               name)) {
         emitDistroboxOperationResult(Operation::DistroboxRemove, name, false, statusMessage());
         return;
     }
