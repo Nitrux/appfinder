@@ -59,6 +59,7 @@ class AppHubBackend final : public QObject
     Q_PROPERTY(QString appHubCategory READ appHubCategory WRITE setAppHubCategory NOTIFY appHubCategoryChanged)
     Q_PROPERTY(bool appHubInstalledOnly READ appHubInstalledOnly WRITE setAppHubInstalledOnly NOTIFY appHubInstalledOnlyChanged)
     Q_PROPERTY(AppModel *distroboxModel READ distroboxModel CONSTANT)
+    Q_PROPERTY(AppModel *distroboxImagesModel READ distroboxImagesModel CONSTANT)
     Q_PROPERTY(bool rootfulDistroboxesLoaded READ rootfulDistroboxesLoaded NOTIFY rootfulDistroboxesLoadedChanged)
     Q_PROPERTY(int flathubCollection READ flathubCollection WRITE setFlathubCollection NOTIFY flathubCollectionChanged)
     Q_PROPERTY(bool flathubCollectionLoading READ flathubCollectionLoading NOTIFY flathubCollectionLoadingChanged)
@@ -111,6 +112,7 @@ public:
     QString userBundleArchitecture() const;
     AppModel *appHubBackupsModel();
     AppModel *distroboxModel();
+    AppModel *distroboxImagesModel();
     bool rootfulDistroboxesLoaded() const;
 
     int flathubCollection() const;
@@ -183,6 +185,7 @@ public:
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
     Q_INVOKABLE void restoreAppHubBackup(const QString &identifier, const QString &backup);
     Q_INVOKABLE void openDistrobox(const QString &name);
+    Q_INVOKABLE void removeDistroboxImage(const QString &identifier, bool rootful);
     Q_INVOKABLE void createDistrobox(const QString &name, const QString &image, const QString &home = {}, bool rootful = false, const QVariantMap &options = {});
     Q_INVOKABLE void startDistrobox(const QString &name);
     Q_INVOKABLE void stopDistrobox(const QString &name);
@@ -252,7 +255,8 @@ private:
         DistroboxRepair,
         DistroboxRemove,
         DistroboxRemoveAll,
-        DistroboxRootfulList
+        DistroboxRootfulList,
+        DistroboxImageRemove
     };
 
     struct FlatpakUpdateRequest
@@ -329,6 +333,7 @@ private:
     QString distroboxHelper() const;
     bool isRootfulDistrobox(const QString &name) const;
     void mergeDistroboxItems();
+    void mergeDistroboxImageItems();
     bool applyRootfulDistroboxSnapshot(const QByteArray &output, QString *error = nullptr);
     void openDistroboxInStation(const QString &name);
     void parseFlatpakSearch(const QByteArray &output);
@@ -344,6 +349,7 @@ private:
     QList<AppModel::Item> loadAppHubItems() const;
     QList<AppModel::Item> appHubBackupItems(const QString &identifier) const;
     QList<AppModel::Item> loadDistroboxItems(const QByteArray &output) const;
+    QList<AppModel::Item> loadDistroboxImageItems(const QByteArray &output, const QString &containerMode) const;
     void enrichDistroboxItems(QList<AppModel::Item> &items, const QByteArray &inspectOutput, const QByteArray &infoOutput) const;
 
     QString appHubRepositoryPath() const;
@@ -379,6 +385,7 @@ private:
     AppModel *m_userBundleBuildsModel;
     AppModel *m_appHubBackupsModel;
     AppModel *m_distroboxModel;
+    AppModel *m_distroboxImagesModel;
     QProcess *m_process;
     QFileSystemWatcher *m_appHubInstallWatcher;
     QFileSystemWatcher *m_userBundleWatcher;
@@ -410,6 +417,8 @@ private:
     QHash<QString, AppModel::Item> m_flathubBrowseFeaturedCache;
     QList<AppModel::Item> m_allDistroboxItems;
     QList<AppModel::Item> m_rootfulDistroboxItems;
+    QList<AppModel::Item> m_allDistroboxImageItems;
+    QList<AppModel::Item> m_rootfulDistroboxImageItems;
     QSet<QString> m_installedFlatpaks;
     QSet<QString> m_userInstalledFlatpaks;
     QSet<QString> m_systemInstalledFlatpaks;

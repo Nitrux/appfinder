@@ -25,7 +25,7 @@ Maui.ScrollColumn {
     property var sandboxBooleanModelRef
     anchors.fill: parent
     padding: Maui.Style.contentMargins
-    spacing: Maui.Style.space.medium
+    spacing: Maui.Style.space.big
     function forwardGridWheel(wheel) {
         const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
         const horizontalDelta = usePixelDelta ? wheel.pixelDelta.x : wheel.angleDelta.x

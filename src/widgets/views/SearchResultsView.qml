@@ -36,7 +36,7 @@ Maui.ScrollColumn {
     property var secondaryActionIconResolver: function(item) { return "" }
 
     padding: Maui.Style.contentMargins
-    spacing: Maui.Style.space.small
+    spacing: Maui.Style.space.big
 
     function forwardGridWheel(wheel) {
         const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0

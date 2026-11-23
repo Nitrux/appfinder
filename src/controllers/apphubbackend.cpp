@@ -150,6 +150,12 @@ bool isSafeIdentifier(const QString &value)
     return pattern.match(value).hasMatch();
 }
 
+bool isSafeContainerImageIdentifier(const QString &value)
+{
+    static const QRegularExpression pattern(QStringLiteral("^(?:[A-Fa-f0-9]{12,64}|sha256:[A-Fa-f0-9]{12,64})$"));
+    return pattern.match(value).hasMatch();
+}
+
 void removeDistroboxLauncher(const QString &name)
 {
     if (!isSafeIdentifier(name))
@@ -699,6 +705,7 @@ AppHubBackend::AppHubBackend(QObject *parent)
     , m_userBundleBuildsModel(new AppModel(this))
     , m_appHubBackupsModel(new AppModel(this))
     , m_distroboxModel(new AppModel(this))
+    , m_distroboxImagesModel(new AppModel(this))
     , m_process(new QProcess(this))
     , m_appHubInstallWatcher(new QFileSystemWatcher(this))
     , m_userBundleWatcher(new QFileSystemWatcher(this))
@@ -943,6 +950,11 @@ AppModel *AppHubBackend::distroboxModel()
     return m_distroboxModel;
 }
 
+AppModel *AppHubBackend::distroboxImagesModel()
+{
+    return m_distroboxImagesModel;
+}
+
 bool AppHubBackend::rootfulDistroboxesLoaded() const
 {
     return m_rootfulDistroboxesLoaded;
@@ -1017,6 +1029,7 @@ QString AppHubBackend::operationAction() const
     case Operation::DistroboxRemove: return QStringLiteral("distrobox-remove");
     case Operation::DistroboxRemoveAll: return QStringLiteral("distrobox-remove-all");
     case Operation::DistroboxRootfulList: return QStringLiteral("distrobox-rootful-list");
+    case Operation::DistroboxImageRemove: return QStringLiteral("distrobox-image-remove");
     case Operation::None:
     case Operation::FlatpakSearch:
         return {};
@@ -1053,6 +1066,7 @@ QString AppHubBackend::operationLabel() const
     case Operation::DistroboxRemove: return tr("Deleting container");
     case Operation::DistroboxRemoveAll: return tr("Deleting all containers");
     case Operation::DistroboxRootfulList: return tr("Loading rootful containers");
+    case Operation::DistroboxImageRemove: return tr("Removing image");
     case Operation::None:
     case Operation::FlatpakSearch:
         return {};
@@ -1405,6 +1419,7 @@ void AppHubBackend::emitDistroboxOperationResult(Operation operation,
     case Operation::DistroboxRepair: action = QStringLiteral("repair"); break;
     case Operation::DistroboxRemove: action = QStringLiteral("remove"); break;
     case Operation::DistroboxRemoveAll: action = QStringLiteral("remove-all"); break;
+    case Operation::DistroboxImageRemove: action = QStringLiteral("image-remove"); break;
     default: return;
     }
 
@@ -1436,7 +1451,8 @@ QString AppHubBackend::notificationName(const QString &identifier) const
         m_appHubModel,
         m_appHubFeaturedModel,
         m_userBundleModel,
-        m_distroboxModel
+        m_distroboxModel,
+        m_distroboxImagesModel
     };
     for (const AppModel *model : models) {
         const QString name = findName(model->items());
@@ -1540,6 +1556,10 @@ void AppHubBackend::showOperationNotification(Operation operation, const QString
     case Operation::DistroboxRemoveAll:
         title = tr("Containers deleted");
         body = tr("All containers were deleted.");
+        break;
+    case Operation::DistroboxImageRemove:
+        title = tr("Container image removed");
+        body = tr("%1 was removed successfully.").arg(subject);
         break;
     default:
         return;
@@ -2995,6 +3015,54 @@ void AppHubBackend::openDistrobox(const QString &name)
     openDistroboxInStation(name);
 }
 
+void AppHubBackend::removeDistroboxImage(const QString &identifier, bool rootful)
+{
+    if (!isSafeContainerImageIdentifier(identifier)) {
+        setStatusMessage(QStringLiteral("Invalid container image identifier."));
+        emitDistroboxOperationResult(Operation::DistroboxImageRemove, identifier, false, statusMessage());
+        return;
+    }
+
+    if (rootful) {
+        const QString pkexec = findExecutable(QStringLiteral("pkexec"));
+        const QString helper = distroboxHelper();
+        if (pkexec.isEmpty() || helper.isEmpty()) {
+            const QString error = pkexec.isEmpty()
+                ? QStringLiteral("PolicyKit is not installed.")
+                : QStringLiteral("The rootful container helper is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxImageRemove, identifier, false, error);
+            return;
+        }
+
+        m_pendingRootfulDistroboxOperation = true;
+        if (!startOperation(pkexec,
+                            {helper, QStringLiteral("image-remove"), identifier},
+                            Operation::DistroboxImageRemove,
+                            identifier)) {
+            emitDistroboxOperationResult(Operation::DistroboxImageRemove, identifier, false, statusMessage());
+            return;
+        }
+    } else {
+        const QString engine = containerEngine();
+        if (engine.isEmpty()) {
+            const QString error = QStringLiteral("podman or docker is not installed.");
+            setStatusMessage(error);
+            emitDistroboxOperationResult(Operation::DistroboxImageRemove, identifier, false, error);
+            return;
+        }
+        if (!startOperation(engine,
+                            {QStringLiteral("image"), QStringLiteral("rm"), identifier},
+                            Operation::DistroboxImageRemove,
+                            identifier)) {
+            emitDistroboxOperationResult(Operation::DistroboxImageRemove, identifier, false, statusMessage());
+            return;
+        }
+    }
+
+    setStatusMessage(QStringLiteral("Removing image %1…").arg(identifier.left(12)));
+}
+
 void AppHubBackend::openDistroboxInStation(const QString &name)
 {
     const QString executable = findExecutable(QStringLiteral("distrobox"));
@@ -3927,6 +3995,12 @@ void AppHubBackend::refreshDistrobox()
                              runCommand(engine, {QStringLiteral("info"), QStringLiteral("--format"), QStringLiteral("json")}));
     }
 
+    const QString imageFormat = QStringLiteral("{{.ID}}|{{.Repository}}|{{.Tag}}|{{.Size}}|{{.CreatedAt}}");
+    m_allDistroboxImageItems = engine.isEmpty()
+        ? QList<AppModel::Item>()
+        : loadDistroboxImageItems(runCommand(engine, {QStringLiteral("image"), QStringLiteral("list"), QStringLiteral("--no-trunc"),
+                                                      QStringLiteral("--format"), imageFormat}),
+                                  QStringLiteral("Rootless"));
     m_allDistroboxItems = rootlessItems;
     mergeDistroboxItems();
 }
@@ -3943,6 +4017,31 @@ void AppHubBackend::mergeDistroboxItems()
     }
 
     m_distroboxModel->setItems(filterItems(m_allDistroboxItems));
+    mergeDistroboxImageItems();
+}
+
+void AppHubBackend::mergeDistroboxImageItems()
+{
+    QList<AppModel::Item> items = m_allDistroboxImageItems;
+    QSet<QString> identifiers;
+    for (const AppModel::Item &item : std::as_const(items))
+        identifiers.insert(item.containerMode + QLatin1Char(':') + item.identifier);
+
+    for (const AppModel::Item &item : m_rootfulDistroboxImageItems) {
+        const QString key = item.containerMode + QLatin1Char(':') + item.identifier;
+        if (!identifiers.contains(key)) {
+            identifiers.insert(key);
+            items.append(item);
+        }
+    }
+
+    std::stable_sort(items.begin(), items.end(), [](const AppModel::Item &left, const AppModel::Item &right) {
+        const int modeComparison = left.containerMode.compare(right.containerMode, Qt::CaseInsensitive);
+        if (modeComparison != 0)
+            return modeComparison < 0;
+        return left.name.compare(right.name, Qt::CaseInsensitive) < 0;
+    });
+    m_distroboxImagesModel->setItems(items);
 }
 
 void AppHubBackend::loadRootfulDistroboxes()
@@ -4010,6 +4109,8 @@ bool AppHubBackend::applyRootfulDistroboxSnapshot(const QByteArray &output, QStr
     for (AppModel::Item &item : items)
         item.containerMode = QStringLiteral("Rootful");
 
+    m_rootfulDistroboxImageItems = loadDistroboxImageItems(snapshot.value(QStringLiteral("images")).toString().toUtf8(),
+                                                           QStringLiteral("Rootful"));
     m_rootfulDistroboxItems = items;
     if (!m_rootfulDistroboxesLoaded) {
         m_rootfulDistroboxesLoaded = true;
@@ -4399,6 +4500,57 @@ QList<AppModel::Item> AppHubBackend::loadDistroboxItems(const QByteArray &output
             {}
         });
     }
+    return items;
+}
+
+QList<AppModel::Item> AppHubBackend::loadDistroboxImageItems(const QByteArray &output, const QString &containerMode) const
+{
+    QList<AppModel::Item> items;
+    QHash<QString, int> indexes;
+    for (const QByteArray &line : output.split('\n')) {
+        const QStringList fields = QString::fromLocal8Bit(line).trimmed().split(QLatin1Char('|'));
+        if (fields.size() < 5)
+            continue;
+
+        const QString identifier = fields.at(0).trimmed();
+        if (!isSafeContainerImageIdentifier(identifier))
+            continue;
+
+        const QString repository = fields.at(1).trimmed();
+        const QString tag = fields.at(2).trimmed();
+        const bool tagged = !repository.isEmpty() && repository != QLatin1String("<none>")
+                            && !tag.isEmpty() && tag != QLatin1String("<none>");
+        const QString reference = tagged ? repository + QLatin1Char(':') + tag : tr("Untagged image");
+        const auto existing = indexes.constFind(identifier);
+        if (existing != indexes.cend()) {
+            AppModel::Item &item = items[existing.value()];
+            if (tagged) {
+                if (item.name == tr("Untagged image"))
+                    item.name = reference;
+                else if (!item.name.split(QStringLiteral(", ")).contains(reference))
+                    item.name += QStringLiteral(", %1").arg(reference);
+            }
+            continue;
+        }
+
+        AppModel::Item item;
+        item.name = reference;
+        const QString shortIdentifier = identifier.startsWith(QLatin1String("sha256:"))
+            ? identifier.mid(7, 12)
+            : identifier.left(12);
+        item.summary = QStringLiteral("%1 • %2 • %3").arg(containerMode, shortIdentifier, fields.at(3).trimmed());
+        item.version = fields.at(4).trimmed();
+        item.identifier = identifier;
+        item.category = QStringLiteral("Container Image");
+        item.icon = QStringLiteral("package-x-generic");
+        item.status = QStringLiteral("Available");
+        item.size = fields.at(3).trimmed();
+        item.created = fields.at(4).trimmed();
+        item.containerMode = containerMode;
+        indexes.insert(identifier, items.size());
+        items.append(item);
+    }
+
     return items;
 }
 
@@ -5146,6 +5298,15 @@ void AppHubBackend::processFinished(int exitCode, QProcess::ExitStatus exitStatu
             loadRootfulDistroboxes();
             return;
         }
+        break;
+    case Operation::DistroboxImageRemove:
+        setStatusMessage(QStringLiteral("Container image removed."));
+        emitDistroboxOperationResult(operation, identifier, true);
+        if (rootfulDistroboxOperation) {
+            loadRootfulDistroboxes();
+            return;
+        }
+        refreshDistrobox();
         break;
     case Operation::DistroboxRemove:
         removeDistroboxLauncher(identifier);

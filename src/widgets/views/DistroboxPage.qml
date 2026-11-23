@@ -53,6 +53,7 @@ Maui.Page {
                         : action === "clone" ? qsTr("Could not clone container")
                         : action === "repair" ? qsTr("Could not repair container")
                         : action === "remove" ? qsTr("Could not delete container")
+                        : action === "image-remove" ? qsTr("Could not remove container image")
                                               : qsTr("Could not delete containers")
             const message = hostServiceUnavailable
                 ? qsTr("The container was created, but this session does not provide the host service needed to start it. Try starting it after booting the installed system.")
@@ -205,11 +206,11 @@ Maui.Page {
         }
     }
 
-    ColumnLayout {
+    Maui.ScrollColumn {
         visible: !control.searchActive
         anchors.fill: parent
-        anchors.margins: Maui.Style.contentMargins
-        spacing: Maui.Style.space.small
+        padding: Maui.Style.contentMargins
+        spacing: Maui.Style.space.big
 
         RowLayout {
             Layout.fillWidth: true
@@ -227,7 +228,7 @@ Maui.Page {
         Maui.ListBrowser {
             id: containersBrowser
             Layout.fillWidth: true
-            Layout.fillHeight: true
+            Layout.preferredHeight: holder.visible ? Math.max(holder.implicitHeight, Maui.Style.rowHeight) : contentHeight
             padding: 0
             model: appHub.distroboxModel
             spacing: Maui.Style.space.small
@@ -554,6 +555,75 @@ Maui.Page {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        Maui.SectionHeader {
+            Layout.fillWidth: true
+            text1: qsTr("Container Images")
+            text2: qsTr("Manage images stored for Distrobox containers.")
+            label2.wrapMode: Text.Wrap
+        }
+
+        Rectangle {
+            id: savedImagesCard
+            Layout.fillWidth: true
+            implicitHeight: savedImagesLayout.implicitHeight + Maui.Style.contentMargins * 2
+            color: Maui.Theme.alternateBackgroundColor
+            radius: Maui.Style.radiusV
+            border.color: Maui.Theme.backgroundColor
+            border.width: 1
+
+            ColumnLayout {
+                id: savedImagesLayout
+                anchors.fill: parent
+                anchors.margins: Maui.Style.contentMargins
+                spacing: Maui.Style.space.small
+
+                Maui.SectionHeader {
+                    Layout.fillWidth: true
+                    text1: qsTr("Available Images (%1)").arg(appHub.distroboxImagesModel.count)
+                    text2: qsTr("Remove downloaded images that are no longer needed by a container.")
+                    label2.wrapMode: Text.Wrap
+                }
+
+                Repeater {
+                    model: appHub.distroboxImagesModel
+
+                    delegate: Maui.SectionItem {
+                        Layout.fillWidth: true
+                        flat: true
+                        label1.text: model.name
+                        label1.elide: Text.ElideRight
+                        label1.wrapMode: Text.NoWrap
+                        label2.text: model.summary
+                        label2.elide: Text.ElideRight
+                        label2.wrapMode: Text.NoWrap
+                        template.iconSource: "package-x-generic"
+
+                        template.content: Row {
+                            spacing: Maui.Style.space.tiny
+
+                            ToolButton {
+                                icon.name: "edit-delete"
+                                display: ToolButton.IconOnly
+                                enabled: !appHub.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Remove image")
+                                onClicked: appHub.removeDistroboxImage(model.identifier, model.containerMode === "Rootful")
+                            }
+                        }
+                    }
+                }
+
+                Maui.SectionItem {
+                    Layout.fillWidth: true
+                    visible: appHub.distroboxImagesModel.count === 0
+                    flat: true
+                    label1.text: qsTr("No Saved Container Images")
+                    label2.text: qsTr("Images downloaded for Distrobox containers will appear here.")
+                    template.iconSource: "package-x-generic"
                 }
             }
         }

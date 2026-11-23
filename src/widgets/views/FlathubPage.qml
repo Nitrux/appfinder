@@ -312,7 +312,7 @@ Maui.Page {
         Maui.ScrollColumn {
             id: exploreScroll
             padding: Maui.Style.contentMargins
-            spacing: Maui.Style.space.small
+            spacing: Maui.Style.space.big
 
             function forwardGridWheel(wheel) {
                 const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
@@ -790,7 +790,7 @@ Maui.Page {
         Maui.ScrollColumn {
             id: categoryOverviewScroll
             padding: Maui.Style.contentMargins
-            spacing: Maui.Style.space.medium
+            spacing: Maui.Style.space.big
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
@@ -864,7 +864,7 @@ Maui.Page {
         Maui.ScrollColumn {
             id: categoryDetailScroll
             padding: Maui.Style.contentMargins
-            spacing: Maui.Style.space.small
+            spacing: Maui.Style.space.big
 
             Maui.SectionHeader {
                 Layout.fillWidth: true
@@ -1110,7 +1110,7 @@ Maui.Page {
         Maui.ScrollColumn {
             id: installedScroll
             padding: Maui.Style.contentMargins
-            spacing: Maui.Style.space.small
+            spacing: Maui.Style.space.big
 
             function forwardListWheel(wheel) {
                 const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0

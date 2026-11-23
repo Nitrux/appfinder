@@ -220,7 +220,7 @@ Maui.ScrollColumn {
     }
 
     padding: Maui.Style.contentMargins
-    spacing: Maui.Style.space.medium
+    spacing: Maui.Style.space.big
 
     Rectangle {
         Layout.fillWidth: true
@@ -703,7 +703,7 @@ Maui.ScrollColumn {
     ColumnLayout {
         Layout.fillWidth: true
         visible: control.itemReleases.length > 0
-        spacing: Maui.Style.space.medium
+        spacing: Maui.Style.space.big
 
         Maui.SectionHeader {
             Layout.fillWidth: true
@@ -753,7 +753,7 @@ Maui.ScrollColumn {
     ColumnLayout {
         Layout.fillWidth: true
         visible: control.itemLinks.length > 0
-        spacing: Maui.Style.space.small
+        spacing: Maui.Style.space.big
 
         Maui.SectionHeader {
             Layout.fillWidth: true
@@ -794,7 +794,7 @@ Maui.ScrollColumn {
         id: similarAppsSection
         Layout.fillWidth: true
         visible: control.itemSimilarApps.length > 0
-        spacing: Maui.Style.space.small
+        spacing: Maui.Style.space.big
 
         Maui.SectionHeader {
             Layout.fillWidth: true

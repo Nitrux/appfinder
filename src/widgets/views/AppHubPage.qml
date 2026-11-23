@@ -1220,7 +1220,7 @@ Maui.Page {
             id: appHubScroll
             anchors.fill: parent
             padding: Maui.Style.contentMargins
-            spacing: Maui.Style.space.small
+            spacing: Maui.Style.space.big
 
             function forwardGridWheel(wheel) {
                 const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
@@ -1814,7 +1814,7 @@ Maui.Page {
         Maui.ScrollColumn {
             id: appHubInstalledScroll
             padding: Maui.Style.contentMargins
-            spacing: Maui.Style.space.small
+            spacing: Maui.Style.space.big
 
             function forwardListWheel(wheel) {
                 const usePixelDelta = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0

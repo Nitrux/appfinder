@@ -154,6 +154,12 @@ bool validContainerName(const QString &name)
     return pattern.match(name).hasMatch();
 }
 
+bool validContainerImageIdentifier(const QString &identifier)
+{
+    static const QRegularExpression pattern(QStringLiteral("^(?:[A-Fa-f0-9]{12,64}|sha256:[A-Fa-f0-9]{12,64})$"));
+    return pattern.match(identifier).hasMatch();
+}
+
 QByteArray errorResponse(const QString &message)
 {
     QJsonObject response;
@@ -344,6 +350,7 @@ QByteArray rootfulSnapshot()
 
     QByteArray inspectOutput;
     QByteArray infoOutput;
+    QByteArray imagesOutput;
     if (!names.isEmpty()) {
         QStringList inspectArguments {QStringLiteral("container"), QStringLiteral("inspect"), QStringLiteral("--size")};
         inspectArguments.append(names);
@@ -356,11 +363,17 @@ QByteArray rootfulSnapshot()
                {QStringLiteral("info"), QStringLiteral("--format"), QStringLiteral("json")},
                infoOutput,
                ignoredError);
+    runCommand(engine,
+               {QStringLiteral("image"), QStringLiteral("list"), QStringLiteral("--no-trunc"), QStringLiteral("--format"),
+                QStringLiteral("{{.ID}}|{{.Repository}}|{{.Tag}}|{{.Size}}|{{.CreatedAt}}")},
+               imagesOutput,
+               ignoredError);
 
     QJsonObject response;
     response.insert(QStringLiteral("list"), QString::fromLocal8Bit(listOutput));
     response.insert(QStringLiteral("inspect"), QString::fromLocal8Bit(inspectOutput));
     response.insert(QStringLiteral("info"), QString::fromLocal8Bit(infoOutput));
+    response.insert(QStringLiteral("images"), QString::fromLocal8Bit(imagesOutput));
     response.insert(QStringLiteral("launcherIcons"), rootfulLauncherIcons(names));
     return QJsonDocument(response).toJson(QJsonDocument::Compact);
 }
@@ -544,6 +557,16 @@ bool runRootfulAction(const QStringList &arguments, QString &error)
             && !runAndForward(engine, {QStringLiteral("container"), QStringLiteral("stop"), arguments.at(1)}, error))
             return false;
         return true;
+    }
+
+    if (action == QLatin1String("image-remove")) {
+        if (arguments.size() != 2 || !validContainerImageIdentifier(arguments.at(1))) {
+            error = QStringLiteral("Invalid container image identifier.");
+            return false;
+        }
+        return runAndForward(engine,
+                             {QStringLiteral("image"), QStringLiteral("rm"), arguments.at(1)},
+                             error);
     }
 
     if (action == QLatin1String("stop") || action == QLatin1String("remove")) {
