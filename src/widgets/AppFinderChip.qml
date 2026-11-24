@@ -21,7 +21,7 @@ Maui.Chip {
 
     background: Rectangle {
         color: control.color
-        opacity: 0.5
+        opacity: 0.3
         radius: Maui.Style.radiusV
     }
 
