@@ -2414,7 +2414,33 @@ void AppHubBackend::cancelUserBundleBuild()
     m_process->kill();
 }
 
+bool AppHubBackend::userBundleApplicationConflict(const QString &projectId) const
+{
+    const QVariantMap document = m_userBundleStore.load(projectId);
+    if (!document.value(QStringLiteral("valid")).toBool())
+        return false;
+
+    const QString outputPath = m_userBundleStore.outputPath(projectId, document.value(QStringLiteral("recipe")).toMap());
+    const QFileInfo outputInfo(outputPath);
+    if (!outputInfo.isFile() || outputInfo.isSymbolicLink())
+        return false;
+
+    const QString destination = QDir(QDir::homePath() + QStringLiteral("/Applications")).filePath(outputInfo.fileName());
+    const QFileInfo destinationInfo(destination);
+    return destinationInfo.exists() || destinationInfo.isSymbolicLink();
+}
+
 bool AppHubBackend::moveUserBundleToApplications(const QString &projectId)
+{
+    return moveUserBundleToApplicationsImpl(projectId, false);
+}
+
+bool AppHubBackend::replaceUserBundleInApplications(const QString &projectId)
+{
+    return moveUserBundleToApplicationsImpl(projectId, true);
+}
+
+bool AppHubBackend::moveUserBundleToApplicationsImpl(const QString &projectId, bool replaceExisting)
 {
     const QVariantMap document = m_userBundleStore.load(projectId);
     if (!document.value(QStringLiteral("valid")).toBool()) {
@@ -2438,11 +2464,38 @@ bool AppHubBackend::moveUserBundleToApplications(const QString &projectId)
     const QString destination = applicationsDirectory.filePath(outputInfo.fileName());
     const QFileInfo destinationInfo(destination);
     if (destinationInfo.exists() || destinationInfo.isSymbolicLink()) {
-        setStatusMessage(QStringLiteral("An application with this name already exists."));
-        return false;
-    }
+        if (!replaceExisting) {
+            setStatusMessage(QStringLiteral("An application with this name already exists."));
+            return false;
+        }
 
-    if (!QFile::rename(outputPath, destination)) {
+        if (!destinationInfo.isFile() || destinationInfo.isSymbolicLink()) {
+            setStatusMessage(QStringLiteral("The existing Applications entry cannot be replaced."));
+            return false;
+        }
+
+        QTemporaryDir backupDirectory(applicationsDirectory.filePath(QStringLiteral(".appfinder-replace-XXXXXX")));
+        if (!backupDirectory.isValid()) {
+            setStatusMessage(QStringLiteral("Could not prepare to replace the existing application."));
+            return false;
+        }
+
+        const QString backupPath = QDir(backupDirectory.path()).filePath(QStringLiteral("previous.AppImage"));
+        if (!QFile::rename(destination, backupPath)) {
+            setStatusMessage(QStringLiteral("Could not preserve the existing application before replacement."));
+            return false;
+        }
+
+        if (!QFile::rename(outputPath, destination)) {
+            if (!QFile::rename(backupPath, destination)) {
+                backupDirectory.setAutoRemove(false);
+                setStatusMessage(QStringLiteral("Could not move the new bundle. The existing application remains at %1.").arg(backupPath));
+            } else {
+                setStatusMessage(QStringLiteral("Could not move the new bundle. The existing application was restored."));
+            }
+            return false;
+        }
+    } else if (!QFile::rename(outputPath, destination)) {
         setStatusMessage(QStringLiteral("Could not move the personal bundle to Applications."));
         return false;
     }

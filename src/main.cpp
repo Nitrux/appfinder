@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 
     KAboutData about(QStringLiteral("appfinder"),
                      i18n("AppFinder"),
-                     QStringLiteral("0.1.0"),
+                     QStringLiteral("0.0.2"),
                      i18n("Software management for Nitrux."),
                      KAboutLicense::BSD_3_Clause,
                      i18n("© %1 Made by Nitrux | Built with MauiKit", QString::number(QDate::currentDate().year())),

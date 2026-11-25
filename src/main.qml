@@ -186,7 +186,7 @@ Maui.ApplicationWindow {
 
     Action {
         id: appHubBuilderAction
-        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined"
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode !== AppHubPage.Installed
 
         text: qsTr("Personal Bundle Builder")
         icon.name: "run-build"
@@ -203,7 +203,7 @@ Maui.ApplicationWindow {
 
     Action {
         id: appHubInstalledAction
-        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined"
+        property bool actionVisible: root.currentSection === 1 && contentLoader.item !== null && typeof contentLoader.item.viewMode !== "undefined" && contentLoader.item.viewMode !== AppHubPage.Builder
 
         text: qsTr("Installed AppBoxes")
         icon.name: "appfinder-appboxes"
@@ -604,7 +604,7 @@ Maui.ApplicationWindow {
                     }
 
                     MenuItem {
-                        text: qsTr("Preferences")
+                        text: qsTr("Settings")
                         icon.name: "settings-configure"
                         onTriggered: root.selectSection(4)
                     }
@@ -628,7 +628,7 @@ Maui.ApplicationWindow {
                     visible: root.currentSection !== 0 || page.detailsVisible
 
                     MenuItem {
-                        text: qsTr("Preferences")
+                        text: qsTr("Settings")
                         icon.name: "settings-configure"
                         onTriggered: root.selectSection(4)
                     }

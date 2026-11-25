@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(appfinder VERSION 0.1.0 LANGUAGES CXX)
+project(appfinder VERSION 0.0.2 LANGUAGES CXX)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install path prefix" FORCE)
@@ -62,7 +62,7 @@ elseif(NOT "$ENV{GITHUB_REF_NAME}" STREQUAL "" AND NOT "$ENV{GITHUB_SHA}" STREQU
     string(SUBSTRING "$ENV{GITHUB_SHA}" 0 7 GIT_COMMIT_HASH)
 else()
     set(GIT_BRANCH "Stable")
-    set(GIT_COMMIT_HASH "0.1.0")
+    set(GIT_COMMIT_HASH "0.0.2")
 endif()
 
 if(GIT_COMMIT_HASH STREQUAL "" AND NOT "$ENV{GITHUB_SHA}" STREQUAL "")

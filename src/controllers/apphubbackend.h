@@ -179,7 +179,9 @@ public:
     Q_INVOKABLE bool removeUserBundle(const QString &projectId);
     Q_INVOKABLE void buildUserBundle(const QString &projectId);
     Q_INVOKABLE void cancelUserBundleBuild();
+    Q_INVOKABLE bool userBundleApplicationConflict(const QString &projectId) const;
     Q_INVOKABLE bool moveUserBundleToApplications(const QString &projectId);
+    Q_INVOKABLE bool replaceUserBundleInApplications(const QString &projectId);
     Q_INVOKABLE bool removeUserBundleArtifact(const QString &projectId);
     Q_INVOKABLE bool appHubHasBackups(const QString &identifier) const;
     Q_INVOKABLE void loadAppHubBackups(const QString &identifier);
@@ -366,6 +368,7 @@ private:
     void startNextFlatpakUpdate();
     void restoreUserBundleArtifact();
 
+    bool moveUserBundleToApplicationsImpl(const QString &projectId, bool replaceExisting);
     void setBusy(bool busy);
     void setStatusMessage(const QString &message);
 

@@ -166,13 +166,12 @@ Maui.Page {
         }
     }
 
-    Maui.SettingsDialog {
+    Maui.InfoDialog {
         id: flatpakAddonsDialog
 
         property string applicationName: ""
 
-        Maui.Controls.title: qsTr("Manage Add-ons")
-        persistent: true
+        title: qsTr("Manage Add-Ons")
 
         Maui.SectionGroup {
             title: flatpakAddonsDialog.applicationName
@@ -1293,6 +1292,7 @@ Maui.Page {
                             id: userInstalledDelegate
                             width: ListView.view.width
                             mouseArea.preventStealing: true
+                            mouseArea.z: -1
                             isCurrentItem: control.selectedInstalledScope === "user" && control.selectedInstalledIdentifier === model.identifier
                             onClicked: control.openDetails(model)
                             iconSource: model.icon
@@ -1305,7 +1305,7 @@ Maui.Page {
                             label2.elide: Text.ElideRight
 
                             ToolButton {
-                                text: qsTr("Manage Add-ons")
+                                text: qsTr("Manage Add-Ons")
                                 icon.name: "plugins"
                                 icon.color: control.contrastingForeground(down || checked
                                                                           ? Maui.Theme.highlightColor
@@ -1388,6 +1388,7 @@ Maui.Page {
                             id: systemInstalledDelegate
                             width: ListView.view.width
                             mouseArea.preventStealing: true
+                            mouseArea.z: -1
                             isCurrentItem: control.selectedInstalledScope === "system" && control.selectedInstalledIdentifier === model.identifier
                             onClicked: control.openDetails(model)
                             iconSource: model.icon
@@ -1400,7 +1401,7 @@ Maui.Page {
                             label2.elide: Text.ElideRight
 
                             ToolButton {
-                                text: qsTr("Manage Add-ons")
+                                text: qsTr("Manage Add-Ons")
                                 icon.name: "plugins"
                                 icon.color: control.contrastingForeground(down || checked
                                                                           ? Maui.Theme.highlightColor

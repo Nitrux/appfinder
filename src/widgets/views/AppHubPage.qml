@@ -660,10 +660,22 @@ Maui.Page {
         buildOutputFinished = false
         buildOutputSucceeded = false
         buildOutputError = ""
-        buildOutputDialog.animatedEllipsis = ""
         buildOutputDialog.open()
         appHub.buildUserBundle(editingProject)
     }
+
+    function moveBuiltBundleToApplications(projectId, replaceExisting) {
+        const moved = replaceExisting
+                     ? appHub.replaceUserBundleInApplications(projectId)
+                     : appHub.moveUserBundleToApplications(projectId)
+        if (moved)
+            return
+
+        const error = String(appHub.statusMessage || "").trim()
+        Maui.App.rootComponent.notify("dialog-error", qsTr("Move to Applications failed"),
+                                      error.length > 0 ? error : qsTr("The personal bundle could not be moved to Applications."))
+    }
+
     function revealEditorOutput() {
         if (artifactUrl.length > 0)
             Qt.openUrlExternally(artifactUrl.toString().replace(/\/[^\/]*$/, ""))
@@ -772,12 +784,11 @@ Maui.Page {
         }
     }
 
-    Maui.SettingsDialog {
+    Maui.InfoDialog {
         id: appHubRestoreDialog
         property string applicationIdentifier: ""
         property string applicationName: ""
-        Maui.Controls.title: qsTr("Restore AppBox")
-        persistent: true
+        title: qsTr("Restore AppBox")
 
         Maui.SectionGroup {
             title: appHubRestoreDialog.applicationName
@@ -921,10 +932,24 @@ Maui.Page {
         }
     }
 
-    Maui.SettingsDialog {
+    Maui.InfoDialog {
         id: collectionEditorDialog
         title: control.collectionEditorTitle()
-        persistent: true
+        standardButtons: Dialog.Cancel | Dialog.Apply
+
+        Binding {
+            target: collectionEditorDialog.standardButton(Dialog.Apply)
+            property: "text"
+            value: control.collectionEditorIndex < 0 ? qsTr("Add") : qsTr("Apply")
+        }
+
+        Binding {
+            target: collectionEditorDialog.standardButton(Dialog.Apply)
+            property: "enabled"
+            value: collectionPrimaryField.text.trim().length > 0
+                   && (control.collectionEditorType !== "repository" || collectionSecondaryField.text.trim().length > 0)
+                   && (control.collectionEditorType !== "ppa" || collectionSecondaryField.text.trim().length > 0)
+        }
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -1014,19 +1039,7 @@ Maui.Page {
             }
         }
 
-        actions: [
-            Action {
-                text: qsTr("Cancel")
-                onTriggered: collectionEditorDialog.close()
-            },
-            Action {
-                text: control.collectionEditorIndex < 0 ? qsTr("Add") : qsTr("Apply")
-                enabled: collectionPrimaryField.text.trim().length > 0
-                         && (control.collectionEditorType !== "repository" || collectionSecondaryField.text.trim().length > 0)
-                         && (control.collectionEditorType !== "ppa" || collectionSecondaryField.text.trim().length > 0)
-                onTriggered: control.applyCollectionEditor()
-            }
-        ]
+        onApplied: control.applyCollectionEditor()
 
         onClosed: {
             control.collectionEditorType = ""
@@ -1036,6 +1049,7 @@ Maui.Page {
 
     Maui.InfoDialog {
         id: unsavedDialog
+        implicitWidth: Math.min(control.Window.window.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 32)
         title: qsTr("Unsaved Changes")
         message: qsTr("Save the current personal-bundle recipe before leaving it?")
         standardButtons: Dialog.Save | Dialog.Discard | Dialog.Cancel
@@ -1066,33 +1080,36 @@ Maui.Page {
     }
 
     Maui.InfoDialog {
-        id: buildOutputDialog
-        property string animatedEllipsis: ""
-        implicitWidth: Math.min(control.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 40)
-        title: control.buildOutputFinished
-               ? (control.buildOutputSucceeded ? qsTr("Bundle Built") : qsTr("Build Failed"))
-               : qsTr("Building Bundle")
-        message: control.buildOutputFinished
-                 ? (control.buildOutputSucceeded
-                    ? qsTr("%1 was built successfully.").arg(control.buildOutputProject)
-                    : qsTr("The build failed. Review the nx-apphub-cli output below."))
-                 : qsTr("Building %1 with nx-apphub-cli%2").arg(control.buildOutputProject).arg(buildOutputDialog.animatedEllipsis)
-        template.iconSource: "run-build"
-        standardButtons: control.buildOutputFinished || !appHub.busy ? Dialog.Close : Dialog.Cancel
-
-        Timer {
-            id: buildOutputEllipsisTimer
-            interval: 400
-            repeat: true
-            running: buildOutputDialog.visible && !control.buildOutputFinished
-            onTriggered: buildOutputDialog.animatedEllipsis = buildOutputDialog.animatedEllipsis.length >= 3
-                ? ""
-                : buildOutputDialog.animatedEllipsis + "."
+        id: replaceApplicationDialog
+        property string projectId: ""
+        title: qsTr("Replace")
+        message: qsTr("An AppImage with the same name already exists in Applications. Replace it with this build?")
+        standardButtons: Dialog.Apply | Dialog.Cancel
+        Component.onCompleted: standardButton(Dialog.Apply).text = qsTr("Replace")
+        onApplied: {
+            const selectedProjectId = replaceApplicationDialog.projectId
+            replaceApplicationDialog.close()
+            control.moveBuiltBundleToApplications(selectedProjectId, true)
         }
+    }
+
+    Maui.InfoDialog {
+        id: buildOutputDialog
+        Binding {
+            target: buildOutputDialog.contentItem
+            property: "rightPadding"
+            value: target.padding + (target.contentHeight > target.availableHeight && target.locale.textDirection === Qt.LeftToRight ? target.effectiveScrollBarWidth : 0)
+        }
+        implicitWidth: Math.min(control.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 40)
+        title: qsTr("AppHub Output")
+        standardButtons: control.buildOutputFinished || !appHub.busy ? Dialog.Close : Dialog.Cancel
 
         Maui.SectionHeader {
             Layout.fillWidth: true
-            text1: qsTr("Command Output")
+            text1: qsTr("Building %1 with nx-apphub-cli").arg(control.buildOutputProject)
+            template.content: ActionBusyIndicator {
+                running: buildOutputDialog.visible && !control.buildOutputFinished
+            }
             text2: appHub.busy ? qsTr("nx-apphub-cli is still running.") : qsTr("The operation has finished.")
             label2.wrapMode: Text.Wrap
         }
@@ -1106,12 +1123,19 @@ Maui.Page {
         }
 
         ScrollView {
+            id: buildOutputScrollView
+            ScrollBar.vertical.x: locale.textDirection === Qt.RightToLeft
+                                  ? -ScrollBar.vertical.leftPadding
+                                  : width - ScrollBar.vertical.width + ScrollBar.vertical.rightPadding
             Layout.fillWidth: true
             Layout.preferredHeight: Maui.Style.units.gridUnit * 18
+            contentWidth: availableWidth
             clip: true
 
             TextArea {
-                width: parent.width
+                width: buildOutputScrollView.availableWidth
+                font: Maui.Style.monospacedFont
+                rightPadding: Maui.Style.space.tiny
                 readOnly: true
                 selectByMouse: true
                 textFormat: TextEdit.PlainText
@@ -1629,6 +1653,7 @@ Maui.Page {
                             delegate: Maui.ListBrowserDelegate {
                                 id: userRecipeDelegate
                                 width: ListView.view.width
+                                mouseArea.z: -1
                                 isCurrentItem: false
                                 iconSource: model.icon
                                 iconSizeHint: Maui.Style.iconSizes.big
@@ -1730,7 +1755,9 @@ Maui.Page {
 
                             delegate: Maui.ListBrowserDelegate {
                                 id: builtBundleDelegate
+                                visible: appHub.userBundleBuildsModel.count > 0 && index >= 0
                                 width: ListView.view.width
+                                mouseArea.z: -1
                                 isCurrentItem: false
                                 onClicked: control.openProject(model.identifier)
                                 iconSource: model.icon
@@ -1754,7 +1781,15 @@ Maui.Page {
                                     enabled: !appHub.busy
                                     ToolTip.visible: hovered
                                     ToolTip.text: text
-                                    onClicked: appHub.moveUserBundleToApplications(model.identifier)
+                                    onClicked: {
+                                        const projectId = String(model.identifier)
+                                        if (appHub.userBundleApplicationConflict(projectId)) {
+                                            replaceApplicationDialog.projectId = projectId
+                                            replaceApplicationDialog.open()
+                                        } else {
+                                            control.moveBuiltBundleToApplications(projectId, false)
+                                        }
+                                    }
                                 }
 
                                 ToolSeparator {

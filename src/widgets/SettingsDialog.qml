@@ -8,7 +8,7 @@ Maui.SettingsDialog {
 
     property var appSettings
 
-    Maui.Controls.title: qsTr("Preferences")
+    Maui.Controls.title: qsTr("Settings")
 
     Maui.SectionGroup {
         title: qsTr("General")

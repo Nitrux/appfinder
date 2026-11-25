@@ -167,7 +167,6 @@ Maui.Page {
                                             spacing: Maui.Style.space.small
 
                                             Button {
-                                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                                 visible: !distroboxResult.running
                                                 text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
                                                       ? appHub.operationLabel : qsTr("Start")
@@ -178,7 +177,6 @@ Maui.Page {
                                             }
 
                                             Button {
-                                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                                 visible: distroboxResult.running
                                                 text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
                                                       ? appHub.operationLabel : qsTr("Stop")
@@ -449,7 +447,6 @@ Maui.Page {
                             spacing: Maui.Style.space.medium
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: !containerCard.running
                                 text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Start")
@@ -460,7 +457,6 @@ Maui.Page {
                             }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: containerCard.running
                                 text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Stop")
@@ -473,7 +469,6 @@ Maui.Page {
                             Item { Layout.fillWidth: true }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Repair")
                                 enabled: !appHub.busy && containerCard.running
@@ -482,7 +477,6 @@ Maui.Page {
                             }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-clone" && appHub.operationIdentifier === model.name ? appHub.operationLabel : qsTr("Clone")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: control.cloneRequested(model.name)
@@ -490,7 +484,6 @@ Maui.Page {
                             }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Delete")
                                 enabled: !appHub.busy && !containerCard.running
@@ -507,7 +500,6 @@ Maui.Page {
                             spacing: Maui.Style.space.small
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: !containerCard.running
                                 text: appHub.operationAction === "distrobox-start" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Start")
@@ -518,7 +510,6 @@ Maui.Page {
                             }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 visible: containerCard.running
                                 text: appHub.operationAction === "distrobox-stop" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Stop")
@@ -529,7 +520,6 @@ Maui.Page {
                             }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-repair" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Repair")
                                 enabled: !appHub.busy && containerCard.running
@@ -538,7 +528,6 @@ Maui.Page {
                             }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-clone" && appHub.operationIdentifier === model.name ? appHub.operationLabel : qsTr("Clone")
                                 enabled: !appHub.busy && !containerCard.running
                                 onClicked: control.cloneRequested(model.name)
@@ -546,7 +535,6 @@ Maui.Page {
                             }
 
                             Button {
-                                implicitWidth: Math.max(contentItem.implicitWidth + leftPadding + rightPadding, Maui.Style.units.gridUnit * 4)
                                 text: appHub.operationAction === "distrobox-remove" && appHub.operationIdentifier === model.name
                                       ? appHub.operationLabel : qsTr("Delete")
                                 enabled: !appHub.busy && !containerCard.running
