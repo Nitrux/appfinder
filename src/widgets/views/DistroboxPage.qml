@@ -624,7 +624,6 @@ Maui.Page {
         property bool rootfulEnabled: false
         property bool initEnabled: false
         property bool nvidiaEnabled: false
-        implicitWidth: Math.min(control.Window.window.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 30)
         title: qsTr("New Container")
         standardButtons: Dialog.Ok | Dialog.Cancel
         Component.onCompleted: standardButton(Dialog.Ok).text = qsTr("Create")
@@ -885,7 +884,6 @@ Maui.Page {
         property bool operationSucceeded: false
         property string operationError: ""
 
-        implicitWidth: Math.min(control.Window.window.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 40)
         title: operationFinished
                ? (operationSucceeded ? qsTr("Container Created") : qsTr("Container Creation Failed"))
                : qsTr("Creating Container")

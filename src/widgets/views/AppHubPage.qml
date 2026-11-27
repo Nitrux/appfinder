@@ -1049,7 +1049,6 @@ Maui.Page {
 
     Maui.InfoDialog {
         id: unsavedDialog
-        implicitWidth: Math.min(control.Window.window.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 32)
         title: qsTr("Unsaved Changes")
         message: qsTr("Save the current personal-bundle recipe before leaving it?")
         standardButtons: Dialog.Save | Dialog.Discard | Dialog.Cancel
@@ -1095,12 +1094,6 @@ Maui.Page {
 
     Maui.InfoDialog {
         id: buildOutputDialog
-        Binding {
-            target: buildOutputDialog.contentItem
-            property: "rightPadding"
-            value: target.padding + (target.contentHeight > target.availableHeight && target.locale.textDirection === Qt.LeftToRight ? target.effectiveScrollBarWidth : 0)
-        }
-        implicitWidth: Math.min(control.width - Maui.Style.contentMargins * 2, Maui.Style.units.gridUnit * 40)
         title: qsTr("AppHub Output")
         standardButtons: control.buildOutputFinished || !appHub.busy ? Dialog.Close : Dialog.Cancel
 
